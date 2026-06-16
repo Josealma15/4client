@@ -148,13 +148,16 @@ CREATE TABLE refresh_tokens (
 
 -- ═══════════════ CATÁLOGO POR TENANT ═══════════════
 CREATE TABLE products (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id      UUID NOT NULL REFERENCES organizations(id),
-  name        VARCHAR(200) NOT NULL,
-  category    VARCHAR(100),
-  active      BOOLEAN DEFAULT true,
-  sort_order  INT DEFAULT 0,
-  created_at  TIMESTAMPTZ DEFAULT now()
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          UUID NOT NULL REFERENCES organizations(id),
+  name            VARCHAR(200) NOT NULL,
+  category        VARCHAR(100),
+  active          BOOLEAN DEFAULT true,
+  sort_order      INT DEFAULT 0,
+  -- Campos para balanza (Fase 2) — nullable, no usados en Fase 1
+  price_per_unit  NUMERIC(12,2),     -- precio por kg o por unidad
+  unit_type       VARCHAR(20),       -- 'kg' | 'und' | 'libra' | 'manojo'
+  created_at      TIMESTAMPTZ DEFAULT now()
 );
 
 -- ═══════════════ EMPLEADOS (DOMICILIARIOS) ═══════════════
@@ -232,12 +235,17 @@ CREATE TABLE orders (
 );
 
 CREATE TABLE order_items (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id     UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_name VARCHAR(200) NOT NULL,
-  quantity     VARCHAR(100),            -- texto libre: "2 kg", "1 manojo", "3 und"
-  price        NUMERIC(12,2) DEFAULT 0,
-  sort_order   INT DEFAULT 0
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id        UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_name    VARCHAR(200) NOT NULL,
+  -- Fase 1: quantity_label es el campo usado en la UI (texto libre del mockup: "2 kg", "1 manojo")
+  quantity_label  VARCHAR(100),
+  price           NUMERIC(12,2) DEFAULT 0,
+  sort_order      INT DEFAULT 0,
+  -- Campos para balanza (Fase 2) — nullable, no usados en Fase 1
+  -- Cuando la balanza esté integrada, se llenan estos y price se calcula automático
+  quantity_value  NUMERIC(10,3),    -- 2.500 (el número solo)
+  quantity_unit   VARCHAR(20)       -- 'kg' | 'und' | 'libra'
 );
 
 -- APPEND-ONLY: inmutable por reglas PostgreSQL
@@ -648,7 +656,37 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 
 ---
 
-### FASE 2 — Multi-Cliente y Escalabilidad (Futuro)
+### FASE 2 — Hardware: Balanza + Impresora de Etiquetas (Futuro)
+
+Convierte el PC del negocio en una estación de despacho completamente automatizada.
+
+#### 2A — Balanza digital conectada al PC
+
+| Módulo | Detalle |
+|---|---|
+| **Protocolo** | Web Serial API (Chrome/Edge) — sin instalar drivers, el browser lee el puerto USB directamente |
+| **Flujo** | Seleccionas producto en 4Client → pones producto en balanza → 4Client lee el peso automático → multiplica `quantity_value × price_per_unit` de la BD → llena precio solo |
+| **Cambios en BD** | Cero — los campos `quantity_value`, `quantity_unit` y `price_per_unit` ya están en el schema desde Fase 1 |
+| **Cambios en backend** | Cero — la lectura de la balanza es 100% frontend via Web Serial API |
+| **Cambios en frontend** | Nuevo componente `BalanzaReader` en el modal de nuevo pedido/detalle |
+| **Requisito** | PC del negocio debe usar Chrome o Edge (no Firefox, no Safari) |
+| **Gestión de precios** | El dueño actualiza precios por producto en la sección Configuración → el sistema multiplica automáticamente |
+
+#### 2B — Impresora de etiquetas térmica (stickers para bolsas)
+
+| Módulo | Detalle |
+|---|---|
+| **Tipo de impresora** | Zebra, Brother QL, TSC u otras impresoras de etiquetas térmicas |
+| **Arquitectura** | Agente local Node.js corriendo en el PC del negocio (`localhost:3001`) — más robusto que Web Serial para impresoras |
+| **Flujo** | Trabajador confirma pedido en 4Client → clic "Imprimir etiqueta" → 4Client POST al agente local → agente formatea en ZPL/TSPL → impresora imprime sticker |
+| **Contenido etiqueta** | Número pedido, nombre cliente, dirección, teléfono, productos, total, método de pago, hora |
+| **Cambios en BD** | Cero — todos los datos ya están en `orders` + `order_items` |
+| **Cambios en backend** | Cero — el agente local es independiente del servidor |
+| **Entregable** | Sticker listo para pegar en la bolsa del pedido antes de salir con el domiciliario |
+
+---
+
+### FASE 3 — Multi-Cliente, Tienda Online y Pagos (Futuro)
 
 | Módulo | Descripción |
 |---|---|
@@ -657,8 +695,8 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 | **Subdominios** | `fruver.4client.shop`, `negocio2.4client.shop` |
 | **App móvil nativa** | React Native — comparte lógica y tipos del monorepo |
 | **Vista domiciliario** | App simplificada para domiciliarios en celular |
-| **Tienda online** | E-commerce público para pedidos directos |
-| **Pasarela de pagos** | Wompi, Nequi, Daviplata |
+| **Tienda online pública** | Página donde clientes hacen pedidos directamente → se crea automático en 4Client |
+| **Pasarela de pagos** | Wompi, Nequi, Daviplata integrados en la tienda online |
 | **Reportes avanzados** | Histórico multi-día, exportes, análisis de ventas |
 
 ---
