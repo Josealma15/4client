@@ -241,6 +241,11 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
 .iinput:disabled{opacity:.55;cursor:not-allowed;background:var(--gm);}
 .idel{background:var(--rc);border:none;color:var(--r);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
 .idel:hover{background:var(--r);color:#fff;}
+.icheck{display:none;background:var(--vc);border:none;color:var(--v);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;align-items:center;justify-content:center;transition:all .2s;}
+.icheck:hover{background:var(--v);color:#fff;}
+.active-search-item .icheck{display:flex;}
+.active-search-item .idel{display:none;}
+.iactions{display:flex;gap:4px;}
 
 /* FACTURA */
 .factbox{background:var(--bg);border-radius:var(--rad);padding:14px 16px;border:2px solid var(--brd);}
@@ -316,7 +321,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
 .tk-badge.nuevo{background:#F8FAFC;color:#64748B;}
 .tk-ver-btn{background:none;border:1.5px solid var(--v);color:var(--v);padding:4px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--f);transition:all .15s;margin-top:6px;width:100%;}
 .tk-ver-btn:hover{background:var(--v);color:#fff;}
-.tk-new-dot{position:absolute;top:5px;right:5px;min-width:18px;height:18px;background:var(--r);border-radius:10px;animation:pulse 1.8s infinite;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
+.tk-new-dot{min-width:18px;height:18px;background:var(--r);border-radius:10px;animation:pulse 1.8s infinite;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
 .tk-crear-btn{background:var(--vc);border:2px dashed var(--v);color:var(--v);padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--f);width:100%;margin-top:6px;text-align:center;transition:all .2s;}
 .tk-crear-btn:hover{background:var(--v);color:#fff;}
 /* Dispatch card en columnas */
