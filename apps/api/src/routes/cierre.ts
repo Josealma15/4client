@@ -45,12 +45,13 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
 
     const tomorrow = new Date(fecha);
     tomorrow.setDate(tomorrow.getDate() + 1);
+    const fechaStr = fecha.toISOString().split('T')[0];
 
     // Aplicar decisiones y cerrar caja en transacción
     await fastify.prisma.$transaction(async (tx) => {
       for (const [orderId, decision] of Object.entries(decisions)) {
         if (decision === 'manana') {
-          await tx.order.update({ where: { id: orderId }, data: { fecha: tomorrow } });
+          await tx.order.update({ where: { id: orderId }, data: { fecha: tomorrow, notes: `pasado_manana:${fechaStr}` } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
           });
