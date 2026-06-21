@@ -46,6 +46,7 @@ function buildOrderSelect(includeHistory = false) {
     created_at: true, updated_at: true,
     employee: { select: { id: true, name: true } },
     registeredBy: { select: { id: true, name: true } },
+    paidBy: { select: { id: true, name: true } },
     items: { orderBy: { sort_order: 'asc' as const } },
     ...(includeHistory ? {
       history: {
@@ -60,10 +61,17 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   // GET /api/v1/orders?fecha=2026-06-15
   fastify.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const query = z.object({ fecha: z.string().optional() }).parse(req.query);
-    const fecha = query.fecha ? new Date(query.fecha) : new Date();
+    const fechaStr = query.fecha ?? new Date().toISOString().split('T')[0];
+    const fecha = new Date(fechaStr);
 
     const orders = await fastify.prisma.order.findMany({
-      where: { org_id: req.user.orgId, fecha },
+      where: {
+        org_id: req.user.orgId,
+        OR: [
+          { fecha },
+          { notes: { contains: `pasado_manana:${fechaStr}` } },
+        ],
+      },
       select: buildOrderSelect(false),
       orderBy: { order_hour: 'asc' },
     });
@@ -163,16 +171,37 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // Fetch current items before transaction so we can diff removals/additions
+    const prevItems = items !== undefined
+      ? await fastify.prisma.orderItem.findMany({ where: { order_id: id } })
+      : [];
+
     const updatedOrder = await fastify.prisma.$transaction(async (tx) => {
       if (items !== undefined) {
-        await tx.orderItem.deleteMany({ where: { order_id: id } });
-        await tx.orderItem.createMany({ data: items.map(i => ({ ...i, order_id: id })) });
-        if (JSON.stringify(existing) !== JSON.stringify(items)) {
+        const newNames = new Set(items.map(i => i.product_name));
+        const prevNames = new Set(prevItems.map(i => i.product_name));
+
+        for (const ri of prevItems.filter(i => !newNames.has(i.product_name))) {
           historyEntries.push({
             org_id: req.user.orgId, order_id: id, actor_id: req.user.userId,
-            action_type: 'edit', field: 'Productos', notes: 'Productos actualizados',
+            action_type: 'producto_eliminado', field: 'Producto eliminado',
+            value_before: `${ri.quantity_label ? ri.quantity_label + ' ' : ''}${ri.product_name} — $${Number(ri.price).toLocaleString('es-CO')}`,
+            value_after: 'Eliminado',
+            notes: `Estado al eliminar: ${existing.status}`,
           });
         }
+        for (const ai of items.filter(i => !prevNames.has(i.product_name))) {
+          historyEntries.push({
+            org_id: req.user.orgId, order_id: id, actor_id: req.user.userId,
+            action_type: 'producto_agregado', field: 'Producto agregado',
+            value_before: '',
+            value_after: `${ai.quantity_label ? ai.quantity_label + ' ' : ''}${ai.product_name} — $${ai.price}`,
+            notes: `Estado al agregar: ${existing.status}`,
+          });
+        }
+
+        await tx.orderItem.deleteMany({ where: { order_id: id } });
+        await tx.orderItem.createMany({ data: items.map(i => ({ ...i, order_id: id })) });
       }
 
       const updated = await tx.order.update({

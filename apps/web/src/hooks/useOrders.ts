@@ -12,7 +12,10 @@ export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: any) => api.post<{ data: any }>('/orders', body).then((r) => r.data),
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['orders', vars.fecha] }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['orders', vars.fecha] });
+      qc.invalidateQueries({ queryKey: ['tickets'] }); // re-link order into ticket row immediately
+    },
   });
 }
 

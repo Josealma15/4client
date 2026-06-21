@@ -17,7 +17,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           select: { id: true, num: true, status: true, paid: true },
         },
       },
-      orderBy: { last_message_at: 'desc' },
+      orderBy: { created_at: 'asc' },
     });
 
     return reply.send({ data: tickets });

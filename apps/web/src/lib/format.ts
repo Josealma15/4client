@@ -8,7 +8,8 @@ export function fmtDate(d: string | Date): string {
 }
 
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -19,5 +20,5 @@ export const STATUS_LABEL: Record<string, string> = {
 export const STATUS_ORDER = ['nuevo', 'preparando', 'listo', 'camino', 'entregado', 'cerrado'];
 
 export const PAYMENT_LABEL: Record<string, string> = {
-  cod: '💵 Cobra en casa', cash: '💳 Efectivo', transfer: '📲 Transferencia',
+  cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia',
 };

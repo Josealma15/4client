@@ -17,7 +17,11 @@ export default function LoginPage() {
       const res = await api.post<{ data: { accessToken: string; refreshToken: string; user: any } }>(
         '/auth/login', { email, password }
       );
-      setAuth({ accessToken: res.data.accessToken, refreshToken: res.data.refreshToken }, res.data.user);
+      const apiUser = res.data.user as any;
+      setAuth(
+        { accessToken: res.data.accessToken, refreshToken: res.data.refreshToken },
+        { ...apiUser, userId: apiUser.id, orgId: apiUser.org_id },
+      );
     } catch (e: any) {
       setError(e.message === 'Credenciales incorrectas' ? 'Usuario o contraseña incorrectos' : 'Error al conectar con el servidor');
     } finally {
