@@ -366,6 +366,8 @@ function UsersSection() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [resetId, setResetId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '', role: '' });
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'encargado' as string });
   const [newPass, setNewPass] = useState('');
   const [confirmToggle, setConfirmToggle] = useState<{ id: string; name: string; active: boolean } | null>(null);
@@ -398,6 +400,17 @@ function UsersSection() {
     onError: (e: any) => { setConfirmToggle(null); toast(e.message, true); },
   });
 
+  const update = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name: string; email: string; role: string }) =>
+      api.patch(`/users/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users-admin'] });
+      setEditId(null);
+      toast('Usuario actualizado');
+    },
+    onError: (e: any) => toast(e.message, true),
+  });
+
   const resetPass = useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) =>
       api.post(`/users/${id}/reset-password`, { password }),
@@ -416,6 +429,18 @@ function UsersSection() {
     if (!form.password) return toast('La contraseña es obligatoria', true);
     if (form.password.length < 6) return toast('La contraseña debe tener al menos 6 caracteres', true);
     create.mutate({ name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password, role: form.role });
+  }
+
+  function openEdit(u: any) {
+    setEditId(u.id);
+    setEditForm({ name: u.name, email: u.email, role: u.role });
+    setResetId(null);
+  }
+
+  function handleUpdate() {
+    if (!editForm.name.trim()) return toast('El nombre es obligatorio', true);
+    if (!editForm.email.trim()) return toast('El correo es obligatorio', true);
+    update.mutate({ id: editId!, name: editForm.name.trim(), email: editForm.email.trim(), role: editForm.role });
   }
 
   return (
@@ -517,8 +542,15 @@ function UsersSection() {
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button
                     className="dc-btn"
+                    title="Editar usuario"
+                    onClick={() => editId === u.id ? setEditId(null) : openEdit(u)}
+                    style={{ borderColor: 'var(--v)', color: 'var(--v)' }}>
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    className="dc-btn"
                     title="Restablecer contraseña"
-                    onClick={() => { setResetId(resetId === u.id ? null : u.id); setNewPass(''); }}
+                    onClick={() => { setResetId(resetId === u.id ? null : u.id); setNewPass(''); setEditId(null); }}
                     style={{ borderColor: 'var(--az)', color: 'var(--az)' }}>
                     <RotateCcw size={13} />
                   </button>
@@ -533,6 +565,49 @@ function UsersSection() {
                   </button>
                 </div>
               </div>
+
+              {/* Inline edit panel */}
+              {editId === u.id && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1.5px solid var(--brd)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--v)', marginBottom: 10 }}>
+                    Editar datos de {u.name}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <label className="fl" style={{ fontSize: 11 }}>Nombre *</label>
+                      <input className="fi" value={editForm.name}
+                        onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                        style={{ padding: '8px 11px', fontSize: 13 }} autoFocus />
+                    </div>
+                    <div>
+                      <label className="fl" style={{ fontSize: 11 }}>Correo *</label>
+                      <input className="fi" type="email" value={editForm.email}
+                        onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                        style={{ padding: '8px 11px', fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label className="fl" style={{ fontSize: 11 }}>Rol *</label>
+                      <select className="fi" value={editForm.role}
+                        onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                        style={{ padding: '8px 11px', fontSize: 13 }}>
+                        <option value="encargado">Encargado</option>
+                        <option value="domiciliario">Domiciliario</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="bpri" style={{ flex: 0, padding: '8px 18px', margin: 0, fontSize: 13 }}
+                      onClick={handleUpdate} disabled={update.isPending}>
+                      <Check size={13} /> {update.isPending ? 'Guardando...' : 'Guardar cambios'}
+                    </button>
+                    <button className="bsec" style={{ flex: 0, padding: '8px 14px', fontSize: 13 }}
+                      onClick={() => setEditId(null)}>
+                      <X size={13} /> Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Inline reset password panel */}
               {resetId === u.id && (

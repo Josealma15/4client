@@ -12,6 +12,7 @@ const createUserSchema = z.object({
 
 const updateUserSchema = z.object({
   name:   z.string().min(2).optional(),
+  email:  z.string().email().optional(),
   role:   z.enum(['admin', 'encargado', 'domiciliario']).optional(),
   active: z.boolean().optional(),
 });
@@ -66,9 +67,18 @@ export default async function userRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'No puedes desactivarte a ti mismo', code: 'SELF_DEACTIVATE' });
     }
 
+    // Check email uniqueness if changing email
+    if (body.data.email) {
+      const conflict = await fastify.prisma.user.findFirst({
+        where: { org_id: req.user.orgId, email: body.data.email.toLowerCase(), id: { not: id } },
+      });
+      if (conflict) return reply.status(409).send({ error: 'Email ya registrado en esta organización', code: 'DUPLICATE_EMAIL' });
+    }
+
+    const updateData = { ...body.data, ...(body.data.email ? { email: body.data.email.toLowerCase() } : {}) };
     const result = await fastify.prisma.user.updateMany({
       where: { id, org_id: req.user.orgId },
-      data: body.data,
+      data: updateData,
     });
     if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
     return reply.send({ data: { ok: true } });
