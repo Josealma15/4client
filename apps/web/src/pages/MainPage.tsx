@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ClipboardList, BarChart2, MessageSquare,
+  ClipboardList, BarChart2, MessageSquare, Settings,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth';
 import { useOrders } from '../hooks/useOrders';
@@ -17,6 +17,7 @@ import CierreCajaModal from '../components/modals/CierreCajaModal';
 import DetallePedidoModal from '../components/modals/DetallePedidoModal';
 import InboxPanel from '../components/inbox/InboxPanel';
 import ResumenTab from '../components/dashboard/ResumenTab';
+import ConfigTab from '../components/config/ConfigTab';
 import Toast from '../components/ui/Toast';
 
 interface Ticket {
@@ -35,7 +36,8 @@ export default function MainPage() {
   const qc = useQueryClient();
 
   const [fecha, setFecha] = useState(todayStr());
-  const [tab, setTab] = useState<'swimlane' | 'inbox' | 'resumen'>('swimlane');
+  const [tab, setTab] = useState<'swimlane' | 'inbox' | 'resumen' | 'config'>('swimlane');
+  const [unreadWpp, setUnreadWpp] = useState(0);
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [showCierre, setShowCierre] = useState(false);
@@ -67,13 +69,16 @@ export default function MainPage() {
     });
     socket.on('order:moved', () => qc.invalidateQueries({ queryKey: ['orders', fecha] }));
     socket.on('order:paid', () => qc.invalidateQueries({ queryKey: ['orders', fecha] }));
-    const onTicketMessage = (data: { ticketId: string }) => {
+    const onTicketMessage = (data: { ticketId: string; message?: { direction?: string } }) => {
       qc.invalidateQueries({ queryKey: ['tickets', fecha] });
       qc.invalidateQueries({ queryKey: ['inbox'] });
-      // Refresh any open conversation (TicketModal, DetallePedidoModal chat, InboxPanel)
       if (data?.ticketId) {
         qc.invalidateQueries({ queryKey: ['inbox-convo', data.ticketId] });
         qc.invalidateQueries({ queryKey: ['ticket', data.ticketId] });
+      }
+      // Badge: increment only for incoming messages when not viewing inbox
+      if (data?.message?.direction === 'in') {
+        setUnreadWpp((n) => n + 1);
       }
     };
     const onTicketUnread = () => {
@@ -140,13 +145,30 @@ export default function MainPage() {
             <ClipboardList size={15} /> Tickets & Pedidos
           </button>
           {isAdmin && (
-            <button className={`tab${tab === 'inbox' ? ' on' : ''}`} onClick={() => setTab('inbox')}>
+            <button className={`tab${tab === 'inbox' ? ' on' : ''}`}
+              onClick={() => { setTab('inbox'); setUnreadWpp(0); }}
+              style={{ position: 'relative' }}>
               <MessageSquare size={15} /> Chats WPP
+              {unreadWpp > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  minWidth: 17, height: 17, background: '#DC2626', borderRadius: 10,
+                  color: '#fff', fontSize: 10, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                }}>
+                  {unreadWpp > 99 ? '99+' : unreadWpp}
+                </span>
+              )}
             </button>
           )}
           {isAdmin && (
             <button className={`tab${tab === 'resumen' ? ' on' : ''}`} onClick={() => setTab('resumen')}>
               <BarChart2 size={15} /> Informe del día
+            </button>
+          )}
+          {isAdmin && (
+            <button className={`tab${tab === 'config' ? ' on' : ''}`} onClick={() => setTab('config')}>
+              <Settings size={15} /> Configuración
             </button>
           )}
         </div>
@@ -218,6 +240,8 @@ export default function MainPage() {
             onCierreCaja={() => setShowCierre(true)}
           />
         )}
+
+        {tab === 'config' && isAdmin && <ConfigTab />}
       </div>
 
       {fromTicket && (

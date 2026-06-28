@@ -1,0 +1,91 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import bcrypt from 'bcrypt';
+import { authenticate, requireRole } from '../middleware/auth.js';
+
+const createUserSchema = z.object({
+  name:     z.string().min(2),
+  email:    z.string().email(),
+  password: z.string().min(6),
+  role:     z.enum(['admin', 'encargado', 'domiciliario']),
+});
+
+const updateUserSchema = z.object({
+  name:   z.string().min(2).optional(),
+  role:   z.enum(['admin', 'encargado', 'domiciliario']).optional(),
+  active: z.boolean().optional(),
+});
+
+const resetPassSchema = z.object({
+  password: z.string().min(6),
+});
+
+export default async function userRoutes(fastify: FastifyInstance) {
+  // GET /api/v1/users — list org users, admin only
+  fastify.get('/', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
+    const users = await fastify.prisma.user.findMany({
+      where: { org_id: req.user.orgId },
+      select: { id: true, name: true, email: true, role: true, active: true, last_login: true, created_at: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    });
+    return reply.send({ data: users });
+  });
+
+  // POST /api/v1/users — create user in org, admin only
+  fastify.post('/', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
+    const body = createUserSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+
+    const existing = await fastify.prisma.user.findFirst({
+      where: { org_id: req.user.orgId, email: body.data.email.toLowerCase() },
+    });
+    if (existing) return reply.status(409).send({ error: 'Email ya registrado en esta organización', code: 'DUPLICATE_EMAIL' });
+
+    const password_hash = await bcrypt.hash(body.data.password, 12);
+    const user = await fastify.prisma.user.create({
+      data: {
+        org_id: req.user.orgId,
+        name: body.data.name,
+        email: body.data.email.toLowerCase(),
+        password_hash,
+        role: body.data.role,
+      },
+      select: { id: true, name: true, email: true, role: true, active: true, created_at: true },
+    });
+    return reply.status(201).send({ data: user });
+  });
+
+  // PATCH /api/v1/users/:id — update user (name, role, active), admin only
+  fastify.patch('/:id', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = updateUserSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+
+    // Prevent admin from deactivating themselves
+    if (id === req.user.userId && body.data.active === false) {
+      return reply.status(400).send({ error: 'No puedes desactivarte a ti mismo', code: 'SELF_DEACTIVATE' });
+    }
+
+    const result = await fastify.prisma.user.updateMany({
+      where: { id, org_id: req.user.orgId },
+      data: body.data,
+    });
+    if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
+    return reply.send({ data: { ok: true } });
+  });
+
+  // POST /api/v1/users/:id/reset-password — admin resets any user's password
+  fastify.post('/:id/reset-password', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = resetPassSchema.safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: 'La contraseña debe tener al menos 6 caracteres', code: 'VALIDATION_ERROR' });
+
+    const password_hash = await bcrypt.hash(body.data.password, 12);
+    const result = await fastify.prisma.user.updateMany({
+      where: { id, org_id: req.user.orgId },
+      data: { password_hash },
+    });
+    if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
+    return reply.send({ data: { ok: true } });
+  });
+}
