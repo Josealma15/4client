@@ -4,7 +4,7 @@ import {
   FileText, Trash2, History, ChevronDown, ChevronRight, Lock,
   MessageSquare, MessageCircleOff, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
-import { STATUS_LABEL, fmtCOP } from '../../lib/format';
+import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   nuevo: { bg: '#F8FAFC', fg: '#94A3B8' },
@@ -269,7 +269,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
                         <div className="ord-hist-sub" style={{ paddingLeft: 32 }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px 12px', fontSize: 13, marginBottom: orderHist.length > 0 ? 10 : 0 }}>
                             <div><span style={{ color: 'var(--gt)' }}>Teléfono: </span>{o.customer_phone ?? '—'}</div>
-                            <div><span style={{ color: 'var(--gt)' }}>Pago: </span>{o.payment_method ?? '—'}</div>
+                            <div><span style={{ color: 'var(--gt)' }}>Pago: </span>{PAYMENT_LABEL[o.payment_method] ?? o.payment_method ?? '-'}</div>
                             <div><span style={{ color: 'var(--gt)' }}>Dom: </span>{o.employee?.name ?? 'Sin asignar'}</div>
                           </div>
                           {o.items && o.items.length > 0 && (
@@ -331,7 +331,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
             return (
               <div key={o.id} className="papcard">
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 14, fontWeight: 800 }}>#{o.num} — {o.customer_name}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800 }}>#{o.num} - {o.customer_name}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--r)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Trash2 size={11} /> {new Date(o.updated_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -341,7 +341,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
                   {o.items?.map((i: any) => `${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}`).join(' · ')}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 4, fontWeight: 700 }}>
-                  {fmtCOP(total)} · {o.payment_method}
+                  {fmtCOP(total)} · {PAYMENT_LABEL[o.payment_method] ?? o.payment_method}
                 </div>
               </div>
             );
@@ -360,7 +360,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
             <div key={i} className="elogcard">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                 <span style={{ fontSize: 14, fontWeight: 800 }}>
-                  Pedido #{h.order?.num ?? '?'} — {h.order?.customer_name ?? ''}
+                  Pedido #{h.order?.num ?? '?'} - {h.order?.customer_name ?? ''}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--a)', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <History size={11} /> {new Date(h.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
@@ -371,9 +371,9 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
               </div>
               {h.value_before != null && h.value_after != null && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
-                  <span className="diff-old">− {h.value_before}</span>
+                  <span className="diff-old">- {PAYMENT_LABEL[h.value_before] ?? STATUS_LABEL[h.value_before] ?? h.value_before}</span>
                   <span className="diff-arrow">→</span>
-                  <span className="diff-new">+ {h.value_after}</span>
+                  <span className="diff-new">+ {PAYMENT_LABEL[h.value_after] ?? STATUS_LABEL[h.value_after] ?? h.value_after}</span>
                 </div>
               )}
               {h.notes && !h.value_before && !h.value_after && (
