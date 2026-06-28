@@ -69,6 +69,9 @@ async function ingestMessage(
     where: { org_id: org.id, phone, fecha: todayLocal },
   });
 
+  // True only when no ticket exists yet today — first message of the day
+  const isNewTicket = !ticket;
+
   if (!ticket) {
     ticket = await fastify.prisma.ticket.create({
       data: {
@@ -90,8 +93,6 @@ async function ingestMessage(
       },
     });
   }
-
-  const isNewTicket = !ticket || ticket.unread_count === 0;
 
   const message = await fastify.prisma.ticketMessage.create({
     data: {
