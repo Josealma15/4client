@@ -174,7 +174,7 @@ export default function MainPage() {
         </div>
       </header>
 
-      <div className="ac">
+      <div className={`ac${tab === 'inbox' ? ' inbox-mode' : ''}`}>
         {tab === 'swimlane' && (
           <>
             <div className="khead">
@@ -216,7 +216,7 @@ export default function MainPage() {
 
         {tab === 'inbox' && isAdmin && (
           <>
-            <div className="khead">
+            <div className="khead" style={{ marginBottom: 0, flexShrink: 0 }}>
               <div>
                 <div className="ktit">Chats WhatsApp</div>
                 <div className="kmeta">Bandeja de entrada - todas las conversaciones</div>
