@@ -144,6 +144,9 @@ async function ingestMessage(
 }
 
 export default async function webhookRoutes(fastify: FastifyInstance) {
+  if (!config.META_APP_SECRET) {
+    fastify.log.warn('⚠️  META_APP_SECRET no configurado — webhook acepta solicitudes sin verificar firma HMAC');
+  }
   // Capture raw body for HMAC validation before JSON parsing
   fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
     try {
@@ -201,10 +204,13 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
         for (const msg of messages) {
           if (msg.type !== 'text' || !msg.text?.body) continue;
 
-          const phone  = msg.from;
-          const name   = contacts?.find(c => c.wa_id === phone)?.profile.name ?? phone;
-          const text   = msg.text.body;
           const sentAt = new Date(parseInt(msg.timestamp) * 1000);
+          // Reject replayed messages older than 10 minutes
+          if (Date.now() - sentAt.getTime() > 10 * 60 * 1000) continue;
+
+          const phone  = String(msg.from ?? '').slice(0, 20);
+          const name   = String(contacts?.find(c => c.wa_id === msg.from)?.profile.name ?? msg.from ?? '').slice(0, 200);
+          const text   = String(msg.text.body).slice(0, 4096);
 
           ingestMessage(fastify, metadata.phone_number_id, phone, name, text, msg.id, sentAt)
             .catch(err => fastify.log.error({ err }, 'WPP: error ingiriendo mensaje'));

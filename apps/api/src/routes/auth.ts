@@ -2,12 +2,25 @@ import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { config } from '../config.js';
 import { authenticate } from '../middleware/auth.js';
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+// Pre-computed dummy hash — prevents timing attack revealing user existence.
+// bcrypt.compare always runs regardless of whether user was found.
+const DUMMY_HASH = '$2b$12$LzVFpXDW.jkMhGlXb2WiIeq3rAhnWPvVRqSRLCLdTT0W5HjCMfBtm';
+
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: config.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path: '/api/v1/auth',
+  maxAge: 7 * 24 * 60 * 60, // 7 days
+};
 
 export default async function authRoutes(fastify: FastifyInstance) {
   // POST /api/v1/auth/login — rate limited to 10 attempts/min per IP
@@ -24,12 +37,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
       include: { org: true },
     });
 
-    if (!user || !user.org.active) {
-      return reply.status(401).send({ error: 'Credenciales incorrectas', code: 'INVALID_CREDENTIALS' });
-    }
+    // Always run bcrypt to prevent timing-based user enumeration
+    const hashToCheck = user?.password_hash ?? DUMMY_HASH;
+    const valid = await bcrypt.compare(password, hashToCheck);
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
+    if (!user || !user.org.active || !valid) {
       return reply.status(401).send({ error: 'Credenciales incorrectas', code: 'INVALID_CREDENTIALS' });
     }
 
@@ -49,10 +61,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
       data: { last_login: new Date() },
     });
 
+    reply.setCookie('rf', rawRefresh, COOKIE_OPTS);
+
     return reply.send({
       data: {
         accessToken,
-        refreshToken: rawRefresh,
         user: {
           id: user.id,
           org_id: user.org_id,
@@ -68,14 +81,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // POST /api/v1/auth/refresh
-  fastify.post('/refresh', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const body = z.object({ refreshToken: z.string() }).safeParse(req.body);
-    if (!body.success) {
-      return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
+  // POST /api/v1/auth/refresh — reads refresh token from HttpOnly cookie
+  fastify.post('/refresh', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const rawRefresh = (req.cookies as Record<string, string>)?.rf;
+    if (!rawRefresh) {
+      return reply.status(401).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     }
 
-    const tokenHash = crypto.createHash('sha256').update(body.data.refreshToken).digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
 
     const stored = await fastify.prisma.refreshToken.findFirst({
       where: { token_hash: tokenHash, revoked: false },
@@ -83,16 +96,17 @@ export default async function authRoutes(fastify: FastifyInstance) {
     });
 
     if (!stored || stored.expires_at <= new Date()) {
+      reply.clearCookie('rf', { path: '/api/v1/auth' });
       return reply.status(401).send({ error: 'Token inválido o expirado', code: 'INVALID_REFRESH_TOKEN' });
     }
 
-    // Reject if user or org was deactivated after token was issued
     if (!stored.user.active || !stored.user.org.active) {
       await fastify.prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
+      reply.clearCookie('rf', { path: '/api/v1/auth' });
       return reply.status(401).send({ error: 'Usuario inactivo', code: 'USER_INACTIVE' });
     }
 
-    // Rotar el refresh token
+    // Rotate refresh token
     await fastify.prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
 
     const newRaw = crypto.randomBytes(40).toString('hex');
@@ -106,19 +120,21 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const payload = { userId: stored.user.id, orgId: stored.user.org_id, role: stored.user.role as import('@4client/shared').UserRole };
     const accessToken = fastify.jwt.sign(payload, { expiresIn: '15m' });
 
-    return reply.send({ data: { accessToken, refreshToken: newRaw } });
+    reply.setCookie('rf', newRaw, COOKIE_OPTS);
+    return reply.send({ data: { accessToken } });
   });
 
   // POST /api/v1/auth/logout
   fastify.post('/logout', { preHandler: [authenticate] }, async (req, reply) => {
-    const body = z.object({ refreshToken: z.string() }).safeParse(req.body);
-    if (body.success) {
-      const tokenHash = crypto.createHash('sha256').update(body.data.refreshToken).digest('hex');
+    const rawRefresh = (req.cookies as Record<string, string>)?.rf;
+    if (rawRefresh) {
+      const tokenHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
       await fastify.prisma.refreshToken.updateMany({
         where: { token_hash: tokenHash },
         data: { revoked: true },
       });
     }
+    reply.clearCookie('rf', { path: '/api/v1/auth' });
     return reply.send({ data: { ok: true } });
   });
 

@@ -35,15 +35,17 @@ function formatDateTime(raw: string | null | undefined): string {
   });
 }
 
-const URL_RE = /(https?:\/\/[^\s]+)/g;
+const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
   const parts = text.split(URL_RE);
-  return parts.map((p, i) =>
-    URL_RE.test(p)
-      ? <a key={i} href={p} target="_blank" rel="noreferrer"
+  URL_RE.lastIndex = 0;
+  return parts.map((p, i) => {
+    URL_RE.lastIndex = 0;
+    return URL_RE.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noreferrer noopener"
           style={{ color: 'var(--v)', textDecoration: 'underline', wordBreak: 'break-all' }}>{p}</a>
-      : p
-  );
+      : p;
+  });
 }
 
 export default function DetallePedidoModal({ orderId, onClose, openCobro }: Props) {
@@ -246,7 +248,8 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       const res = await api.post<{ url: string }>('/files/invoice', { data: base64, num: order.num });
       const url = res.url;
       const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
-      const msg = `Factura Pedido #${order.num} - Fruver San Gabriel\nCliente: ${order.customer_name}\nTotal: $${total.toLocaleString('es-CO')}\nDescarga tu factura: ${url}`;
+      const orgName = user?.orgName ?? '4Client';
+      const msg = `Factura Pedido #${order.num} - ${orgName}\nCliente: ${order.customer_name}\nTotal: $${total.toLocaleString('es-CO')}\nDescarga tu factura: ${url}`;
       invoiceMut.mutate(msg);
     } catch {
       toast('Error al subir la factura', true);
@@ -256,7 +259,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   function copyInvoice() {
     if (!order) return;
     const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
-    const lines = [`Pedido #${order.num} — Fruver San Gabriel`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
+    const lines = [`Pedido #${order.num} — ${user?.orgName ?? '4Client'}`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
     items.forEach(i => lines.push(`• ${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}: $${(parseFloat(i.price)||0).toLocaleString('es-CO')}`));
     lines.push('', `Total: $${total.toLocaleString('es-CO')}`, `Pago: ${PAYMENT_LABEL[pago] ?? pago}`);
     navigator.clipboard.writeText(lines.join('\n'));

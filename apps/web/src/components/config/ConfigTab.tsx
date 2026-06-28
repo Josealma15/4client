@@ -365,6 +365,8 @@ function EmployeesSection() {
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 function UsersSection() {
+  const currentUser = useAuthStore(s => s.user);
+  const canAssignDev = currentUser?.role === 'dev';
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [resetId, setResetId] = useState<string | null>(null);
@@ -493,7 +495,7 @@ function UsersSection() {
                 <option value="encargado">Encargado</option>
                 <option value="domiciliario">Domiciliario</option>
                 <option value="admin">Administrador</option>
-                <option value="dev">Dev (super-admin)</option>
+                {canAssignDev && <option value="dev">Dev (super-admin)</option>}
               </select>
             </div>
           </div>
@@ -596,7 +598,7 @@ function UsersSection() {
                         <option value="encargado">Encargado</option>
                         <option value="domiciliario">Domiciliario</option>
                         <option value="admin">Administrador</option>
-                        <option value="dev">Dev (super-admin)</option>
+                        {canAssignDev && <option value="dev">Dev (super-admin)</option>}
                       </select>
                     </div>
                   </div>

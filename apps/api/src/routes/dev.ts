@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 
 const ALLOWED_TABLES = [
   'users', 'organizations', 'products', 'employees',
-  'orders', 'tickets', 'ticket_messages', 'refresh_tokens',
+  'orders', 'tickets', 'ticket_messages',
   'order_history', 'daily_closes',
 ] as const;
 type AllowedTable = (typeof ALLOWED_TABLES)[number];
@@ -13,59 +13,58 @@ type AllowedTable = (typeof ALLOWED_TABLES)[number];
 async function queryTable(
   prisma: FastifyInstance['prisma'],
   table: AllowedTable,
+  orgId: string,
   lim: number,
   off: number,
 ): Promise<{ rows: any[]; total: number }> {
   switch (table) {
     case 'users':
       return {
-        rows: await prisma.user.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.user.count(),
+        rows: await prisma.user.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.user.count({ where: { org_id: orgId } }),
       };
     case 'organizations':
       return {
-        rows: await prisma.organization.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.organization.count(),
+        rows: await prisma.organization.findMany({ where: { id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.organization.count({ where: { id: orgId } }),
       };
     case 'products':
       return {
-        rows: await prisma.product.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.product.count(),
+        rows: await prisma.product.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.product.count({ where: { org_id: orgId } }),
       };
     case 'employees':
       return {
-        rows: await prisma.employee.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.employee.count(),
+        rows: await prisma.employee.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.employee.count({ where: { org_id: orgId } }),
       };
     case 'orders':
       return {
-        rows: await prisma.order.findMany({ take: lim, skip: off, orderBy: { fecha: 'desc' } }),
-        total: await prisma.order.count(),
+        rows: await prisma.order.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { fecha: 'desc' } }),
+        total: await prisma.order.count({ where: { org_id: orgId } }),
       };
     case 'tickets':
       return {
-        rows: await prisma.ticket.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.ticket.count(),
+        rows: await prisma.ticket.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.ticket.count({ where: { org_id: orgId } }),
       };
     case 'ticket_messages':
       return {
-        rows: await prisma.ticketMessage.findMany({ take: lim, skip: off, orderBy: { sent_at: 'desc' } }),
-        total: await prisma.ticketMessage.count(),
-      };
-    case 'refresh_tokens':
-      return {
-        rows: await prisma.refreshToken.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.refreshToken.count(),
+        rows: await prisma.ticketMessage.findMany({
+          where: { ticket: { org_id: orgId } },
+          take: lim, skip: off, orderBy: { sent_at: 'desc' },
+        }),
+        total: await prisma.ticketMessage.count({ where: { ticket: { org_id: orgId } } }),
       };
     case 'order_history':
       return {
-        rows: await prisma.orderHistory.findMany({ take: lim, skip: off, orderBy: { created_at: 'desc' } }),
-        total: await prisma.orderHistory.count(),
+        rows: await prisma.orderHistory.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.orderHistory.count({ where: { org_id: orgId } }),
       };
     case 'daily_closes':
       return {
-        rows: await prisma.dailyClose.findMany({ take: lim, skip: off, orderBy: { fecha: 'desc' } }),
-        total: await prisma.dailyClose.count(),
+        rows: await prisma.dailyClose.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { fecha: 'desc' } }),
+        total: await prisma.dailyClose.count({ where: { org_id: orgId } }),
       };
   }
 }
@@ -74,8 +73,12 @@ export default async function devRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireRole('dev'));
 
-  // GET /dev/db?table=users&limit=20&offset=0
+  // GET /dev/db?table=users&limit=20&offset=0 — scoped to own org only
   fastify.get('/db', async (req: any, reply) => {
+    if (config.NODE_ENV === 'production') {
+      return reply.status(403).send({ error: 'Acceso directo a BD deshabilitado en producción', code: 'FORBIDDEN' });
+    }
+
     const { table = 'users', limit = '20', offset = '0' } = req.query as Record<string, string>;
 
     if (!ALLOWED_TABLES.includes(table as AllowedTable)) {
@@ -85,7 +88,7 @@ export default async function devRoutes(fastify: FastifyInstance) {
     const lim = Math.min(parseInt(limit) || 20, 200);
     const off = Math.max(parseInt(offset) || 0, 0);
 
-    const { rows, total } = await queryTable(fastify.prisma, table as AllowedTable, lim, off);
+    const { rows, total } = await queryTable(fastify.prisma, table as AllowedTable, req.user.orgId, lim, off);
 
     return reply.send({ data: rows, total, limit: lim, offset: off });
   });

@@ -14,12 +14,12 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post<{ data: { accessToken: string; refreshToken: string; user: any } }>(
+      const res = await api.post<{ data: { accessToken: string; user: any } }>(
         '/auth/login', { email, password }
       );
       const apiUser = res.data.user as any;
       setAuth(
-        { accessToken: res.data.accessToken, refreshToken: res.data.refreshToken },
+        { accessToken: res.data.accessToken },
         { ...apiUser, userId: apiUser.id, orgId: apiUser.org_id, orgName: apiUser.org_name },
       );
     } catch (e: any) {

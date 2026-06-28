@@ -9,6 +9,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().accessToken;
   const res = await fetch(`${BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -35,13 +36,12 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 async function doRefresh(): Promise<boolean> {
-  const { refreshToken, setAccessToken, clearAuth } = useAuthStore.getState();
-  if (!refreshToken) return false;
+  const { setAccessToken, clearAuth } = useAuthStore.getState();
   try {
     const res = await fetch(`${BASE}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      credentials: 'include', // HttpOnly cookie sent automatically
     });
     if (!res.ok) { clearAuth(); return false; }
     const { data } = await res.json();
@@ -59,3 +59,10 @@ export const api = {
   patch:  <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+// Call on app init to restore access token from HttpOnly cookie if session exists
+export async function tryRestoreSession(): Promise<boolean> {
+  if (useAuthStore.getState().accessToken) return true;
+  if (!useAuthStore.getState().user) return false; // no persisted user = fresh start
+  return doRefresh();
+}

@@ -100,8 +100,7 @@ export default function MainPage() {
   }, [accessToken, fecha]);
 
   async function handleLogout() {
-    const { refreshToken } = useAuthStore.getState();
-    if (refreshToken) await api.post('/auth/logout', { refreshToken }).catch(() => {});
+    await api.post('/auth/logout', {}).catch(() => {});
     disconnectSocket();
     clearAuth();
   }
