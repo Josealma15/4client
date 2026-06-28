@@ -33,7 +33,7 @@ export default function LoginPage() {
     <div style={{ background: 'linear-gradient(140deg,var(--vd) 0%,var(--v) 60%,#2eac62 100%)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div className="lcard">
         <div className="llogo">
-          <div className="llogo-t">4Client</div>
+          <img src="/logo.png" alt="4Client" style={{ height: 80, objectFit: 'contain' }} />
         </div>
         <p className="lsub">Sistema de Gestión Operativa<br />Fruver San Gabriel</p>
         <div className="fg">
