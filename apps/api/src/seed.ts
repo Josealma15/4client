@@ -91,7 +91,7 @@ async function main() {
   console.log(`✅ Org: ${org.name} (${org.id})`);
 
   // Usuario admin
-  const adminHash = await bcrypt.hash('admin1234', 12);
+  const adminHash = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.upsert({
     where: { org_id_email: { org_id: org.id, email: 'admin@fruver.com' } },
     update: {},
@@ -99,14 +99,14 @@ async function main() {
       org_id: org.id,
       email: 'admin@fruver.com',
       password_hash: adminHash,
-      name: 'Administrador',
+      name: 'Juan Ignasio',
       role: 'admin',
     },
   });
   console.log(`✅ Admin: ${admin.email}`);
 
   // Usuario dev (super-admin del sistema)
-  const devHash = await bcrypt.hash('dev5678!', 12);
+  const devHash = await bcrypt.hash('josejose', 12);
   await prisma.user.upsert({
     where: { org_id_email: { org_id: org.id, email: 'dev@fruver.com' } },
     update: {},
@@ -114,40 +114,11 @@ async function main() {
       org_id: org.id,
       email: 'dev@fruver.com',
       password_hash: devHash,
-      name: 'Dev',
+      name: 'Jose Alvarez',
       role: 'dev',
     },
   });
   console.log('✅ Dev: dev@fruver.com');
-
-  // Usuario encargado
-  const encHash = await bcrypt.hash('encargado1234', 12);
-  const encargado = await prisma.user.upsert({
-    where: { org_id_email: { org_id: org.id, email: 'encargado@fruver.com' } },
-    update: {},
-    create: {
-      org_id: org.id,
-      email: 'encargado@fruver.com',
-      password_hash: encHash,
-      name: 'Jose Alvarez',
-      role: 'encargado',
-    },
-  });
-  console.log(`✅ Encargado: ${encargado.email}`);
-
-  // Domiciliarios
-  const dom1 = await prisma.employee.upsert({
-    where: { id: (await prisma.employee.findFirst({ where: { org_id: org.id, name: 'Pedro Gómez' } }))?.id ?? '00000000-0000-0000-0000-000000000001' },
-    update: {},
-    create: { org_id: org.id, name: 'Pedro Gómez', role: 'domiciliario' },
-  }).catch(async () => {
-    return prisma.employee.create({ data: { org_id: org.id, name: 'Pedro Gómez', role: 'domiciliario' } });
-  });
-
-  const dom2 = await prisma.employee.findFirst({ where: { org_id: org.id, name: 'Andrés Castillo' } })
-    ?? await prisma.employee.create({ data: { org_id: org.id, name: 'Andrés Castillo', role: 'domiciliario' } });
-
-  console.log(`✅ Domiciliarios: Pedro Gómez, Andrés Castillo`);
 
   // Productos
   let prodCount = 0;
@@ -166,10 +137,10 @@ async function main() {
 
   console.log('\n🎉 Seed completado!');
   console.log('─────────────────────────────────');
-  console.log('Credenciales de acceso:');
-  console.log('  Admin:     admin@fruver.com     / admin1234');
-  console.log('  Dev:       dev@fruver.com       / dev5678!');
-  console.log('  Encargado: encargado@fruver.com / encargado1234');
+  console.log('Usuarios creados:');
+  console.log('  admin@fruver.com  (admin)');
+  console.log('  dev@fruver.com    (dev)');
+  console.log('  → Contraseñas definidas por SEED_ADMIN_PASS / SEED_DEV_PASS');
   console.log('─────────────────────────────────');
 }
 

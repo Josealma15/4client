@@ -9,11 +9,13 @@ import { randomUUID } from 'crypto';
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
 export default async function fileRoutes(fastify: FastifyInstance) {
+  const MAX_BASE64_BYTES = 28_000_000; // ~20 MB decoded
+
   // POST /api/v1/files/invoice — save base64 PDF, return download URL
   fastify.post('/invoice', { preHandler: [authenticate] }, async (req, reply) => {
     const body = z.object({
-      data: z.string().min(1),
-      num: z.string(),
+      data: z.string().min(1).max(MAX_BASE64_BYTES),
+      num: z.string().max(20),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos' });
 

@@ -2,37 +2,34 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
+const orderItemSchema = z.object({
+  product_name:   z.string().min(1).max(200),
+  quantity_label: z.string().max(50).optional(),
+  price:          z.number().min(0).max(9_999_999),
+  sort_order:     z.number().default(0),
+});
+
 const createOrderSchema = z.object({
   ticket_id:      z.string().uuid().optional(),
-  customer_name:  z.string().min(1),
-  customer_phone: z.string().optional(),
-  address:        z.string().min(1),
+  customer_name:  z.string().min(1).max(200),
+  customer_phone: z.string().max(20).optional(),
+  address:        z.string().min(1).max(500),
   channel:        z.enum(['whatsapp', 'call']).default('whatsapp'),
   payment_method: z.enum(['cash', 'transfer', 'cod']),
   employee_id:    z.string().uuid().optional(),
-  notes:          z.string().optional(),
+  notes:          z.string().max(1000).optional(),
   fecha:          z.string().optional(),
-  items: z.array(z.object({
-    product_name:   z.string().min(1),
-    quantity_label: z.string().optional(),
-    price:          z.number().min(0),
-    sort_order:     z.number().default(0),
-  })),
+  items:          z.array(orderItemSchema).min(1).max(100),
 });
 
 const updateOrderSchema = z.object({
-  customer_name:  z.string().optional(),
-  customer_phone: z.string().optional(),
-  address:        z.string().optional(),
+  customer_name:  z.string().min(1).max(200).optional(),
+  customer_phone: z.string().max(20).optional(),
+  address:        z.string().min(1).max(500).optional(),
   payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
   employee_id:    z.string().uuid().nullable().optional(),
-  notes:          z.string().optional(),
-  items: z.array(z.object({
-    product_name:   z.string().min(1),
-    quantity_label: z.string().optional(),
-    price:          z.number().min(0),
-    sort_order:     z.number().default(0),
-  })).optional(),
+  notes:          z.string().max(1000).optional(),
+  items:          z.array(orderItemSchema).min(1).max(100).optional(),
 });
 
 function buildOrderSelect(includeHistory = false) {
@@ -224,7 +221,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   });
 
   // PATCH /api/v1/orders/:id/status
-  fastify.patch('/:id/status', { preHandler: [authenticate] }, async (req, reply) => {
+  fastify.patch('/:id/status', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ status: z.enum(['nuevo', 'preparando', 'listo', 'camino', 'entregado', 'papelera']) }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Estado inválido', code: 'VALIDATION_ERROR' });
@@ -254,11 +251,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/orders/:id/cobro
-  fastify.post('/:id/cobro', { preHandler: [authenticate] }, async (req, reply) => {
+  fastify.post('/:id/cobro', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
-      amount_received: z.number().min(0),
-      paid_by: z.string().uuid(),
+      amount_received: z.number().min(0).max(99_999_999),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
 
@@ -277,7 +273,8 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         where: { id },
         data: {
           status: 'cerrado', paid: true, locked: true,
-          paid_at: new Date(), paid_by: body.data.paid_by,
+          paid_at: new Date(),
+          paid_by: req.user.userId,   // always from authenticated user, never from body
           amount_received: body.data.amount_received,
           change_amount: change,
           updated_at: new Date(),

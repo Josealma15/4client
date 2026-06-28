@@ -19,6 +19,7 @@ import fileRoutes from './routes/files.js';
 import webhookRoutes from './routes/webhook.js';
 import userRoutes from './routes/users.js';
 import configRoutes from './routes/config.js';
+import devRoutes from './routes/dev.js';
 import { authenticate } from './middleware/auth.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
@@ -41,7 +42,10 @@ fastify.setErrorHandler((error, _req, reply) => {
   if (config.SENTRY_DSN) Sentry.captureException(error);
   fastify.log.error(error);
   const status = error.statusCode ?? 500;
-  reply.status(status).send({ error: error.message ?? 'Error interno', code: 'SERVER_ERROR' });
+  const message = config.NODE_ENV === 'production' && status >= 500
+    ? 'Error interno del servidor'
+    : (error.message ?? 'Error interno');
+  reply.status(status).send({ error: message, code: error.code ?? 'SERVER_ERROR' });
 });
 
 async function start() {
@@ -79,6 +83,7 @@ async function start() {
   await fastify.register(webhookRoutes,  { prefix: '/api/v1/webhook' });
   await fastify.register(userRoutes,     { prefix: '/api/v1/users' });
   await fastify.register(configRoutes,   { prefix: '/api/v1/config' });
+  await fastify.register(devRoutes,      { prefix: '/api/v1/dev' });
 
   // Health check
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));

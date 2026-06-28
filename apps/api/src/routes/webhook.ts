@@ -166,18 +166,22 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
   });
 
   // POST — incoming messages from Meta
-  fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
-    // HMAC-SHA256 signature validation
+  fastify.post('/', {
+    config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    // HMAC-SHA256 signature validation — mandatory when META_APP_SECRET is set
     const signature = (req.headers['x-hub-signature-256'] as string) ?? '';
     const rawBody = (req as FastifyRequest & { rawBody?: Buffer }).rawBody;
 
-    if (config.META_APP_SECRET && rawBody && signature) {
+    if (config.META_APP_SECRET) {
+      if (!rawBody || !signature) {
+        fastify.log.warn('WPP: request sin firma X-Hub-Signature-256');
+        return reply.status(403).send({ error: 'Firma requerida', code: 'MISSING_SIGNATURE' });
+      }
       if (!verifyHmac(rawBody, signature, config.META_APP_SECRET)) {
         fastify.log.warn('WPP: firma HMAC inválida');
-        return reply.status(403).send({ error: 'Firma inválida' });
+        return reply.status(403).send({ error: 'Firma inválida', code: 'INVALID_SIGNATURE' });
       }
-    } else if (config.META_APP_SECRET && !signature) {
-      fastify.log.warn('WPP: request sin firma X-Hub-Signature-256');
     }
 
     const payload = req.body as MetaWebhookPayload;

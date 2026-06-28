@@ -17,6 +17,8 @@ const envSchema = z.object({
   R2_BUCKET_NAME:            z.string().optional(),
   R2_PUBLIC_URL:             z.string().optional(),
   SENTRY_DSN:                z.string().optional(),
+  SEED_ADMIN_PASS:           z.string().min(8).default('admin123'),
+  SEED_DEV_PASS:             z.string().min(8).default('josejose'),
 });
 
 const parsed = envSchema.safeParse(process.env);

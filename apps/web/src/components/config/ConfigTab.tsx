@@ -724,51 +724,350 @@ function WhatsAppSection() {
   );
 }
 
-// ─── Dev section ──────────────────────────────────────────────────────────────
+// ─── DevTools sub-panels ──────────────────────────────────────────────────────
 
-function DevSection() {
+type DevTab = 'wpp' | 'seed' | 'bd' | 'sistema' | 'links';
+
+const DEV_TABS: { key: DevTab; label: string }[] = [
+  { key: 'wpp',    label: '📱 WhatsApp' },
+  { key: 'seed',   label: '🌱 Seed' },
+  { key: 'bd',     label: '🗄️ BD' },
+  { key: 'sistema',label: '⚙️ Sistema' },
+  { key: 'links',  label: '🔗 Links' },
+];
+
+const DB_TABLES = ['users', 'organizations', 'products', 'employees', 'orders', 'tickets', 'ticket_messages', 'refresh_tokens', 'order_history', 'daily_closes'];
+
+function DevWppPanel() {
+  const qc = useQueryClient();
+  const { data: org, isLoading } = useQuery({
+    queryKey: ['config-org'],
+    queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
+  });
+
+  const [phoneId, setPhoneId] = useState('');
+  const [token, setToken] = useState('');
+  const [welcome, setWelcome] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  if (!loaded && org) {
+    setPhoneId(org.wpp_meta_phone_id ?? '');
+    setWelcome(org.welcome_message ?? '');
+    setLoaded(true);
+  }
+
+  const save = useMutation({
+    mutationFn: (data: any) => api.patch('/config/wpp', data),
+    onSuccess: () => { toast('Config WPP guardada'); qc.invalidateQueries({ queryKey: ['config-org'] }); },
+    onError: () => toast('Error al guardar', true),
+  });
+
+  function handleSave() {
+    const data: any = { welcome_message: welcome || null };
+    if (phoneId.trim()) data.wpp_meta_phone_id = phoneId.trim();
+    if (token.trim()) data.wpp_meta_token = token.trim();
+    save.mutate(data);
+  }
+
+  if (isLoading) return <div style={{ padding: 24, color: 'var(--gt)' }}>Cargando...</div>;
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 6 }}>Phone Number ID</div>
+          <input
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', fontFamily: 'monospace' }}
+            value={phoneId} onChange={e => setPhoneId(e.target.value)}
+            placeholder={org?.wpp_meta_phone_id ? '(configurado)' : 'ej: 1162357783628740'}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 6 }}>Access Token</div>
+          <input
+            type="password"
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', fontFamily: 'monospace' }}
+            value={token} onChange={e => setToken(e.target.value)}
+            placeholder="Dejar vacío para no cambiar"
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 4 }}>Mensaje de bienvenida</div>
+          <div style={{ fontSize: 12, color: 'var(--gt)', marginBottom: 8 }}>Se envía al primer mensaje del día de cada cliente. Vacío = desactivado.</div>
+          <textarea
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', minHeight: 90, resize: 'vertical' }}
+            value={welcome} onChange={e => setWelcome(e.target.value)}
+            placeholder="ej: Hola 👋 Bienvenido a Fruver San Gabriel. En un momento serás atendido por nuestro personal."
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="bpri" onClick={handleSave} disabled={save.isPending}>
+            {save.isPending ? 'Guardando...' : 'Guardar configuración'}
+          </button>
+          <div style={{ fontSize: 12, color: org?.wpp_meta_phone_id ? 'var(--v)' : 'var(--gt)' }}>
+            {org?.wpp_meta_phone_id ? '✅ Phone ID configurado' : '⚠️ Sin configurar'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DevSeedPanel() {
+  const [logs, setLogs] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState(false);
+
+  const run = useMutation({
+    mutationFn: () => api.post<{ logs: string[]; success: boolean }>('/dev/seed', {}).then(r => r),
+    onSuccess: (data: any) => { setConfirm(false); setLogs(data.logs ?? []); },
+    onError: (e: any) => { setConfirm(false); setLogs([`❌ ${e.message}`]); },
+  });
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Ejecutar Seed</div>
+        <p style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 14, lineHeight: 1.5 }}>
+          Crea la org y usuarios base. Idempotente (upsert). Bloqueado en producción.
+        </p>
+        <div style={{ background: 'var(--gm)', borderRadius: 8, padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', marginBottom: 16, color: 'var(--n)', lineHeight: 1.8 }}>
+          admin@fruver.com &nbsp;→ $SEED_ADMIN_PASS<br />
+          dev@fruver.com &nbsp;&nbsp;&nbsp;→ $SEED_DEV_PASS
+        </div>
+        {!confirm ? (
+          <button className="bdel" onClick={() => setConfirm(true)}>▶ Ejecutar seed</button>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="bdel" onClick={() => run.mutate()} disabled={run.isPending}>
+              {run.isPending ? 'Ejecutando...' : '✓ Confirmar'}
+            </button>
+            <button className="bsec" onClick={() => setConfirm(false)}>Cancelar</button>
+          </div>
+        )}
+        {logs.length > 0 && (
+          <div style={{ marginTop: 16, background: '#0f172a', borderRadius: 8, padding: 14, fontSize: 12, fontFamily: 'monospace', color: '#94a3b8', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+            {logs.join('\n')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DevDbPanel() {
+  const [table, setTable] = useState('users');
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
+
+  const { data, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['dev-db', table, offset],
+    queryFn: () => api.get<{ data: any[]; total: number }>(`/dev/db?table=${table}&limit=${limit}&offset=${offset}`).then(r => r),
+    staleTime: 0,
+  });
+
+  const rows: any[] = (data as any)?.data ?? [];
+  const total: number = (data as any)?.total ?? 0;
+  const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const SECRET_COLS = new Set(['password_hash', 'token_hash', 'wpp_meta_token', 'wpp_meta_app_secret']);
+
+  function fmtVal(col: string, val: any): string {
+    if (val === null || val === undefined) return '—';
+    if (SECRET_COLS.has(col)) return '••••••••';
+    if (typeof val === 'boolean') return val ? '✓' : '✗';
+    const s = String(val);
+    return s.length > 60 ? s.slice(0, 57) + '...' : s;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select
+          className="fi"
+          style={{ width: 'auto', padding: '7px 12px', fontSize: 13 }}
+          value={table}
+          onChange={e => { setTable(e.target.value); setOffset(0); }}>
+          {DB_TABLES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button className="bsec" style={{ padding: '7px 14px', fontSize: 13 }} onClick={() => refetch()}>
+          {isFetching ? '...' : '↺ Refresh'}
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--gt)' }}>{total} filas totales</span>
+      </div>
+
+      {isLoading ? (
+        <div style={{ color: 'var(--gt)', padding: 16 }}>Cargando...</div>
+      ) : rows.length === 0 ? (
+        <div style={{ color: 'var(--gt)', padding: 16, fontSize: 13 }}>Sin datos en esta tabla.</div>
+      ) : (
+        <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--brd)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'monospace' }}>
+            <thead>
+              <tr style={{ background: 'var(--gm)' }}>
+                {cols.map(c => (
+                  <th key={c} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--gt)', borderBottom: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid var(--brd)', background: i % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
+                  {cols.map(c => {
+                    const display = fmtVal(c, row[c]);
+                    const isSecret = SECRET_COLS.has(c);
+                    return (
+                      <td
+                        key={c}
+                        title={isSecret ? '(oculto)' : String(row[c] ?? '')}
+                        style={{ padding: '7px 12px', color: isSecret ? 'var(--gt)' : 'var(--n)', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {display}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12 }}
+          disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
+          ← Prev
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--gt)' }}>
+          {rows.length > 0 ? `${offset + 1}–${offset + rows.length} de ${total}` : '0 resultados'}
+        </span>
+        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12 }}
+          disabled={rows.length < limit} onClick={() => setOffset(offset + limit)}>
+          Next →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DevSistemaPanel() {
   const { data: org } = useQuery({
     queryKey: ['config-org'],
     queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
   });
 
+  const { data: health, refetch: pingHealth, isFetching: pinging } = useQuery({
+    queryKey: ['dev-health'],
+    queryFn: () => api.get<any>('/dev/health').then(r => r),
+    enabled: false,
+  });
+
+  const h = health as any;
+
   return (
-    <div style={{ maxWidth: 560, padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 }}>Estado del sistema</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 }}>Org</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
-            { label: 'Org ID', value: org?.id },
-            { label: 'Slug', value: org?.slug },
-            { label: 'Plan', value: org?.plan },
-            { label: 'WPP Phone ID', value: org?.wpp_meta_phone_id ?? '—' },
-            { label: 'WPP conectado', value: org?.wpp_meta_phone_id ? '✅ Sí' : '❌ No' },
-            { label: 'Mensaje bienvenida', value: org?.welcome_message ? '✅ Configurado' : '—' },
-          ].map(({ label, value }) => (
+            ['Org ID', org?.id],
+            ['Slug', org?.slug],
+            ['Plan', org?.plan],
+            ['WPP Phone ID', org?.wpp_meta_phone_id ?? '—'],
+            ['WPP conectado', org?.wpp_meta_phone_id ? '✅ Sí' : '❌ No'],
+            ['Bienvenida', org?.welcome_message ? '✅ Configurada' : '—'],
+          ].map(([label, value]) => (
             <div key={label} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
-              <span style={{ color: 'var(--gt)', minWidth: 160 }}>{label}</span>
+              <span style={{ color: 'var(--gt)', minWidth: 140 }}>{label}</span>
               <span style={{ color: 'var(--n)', fontFamily: 'monospace', wordBreak: 'break-all' }}>{value}</span>
             </div>
           ))}
         </div>
       </div>
+
       <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Links rápidos</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: 1 }}>API Health</div>
+          <button className="bsec" style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => pingHealth()} disabled={pinging}>
+            {pinging ? 'Pingando...' : '▶ Ping'}
+          </button>
+        </div>
+        {h ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              ['Status', h.status],
+              ['DB latency', `${h.db_latency_ms} ms`],
+              ['Orgs en BD', h.counts?.organizations],
+              ['Users en BD', h.counts?.users],
+              ['Node', h.node_version],
+              ['Uptime', `${h.uptime_s}s`],
+              ['Timestamp', h.timestamp],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
+                <span style={{ color: 'var(--gt)', minWidth: 120 }}>{label}</span>
+                <span style={{ color: 'var(--n)', fontFamily: 'monospace' }}>{String(value ?? '—')}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--gt)' }}>Haz clic en Ping para verificar el estado de la API y BD.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DevLinksPanel() {
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 }}>Links rápidos</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {[
             { label: 'Railway (backend + BD)', url: 'https://railway.app' },
             { label: 'Vercel (frontend)', url: 'https://vercel.com' },
             { label: 'Sentry (errores)', url: 'https://sentry.io' },
             { label: 'Meta Business (WPP)', url: 'https://business.facebook.com' },
             { label: 'Cloudflare (DNS)', url: 'https://cloudflare.com' },
+            { label: 'Prisma Studio (local)', url: 'http://localhost:5555' },
           ].map(({ label, url }) => (
             <a key={label} href={url} target="_blank" rel="noreferrer"
-              style={{ fontSize: 13, color: 'var(--v)', textDecoration: 'none' }}>
-              → {label}
+              style={{ fontSize: 13, color: 'var(--v)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: 'var(--gt)' }}>→</span> {label}
             </a>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DevSection() {
+  const [tab, setTab] = useState<DevTab>('wpp');
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+        {DEV_TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: `1.5px solid ${tab === t.key ? 'var(--v)' : 'var(--brd)'}`,
+              background: tab === t.key ? 'var(--vc)' : 'var(--b)',
+              color: tab === t.key ? 'var(--vd)' : 'var(--gt)',
+              transition: 'all .12s',
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'wpp'    && <DevWppPanel />}
+      {tab === 'seed'   && <DevSeedPanel />}
+      {tab === 'bd'     && <DevDbPanel />}
+      {tab === 'sistema'&& <DevSistemaPanel />}
+      {tab === 'links'  && <DevLinksPanel />}
     </div>
   );
 }
@@ -784,8 +1083,8 @@ export default function ConfigTab() {
     { key: 'productos',     label: 'Productos',      icon: <Package size={15} /> },
     { key: 'domiciliarios', label: 'Domiciliarios',  icon: <Truck size={15} /> },
     { key: 'usuarios',      label: 'Usuarios',        icon: <Users size={15} /> },
-    { key: 'whatsapp',      label: 'WhatsApp',        icon: <MessageSquare size={15} /> },
-    ...(isDev ? [{ key: 'dev' as Section, label: 'Dev', icon: <Code2 size={15} /> }] : []),
+    ...(!isDev ? [{ key: 'whatsapp' as Section, label: 'WhatsApp', icon: <MessageSquare size={15} /> }] : []),
+    ...(isDev  ? [{ key: 'dev'      as Section, label: 'DevTools', icon: <Code2 size={15} /> }] : []),
   ];
 
   return (

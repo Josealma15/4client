@@ -18,6 +18,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
         },
       },
       orderBy: { last_message_at: 'desc' },
+      take: 500,
     });
 
     // Deduplicate by phone: keep only the most recent ticket per customer
@@ -40,6 +41,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       include: {
         messages: {
           orderBy: { sent_at: 'asc' },
+          take: 500,
           include: { sender: { select: { id: true, name: true } } },
         },
         orders: {
@@ -62,7 +64,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
   // POST /api/v1/inbox/:ticketId/reply — responder desde 4Client, todos los roles
   fastify.post('/:ticketId/reply', { preHandler: [authenticate] }, async (req, reply) => {
     const { ticketId } = req.params as { ticketId: string };
-    const body = z.object({ text: z.string().min(1) }).safeParse(req.body);
+    const body = z.object({ text: z.string().min(1).max(4096) }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Mensaje requerido', code: 'VALIDATION_ERROR' });
 
     const ticket = await fastify.prisma.ticket.findFirst({

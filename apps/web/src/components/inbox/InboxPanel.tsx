@@ -7,15 +7,19 @@ import { getSocket } from '../../lib/socket';
 import { STATUS_LABEL, fmtCOP } from '../../lib/format';
 import { toast } from '../ui/Toast';
 
-const URL_RE = /(https?:\/\/[^\s]+)/g;
+// Safe URL regex — no backtracking ambiguity, no ReDoS risk
+const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
   const parts = text.split(URL_RE);
-  return parts.map((p, i) =>
-    URL_RE.test(p)
-      ? <a key={i} href={p} target="_blank" rel="noreferrer"
+  // Reset lastIndex since split reuses the regex object
+  URL_RE.lastIndex = 0;
+  return parts.map((p, i) => {
+    URL_RE.lastIndex = 0;
+    return URL_RE.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noreferrer noopener"
           style={{ color: '#1A7A4A', textDecoration: 'underline', wordBreak: 'break-all' }}>{p}</a>
-      : p
-  );
+      : p;
+  });
 }
 
 interface Props {

@@ -69,7 +69,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/auth/refresh
-  fastify.post('/refresh', async (req, reply) => {
+  fastify.post('/refresh', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = z.object({ refreshToken: z.string() }).safeParse(req.body);
     if (!body.success) {
       return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
@@ -79,11 +79,17 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     const stored = await fastify.prisma.refreshToken.findFirst({
       where: { token_hash: tokenHash, revoked: false },
-      include: { user: true },
+      include: { user: { include: { org: true } } },
     });
 
     if (!stored || stored.expires_at <= new Date()) {
       return reply.status(401).send({ error: 'Token inválido o expirado', code: 'INVALID_REFRESH_TOKEN' });
+    }
+
+    // Reject if user or org was deactivated after token was issued
+    if (!stored.user.active || !stored.user.org.active) {
+      await fastify.prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
+      return reply.status(401).send({ error: 'Usuario inactivo', code: 'USER_INACTIVE' });
     }
 
     // Rotar el refresh token

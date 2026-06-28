@@ -2,6 +2,9 @@ import { useAuthStore } from '../store/auth';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api/v1';
 
+// Prevent concurrent refresh calls — all 401s share one in-flight refresh
+let refreshPromise: Promise<boolean> | null = null;
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().accessToken;
   const res = await fetch(`${BASE}${path}`, {
@@ -26,6 +29,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 async function tryRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
+async function doRefresh(): Promise<boolean> {
   const { refreshToken, setAccessToken, clearAuth } = useAuthStore.getState();
   if (!refreshToken) return false;
   try {

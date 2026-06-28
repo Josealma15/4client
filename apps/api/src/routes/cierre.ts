@@ -48,30 +48,43 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const fechaStr = fecha.toISOString().split('T')[0];
 
+    // Whitelist of order IDs that belong to this org — prevents IDOR via crafted decisions keys
+    const validOrderIds = new Set(pendientes.map(p => p.id));
+
     // Aplicar decisiones y cerrar caja en transacción
     await fastify.prisma.$transaction(async (tx) => {
       for (const [orderId, decision] of Object.entries(decisions)) {
+        // Skip any IDs not from this org's pendientes list
+        if (!validOrderIds.has(orderId)) continue;
+
         if (decision === 'manana') {
-          await tx.order.update({ where: { id: orderId }, data: { fecha: tomorrow, notes: `pasado_manana:${fechaStr}` } });
+          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { fecha: tomorrow, notes: `pasado_manana:${fechaStr}` } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
           });
         } else if (decision === 'cancelar') {
-          await tx.order.update({ where: { id: orderId }, data: { status: 'papelera' } });
+          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'papelera' } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cancelado en cierre de caja' },
           });
         } else if (decision === 'forzar_cierre') {
-          await tx.order.update({ where: { id: orderId }, data: { status: 'cerrado', paid: true, locked: true, paid_at: new Date(), paid_by: req.user.userId } });
+          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'cerrado', paid: true, locked: true, paid_at: new Date(), paid_by: req.user.userId } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cierre forzado por admin en cierre de caja' },
           });
         }
       }
 
-      // Procesar decisiones de tickets
+      // Procesar decisiones de tickets — validate each ticketId belongs to this org
       const ticketDecisions = body.data.ticket_decisions ?? {};
+      const ticketIds = Object.keys(ticketDecisions).filter(id => id.match(/^[0-9a-f-]{36}$/i));
+      const validTickets = ticketIds.length > 0
+        ? await tx.ticket.findMany({ where: { id: { in: ticketIds }, org_id: req.user.orgId }, select: { id: true } })
+        : [];
+      const validTicketIds = new Set(validTickets.map(t => t.id));
+
       for (const [ticketId, tdecision] of Object.entries(ticketDecisions)) {
+        if (!validTicketIds.has(ticketId)) continue;
         if (tdecision === 'manana') {
           await tx.ticket.update({ where: { id: ticketId }, data: { deferred_to: tomorrow } });
         } else if (tdecision === 'atendido') {
