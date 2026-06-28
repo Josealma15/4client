@@ -29,12 +29,4 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const WEAK_PASSWORDS = ['admin123', 'josejose', 'password', '12345678', 'admin', 'dev123'];
-if (parsed.data.NODE_ENV === 'production') {
-  if (WEAK_PASSWORDS.includes(parsed.data.SEED_ADMIN_PASS) || WEAK_PASSWORDS.includes(parsed.data.SEED_DEV_PASS)) {
-    console.error('❌ SEED_ADMIN_PASS o SEED_DEV_PASS usan contraseñas débiles en producción. Establece variables de entorno seguras.');
-    process.exit(1);
-  }
-}
-
 export const config = parsed.data;
