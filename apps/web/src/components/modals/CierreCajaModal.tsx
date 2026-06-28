@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Download, MessageSquare } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtCOP, STATUS_LABEL } from '../../lib/format';
+import { fmtCOP, STATUS_LABEL, PAYMENT_LABEL } from '../../lib/format';
 import { toast } from '../ui/Toast';
 
 interface Props {
@@ -86,7 +86,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
         `"${o.address}"`,
         `"${productos}"`,
         total,
-        o.payment_method,
+        PAYMENT_LABEL[o.payment_method] ?? o.payment_method,
         STATUS_LABEL[o.status] ?? o.status,
         accion,
       ].join(',');
@@ -120,7 +120,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
             <div className="cierre-stit">Resumen de ventas</div>
             <div className="cierre-row">
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <Banknote size={15} color="var(--v)" /> Efectivo / COD
+                <Banknote size={15} color="var(--v)" /> Efectivo + Cobro en casa
               </span>
               <span style={{ fontWeight: 800 }}>{fmtCOP(totalEfectivo)}</span>
             </div>
@@ -147,7 +147,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 return (
                   <div key={o.id} className="warn-ord" style={{ opacity: 0.75 }}>
                     <div>
-                      <div style={{ fontWeight: 700 }}>#{o.num} — {o.customer_name}</div>
+                      <div style={{ fontWeight: 700 }}>#{o.num} - {o.customer_name}</div>
                       <div style={{ fontSize: 12, color: 'var(--gt)' }}>
                         {STATUS_LABEL[o.status] ?? o.status} · {fmtCOP(total)}
                       </div>
@@ -165,7 +165,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
             <div className="cierre-sect">
               <div className="cierre-stit" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <AlertTriangle size={13} color="var(--a)" />
-                Pedidos pendientes — decide qué hacer ({pendingOrders.length})
+                Pedidos pendientes - decide qué hacer ({pendingOrders.length})
               </div>
               {pendingSinDecision > 0 && (
                 <div style={{ background: 'var(--ac)', border: '1px solid var(--a)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: 'var(--a)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -178,7 +178,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 return (
                   <div key={o.id} className="warn-ord" style={{ borderLeft: hasDecision ? '3px solid var(--v)' : '3px solid var(--a)' }}>
                     <div>
-                      <div style={{ fontWeight: 700 }}>#{o.num} — {o.customer_name}</div>
+                      <div style={{ fontWeight: 700 }}>#{o.num} - {o.customer_name}</div>
                       <div style={{ fontSize: 12, color: 'var(--gt)' }}>
                         {STATUS_LABEL[o.status] ?? o.status} · {fmtCOP(total)}
                       </div>
@@ -208,7 +208,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
             <div className="cierre-sect">
               <div className="cierre-stit" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MessageSquare size={13} color="var(--az)" />
-                Chats sin resolver — decide qué hacer ({pendingTickets.length})
+                Chats sin resolver - decide qué hacer ({pendingTickets.length})
               </div>
               {pendingTickets.map((t: any) => {
                 const hasDecision = !!ticketDecisions[t.id];
@@ -216,7 +216,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 return (
                   <div key={t.id} className="warn-ord" style={{ borderLeft: hasDecision ? '3px solid var(--v)' : '3px solid var(--az)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700 }}>{t.customer_name} — {t.phone}</div>
+                      <div style={{ fontWeight: 700 }}>{t.customer_name} - {t.phone}</div>
                       <div style={{ fontSize: 12, color: 'var(--gt)' }}>
                         {hasNoOrders ? 'Sin pedido' : `${t.orders.length} pedido(s)`}
                         {t.unread_count > 0 && <span style={{ marginLeft: 8, color: 'var(--az)', fontWeight: 700 }}>{t.unread_count} sin leer</span>}

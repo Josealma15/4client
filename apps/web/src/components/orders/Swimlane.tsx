@@ -304,7 +304,7 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
         }}>
           <Siren size={18} color="#991B1B" />
           <span style={{ fontSize: 13, fontWeight: 800, color: '#991B1B' }}>
-            ZONA ROJA — {urgTickets.length} ticket{urgTickets.length > 1 ? 's' : ''} sin atender
+            ZONA ROJA - {urgTickets.length} ticket{urgTickets.length > 1 ? 's' : ''} sin atender
           </span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {urgTickets.map((t) => {
@@ -345,7 +345,6 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
 
           {filteredTickets.map((ticket) => {
             const ticketOrders = filteredOrders.filter((o) => ticket.orders.some((to) => to.id === o.id));
-            const lastMsg = ticket.messages[0];
             const urg = isTicketUrg(ticket, ticketOrders);
             const isCollapsed = collapsedTickets.has(ticket.id);
             const tNum = `T-${String(filteredTickets.indexOf(ticket) + 1).padStart(2, '0')}`;
@@ -397,11 +396,6 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
                   )}
                   <div className="tk-phone">{ticket.phone}</div>
                   <div className="tk-name">{ticket.customer_name}</div>
-                  {lastMsg && (
-                    <div className="tk-preview">
-                      {lastMsg.direction === 'out' ? '· ' : ''}{lastMsg.text}
-                    </div>
-                  )}
                   <div className="tk-foot">
                     <span className="tk-time">
                       {new Date(ticket.last_message_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}

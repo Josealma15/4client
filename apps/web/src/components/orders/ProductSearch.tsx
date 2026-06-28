@@ -110,7 +110,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
         {items.length === 0 && <div style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 8 }}>Sin productos registrados</div>}
         {items.map(i => (
           <div key={i.product_name} className="factrow">
-            <span>{i.product_name}{i.quantity_label && ` — ${i.quantity_label}`}</span>
+            <span>{i.product_name}{i.quantity_label && ` - ${i.quantity_label}`}</span>
             <span>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</span>
           </div>
         ))}
@@ -140,7 +140,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
           style={{ transition: 'transform .2s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
-        Catálogo — escribe cantidad y precio, luego Enter ↵
+        Catálogo - escribe cantidad y precio, luego Enter ↵
         {items.length > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, background: 'var(--v)', color: '#fff', borderRadius: 20, padding: '1px 8px' }}>
             {items.length} ítem{items.length !== 1 ? 's' : ''}
@@ -255,7 +255,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
         )}
         {items.map(i => (
           <div key={i.product_name} className="factrow">
-            <span>{i.product_name}{i.quantity_label && ` — ${i.quantity_label}`}</span>
+            <span>{i.product_name}{i.quantity_label && ` - ${i.quantity_label}`}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}
               <button
