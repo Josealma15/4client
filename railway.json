@@ -1,8 +1,5 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "buildCommand": "corepack enable && corepack prepare pnpm@10 --activate && pnpm install --frozen-lockfile && pnpm --filter api exec prisma generate && pnpm --filter api build"
-  },
   "deploy": {
     "startCommand": "pnpm --filter api exec prisma migrate deploy && node apps/api/dist/server.js",
     "healthcheckPath": "/health",
