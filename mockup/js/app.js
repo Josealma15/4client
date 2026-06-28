@@ -1,15 +1,7 @@
 // ══════════════════════ DATA ══════════════════════
 const PRODS=[
-  {n:'Papa Pastusa',c:'Tubérculos'},{n:'Papa Criolla',c:'Tubérculos'},
-  {n:'Tomate Chonto',c:'Verduras'},{n:'Cebolla Cabezona',c:'Verduras'},
-  {n:'Cebolla Larga',c:'Verduras'},{n:'Zanahoria',c:'Verduras'},
-  {n:'Cilantro',c:'Hierbas'},{n:'Espinaca',c:'Hojas'},
-  {n:'Plátano Hartón',c:'Frutas'},{n:'Mango Tommy',c:'Frutas'},
-  {n:'Naranja Valencia',c:'Frutas'},{n:'Limón Tahití',c:'Frutas'},
-  {n:'Aguacate Hass',c:'Frutas'},{n:'Yuca',c:'Tubérculos'},
-  {n:'Mora',c:'Frutas'},{n:'Lulo',c:'Frutas'},
-  {n:'Arepa Blanca Paq.',c:'Empacados'},{n:'Huevos x30',c:'Empacados'},
-  {n:'Panela',c:'Empacados'},{n:'Arroz 500g',c:'Granos'},
+  {n:'Ahuyama', c:'Verduras'}, {n:'Ajo', c:'Verduras'}, {n:'Apio', c:'Verduras'}, {n:'Arracacha', c:'Verduras'}, {n:'Arveja', c:'Verduras'}, {n:'Brócoli', c:'Verduras'}, {n:'Cebolla Blanca', c:'Verduras'}, {n:'Cebolla Rama', c:'Verduras'}, {n:'Cebolla roja', c:'Verduras'}, {n:'Cilantro', c:'Verduras'}, {n:'Coliflor', c:'Verduras'}, {n:'Espinaca', c:'Verduras'}, {n:'Frijol Verde Vaina / Desgranado', c:'Verduras'}, {n:'Guineo', c:'Verduras'}, {n:'Habichuela', c:'Verduras'}, {n:'Lechuga', c:'Verduras'}, {n:'Mazorca Amarilla / Blanca', c:'Verduras'}, {n:'Papa Criolla', c:'Verduras'}, {n:'Papa Negra Capira / Nevada', c:'Verduras'}, {n:'Pepino', c:'Verduras'}, {n:'Pimentón Pintón / Maduro', c:'Verduras'}, {n:'Plátano Maduro / Pintón', c:'Verduras'}, {n:'Plátano Verde Artón', c:'Verduras'}, {n:'Remolacha', c:'Verduras'}, {n:'Repollo', c:'Verduras'}, {n:'Tomate Aliño Pintón / Maduro', c:'Verduras'}, {n:'Yuca', c:'Verduras'}, {n:'Zanahoria', c:'Verduras'},
+  {n:'Aguacate', c:'Frutas'}, {n:'Banano Pintón / Maduro', c:'Frutas'}, {n:'Coco', c:'Frutas'}, {n:'Fresas', c:'Frutas'}, {n:'Guanábana', c:'Frutas'}, {n:'Guayaba', c:'Frutas'}, {n:'Granadilla', c:'Frutas'}, {n:'Limón Mandarino / Tahiti', c:'Frutas'}, {n:'Lulo', c:'Frutas'}, {n:'Mandarina', c:'Frutas'}, {n:'Mango Tommy', c:'Frutas'}, {n:'Mango Criollo / Otro', c:'Frutas'}, {n:'Manzanas Verdes / Maduras', c:'Frutas'}, {n:'Maracuyá', c:'Frutas'}, {n:'Mora Paquete x Libra', c:'Frutas'}, {n:'Naranja', c:'Frutas'}, {n:'Papaya', c:'Frutas'}, {n:'Peras', c:'Frutas'}, {n:'Piña', c:'Frutas'}, {n:'Pulpas', c:'Frutas'}, {n:'Tomate Árbol', c:'Frutas'}, {n:'Kiwi', c:'Frutas'}, {n:'Durazno', c:'Frutas'}, {n:'Bandeja Granadilla', c:'Otros'}, {n:'Bandeja champiñon grande', c:'Otros'}, {n:'Bandeja champiñon pequeña', c:'Otros'}, {n:'Bandeja uva Isabella', c:'Otros'}, {n:'Batata', c:'Otros'}, {n:'Berenjena', c:'Otros'}, {n:'Zuccini', c:'Otros'}, {n:'Calabacín', c:'Otros'}, {n:'Perejil', c:'Otros'}, {n:'Cebolla puerro', c:'Otros'}, {n:'Coles', c:'Otros'}, {n:'Cidra', c:'Otros'}
 ];
 const ESTADOS=['nuevo','preparando','listo','camino','entregado','cerrado'];
 const EL={nuevo:'Nuevo',preparando:'Preparando',listo:'Listo',camino:'En camino',entregado:'Entregado',cerrado:'Cerrado'};
@@ -83,6 +75,11 @@ let tickets=[
   {id:'t6',phone:'3162349902',name:'Jorge Pedraza',pedidoIds:[],createdAt:'09:28',msgs:[
     {from:'c',text:'Hola! Quiero pedir',t:'09:28'},
     {from:'c',text:'¿Tienen naranja y mango?',t:'09:28'},
+  ]},
+  {id:'t7',phone:'3129876543',name:'+57 312 987 6543',pedidoIds:[],createdAt:'10:05', unreadCount: 3, msgs:[
+    {from:'c',text:'Hola, tienen servicio a domicilio?',t:'10:05'},
+    {from:'c',text:'quisiera pedir unas cosas',t:'10:06'},
+    {from:'c',text:'aló? están ahí?',t:'10:15'}
   ]},
 ];
 
@@ -188,15 +185,20 @@ function applyRoleUI(){
 }
 
 // ══════════════════════ MODAL MGMT ══════════════════════
-function openMod(){return['m-nuevo','m-det'].find(id=>document.getElementById(id).classList.contains('on'))||null;}
-function openModal(id){const o=openMod();if(o&&o!==id)return;document.getElementById(id).classList.add('on');}
-function closeModal(id){document.getElementById(id).classList.remove('on');dirtyMap[id]=false;}
+function updateBodyScroll() {
+  const anyOpen = document.querySelectorAll('.moverlay.on').length > 0;
+  document.body.style.overflow = anyOpen ? 'hidden' : 'auto';
+}
+
+function openMod(){return['m-nuevo','m-det','m-ticket','m-cierre','m-confirm-cobro'].find(id=>document.getElementById(id).classList.contains('on'))||null;}
+function openModal(id){const o=openMod();if(o&&o!==id)return;document.getElementById(id).classList.add('on'); updateBodyScroll();}
+function closeModal(id){document.getElementById(id).classList.remove('on');dirtyMap[id]=false; updateBodyScroll();}
 function forceClose(id){closeModal(id);if(id==='m-nuevo'){npItems=[];renderItems('np');}}
 function tryClose(id){if(dirtyMap[id]){pendingAction=()=>forceClose(id);openWarn();return;}forceClose(id);}
 function dirty(id){dirtyMap[id]=true;}
-function openWarn(){document.getElementById('m-warn').classList.add('on');}
-function closeWarn(){document.getElementById('m-warn').classList.remove('on');pendingAction=null;}
-function discardGo(){document.getElementById('m-warn').classList.remove('on');if(pendingAction){pendingAction();pendingAction=null;}}
+function openWarn(){document.getElementById('m-warn').classList.add('on'); updateBodyScroll();}
+function closeWarn(){document.getElementById('m-warn').classList.remove('on');pendingAction=null; updateBodyScroll();}
+function discardGo(){document.getElementById('m-warn').classList.remove('on');if(pendingAction){pendingAction();pendingAction=null;} updateBodyScroll();}
 
 // ══════════════════════ NUEVO PEDIDO ══════════════════════
 function tryOpenNuevo(){
@@ -205,7 +207,7 @@ function tryOpenNuevo(){
   _openNuevo();
 }
 function _openNuevo(){
-  npItems=[];
+  npItems=PRODS.slice().sort((a,b)=>a.n.localeCompare(b.n)).map(p=>({n:p.n,q:'',p:''}));
   ['np-nom','np-tel','np-dir','np-ps'].forEach(id=>document.getElementById(id).value='');
   const previewWrap = document.getElementById('np-chat-wrap');
   if(previewWrap) previewWrap.style.display = 'none';
@@ -222,7 +224,7 @@ function regPedido(){
   const p={id:'px'+Date.now(),num,cli:nom,tel:document.getElementById('np-tel').value,
     dir,canal:document.getElementById('np-canal').value.includes('WhatsApp')?'wpp':'llamada',
     pago:document.getElementById('np-pago').value,estado:'nuevo',dom:document.getElementById('np-dom').value,
-    hora:h,pagado:false,reg:whoNow(),items:npItems.map(i=>({...i})),
+    hora:h,pagado:false,reg:whoNow(),items:npItems.filter(i=>String(i.q).trim()&&i.p).map(i=>({...i})),
     hist:[{who:whoNow(),what:'Pedido creado',t:h,tipo:'create'}]};
   pedidos.unshift(p);
   // Vincular al ticket si viene de uno
@@ -237,19 +239,34 @@ function regPedido(){
 }
 
 // ══════════════════════ DETALLE ══════════════════════
-function tryOpenDet(pid,fromAdmin){
+function tryOpenDet(pid){
   const o=openMod();
-  if(o&&o!=='m-det'){if(dirtyMap[o]){pendingAction=()=>{forceClose(o);_openDet(pid,fromAdmin);};openWarn();return;}forceClose(o);}
-  _openDet(pid,fromAdmin);
+  if(o&&o!=='m-det'){if(dirtyMap[o]){pendingAction=()=>{forceClose(o);_openDet(pid);};openWarn();return;}forceClose(o);}
+  _openDet(pid);
 }
-function _openDet(pid,fromAdmin){
+function _openDet(pid){
   const p=pedidos.find(x=>x.id===pid);if(!p)return;
   curDetId=pid;
-  const adm=fromAdmin||isAdmin;
+  const adm=isAdmin;
   const locked=isLocked(p);
 
   document.getElementById('det-tit').textContent='Pedido #'+p.num;
   document.getElementById('det-sub').textContent=(p.canal==='wpp'?'WhatsApp':'Llamada')+' · '+p.hora;
+
+  const t=tickets.find(tk=>tk.pedidoIds.includes(pid));
+  const chatWrap = document.getElementById('det-chat-wrap');
+  const chatPrev = document.getElementById('det-chat-preview');
+  if(t && chatWrap && chatPrev) {
+    chatWrap.style.display = 'block';
+    chatPrev.innerHTML = '<div style="font-size:11px;color:#667781;margin-bottom:6px;font-weight:bold;text-align:center;">💬 Conversación de WhatsApp</div>' + 
+      t.msgs.map(m=>`
+       <div class="chat-msg ${m.from==='c'?'them':'us'}" style="margin-bottom:5px; max-width:95%;">
+         <div class="chat-bubble" style="padding:6px 10px;font-size:12px;display:inline-block;">${m.text}</div>
+       </div>`).join('');
+    setTimeout(()=>chatPrev.scrollTop=chatPrev.scrollHeight, 50);
+  } else if (chatWrap) {
+    chatWrap.style.display = 'none';
+  }
 
   // Banner top
   const banner=document.getElementById('det-top-banner');
@@ -295,7 +312,15 @@ function _openDet(pid,fromAdmin){
   document.getElementById('det-dir').value=p.dir;
   document.getElementById('det-pago').value=p.pago;
   document.getElementById('det-dom').value=p.dom;
-  detItems=p.items.map(i=>({...i}));
+  const orderItemsDict = {};
+  p.items.forEach(i => { orderItemsDict[i.n] = i; });
+  detItems = PRODS.slice().sort((a,b)=>a.n.localeCompare(b.n)).map(pr => {
+    if(orderItemsDict[pr.n]) return {...orderItemsDict[pr.n]};
+    return {n: pr.n, q: '', p: ''};
+  });
+  p.items.forEach(i => {
+    if(!PRODS.find(pr => pr.n === i.n)) detItems.push({...i});
+  });
   document.getElementById('det-ps').value='';
   document.getElementById('det-pd').classList.remove('on');
   renderItems('det',locked);
@@ -307,12 +332,15 @@ function _openDet(pid,fromAdmin){
 
   // Actions
   const ac=document.getElementById('det-actions');
+  const btnFact = `<button class="bsec" style="background:#25D366;color:white;border-color:#25D366;padding:0 12px;" onclick="enviarFacturaChat('${pid}')">📄 Enviar factura</button>`;
+
   if(locked){
-    ac.innerHTML='<button class="bsec" style="flex:1;" onclick="closeModal(\'m-det\')">Cerrar</button>';
+    ac.innerHTML= btnFact + '<button class="bsec" style="flex:1;" onclick="closeModal(\'m-det\')">Cerrar</button>';
   } else if(p.estado==='camino'||p.estado==='entregado'){
     // show "confirmar pago" button
     ac.innerHTML=`
       <button class="bdel" onclick="toPapelera()">🗑 Papelera</button>
+      ${btnFact}
       <button class="bsec" onclick="tryClose('m-det')">Cancelar</button>
       <button class="bverde" onclick="openConfirmCobro('${pid}')">💵 Confirmar pago</button>
       <button class="bpri" onclick="guardar(${adm})">✓ Guardar</button>
@@ -320,6 +348,7 @@ function _openDet(pid,fromAdmin){
   } else {
     ac.innerHTML=`
       <button class="bdel" onclick="toPapelera()">🗑 Papelera</button>
+      ${btnFact}
       <button class="bsec" onclick="tryClose('m-det')">Cancelar</button>
       <button class="bpri" onclick="guardar(${adm})">✓ Guardar cambios</button>
     `;
@@ -341,6 +370,7 @@ function renderMovBtns(pid,locked){
 function moverPed(pid,estado){
   const p=pedidos.find(x=>x.id===pid);
   if(!p||p.estado===estado||isLocked(p))return;
+  if(estado==='cerrado'){openConfirmCobro(pid);return;}
   const prev=p.estado;p.estado=estado;
   p.hist.push({who:whoNow(),what:'Estado',t:nowH(),tipo:'estado',antes:EL[prev],despues:EL[estado]});
   renderMovBtns(pid,false);
@@ -365,7 +395,7 @@ function guardar(adm){
   if(np2!==p.pago){p.hist.push({who,what:'Método de pago',t,tipo:'edit',antes:pLabel(p.pago),despues:pLabel(np2)});p.pago=np2;}
   if(ndom!==p.dom){p.hist.push({who,what:'Domiciliario',t,tipo:'edit',antes:p.dom||'Sin asignar',despues:ndom||'Sin asignar'});p.dom=ndom;}
   const pi=JSON.stringify(p.items);
-  p.items=detItems.map(i=>({...i}));
+  p.items=detItems.filter(i=>String(i.q).trim()&&i.p).map(i=>({...i}));
   if(JSON.stringify(p.items)!==pi)p.hist.push({who,what:'Productos actualizados',t,tipo:'edit',antes:null,despues:null});
   closeModal('m-det');renderPanel();renderAllAdmin();
   toast('Cambios guardados');
@@ -424,7 +454,7 @@ function calcDevCC(){
   const tot=p.items.reduce((s,i)=>s+(parseInt(i.p)||0),0);
   const rec=parseInt(document.getElementById('cc-rec').value)||0;
   const dev=rec-tot;
-  document.getElementById('cc-dev').textContent=dev>=0?fmt(dev):'⚠ Monto insuficiente';
+  document.getElementById('cc-dev').innerHTML=dev>=0?fmt(dev):`<span style="color:var(--r);">Faltan: ${fmt(Math.abs(dev))}</span>`;
 }
 function doCobro(){
   const p=pedidos.find(x=>x.id===curCobroId);if(!p)return;
@@ -432,19 +462,103 @@ function doCobro(){
   p.pagado=true;
   const cobradoPor = document.getElementById('cc-who')?.value || whoNow();
   p.hist.push({who:whoNow(),what:'Pago confirmado por '+cobradoPor,t:nowH(),tipo:'create'});
-  document.getElementById('m-confirm-cobro').classList.remove('on');
+  closeModal('m-confirm-cobro');
   renderPanel();renderAllAdmin();
   toast('✅ Pago confirmado. Pedido cerrado.');
 }
 
-// ══════════════════════ PRODUCTOS ══════════════════════
+// ══════════════════════ PRODUCTOS Y UTILIDADES ══════════════════════
+function normalizeStr(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+window.clearSearch = function(ctx) {
+  const input = document.getElementById(ctx + '-ps');
+  if(input) input.value = '';
+  bProd('', ctx);
+};
+
+window.toggleProdList = function(ctx) {
+  const wrap = document.getElementById(ctx + '-prod-wrap');
+  const icon = document.getElementById(ctx + '-prod-tog-icon');
+  if(!wrap) return;
+  if(wrap.style.display === 'none') {
+    wrap.style.display = 'block';
+    if(icon) icon.style.transform = 'rotate(180deg)';
+  } else {
+    wrap.style.display = 'none';
+    if(icon) icon.style.transform = 'rotate(0deg)';
+  }
+};
+
+window.validateItem = function(ctx, i) {
+  const arr = ctx === 'np' ? npItems : detItems;
+  const item = arr[i];
+  
+  const row = document.getElementById(`${ctx}-item-${i}`);
+  if(!row) return;
+
+  const existingMsg = row.querySelector('.val-msg');
+  if(existingMsg) existingMsg.remove();
+
+  if (!item.q || !item.p) {
+    const msg = document.createElement('div');
+    msg.className = 'val-msg';
+    msg.style.color = 'red';
+    msg.style.fontSize = '12px';
+    msg.style.gridColumn = '1 / -1';
+    msg.style.marginTop = '-5px';
+    msg.style.marginBottom = '5px';
+    msg.textContent = 'Falta agregar info (peso o valor).';
+    row.appendChild(msg);
+  } else {
+    clearSearch(ctx);
+  }
+};
+
 function bProd(q,ctx){
   const drop=document.getElementById(ctx+'-pd');
-  if(!q.trim()){drop.classList.remove('on');return;}
-  const res=PRODS.filter(p=>p.n.toLowerCase().includes(q.toLowerCase())).slice(0,6);
-  if(!res.length){drop.classList.remove('on');return;}
-  drop.innerHTML=res.map(p=>`<div class="popt" onclick="addProd('${ctx}','${p.n}')"><div><div class="popt-n">${p.n}</div><div class="popt-c">${p.c}</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--v)" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>`).join('');
-  drop.classList.add('on');
+  if(drop) drop.classList.remove('on');
+  const arr=ctx==='np'?npItems:detItems;
+  const list = document.getElementById(ctx+'-il');
+  list.style.display = 'flex';
+  list.style.flexDirection = 'column';
+
+  const hdr = list.querySelector('.hdr');
+  if(hdr) hdr.style.order = '-2';
+
+  if(!q.trim()) {
+    arr.forEach((p, i) => {
+      const row = document.getElementById(`${ctx}-item-${i}`);
+      if(row) {
+        row.style.order = '0';
+        row.style.opacity = '1';
+        row.style.pointerEvents = 'auto';
+        row.style.background = '';
+        row.classList.remove('active-search-item');
+      }
+    });
+    return;
+  }
+
+  const qStr = normalizeStr(q);
+  arr.forEach((p, i) => {
+    const row = document.getElementById(`${ctx}-item-${i}`);
+    if(!row) return;
+    if(normalizeStr(p.n).includes(qStr)) {
+      row.style.order = '-1';
+      row.style.opacity = '1';
+      row.style.pointerEvents = 'auto';
+      row.style.background = '#FFF3CD';
+      row.classList.add('active-search-item');
+    } else {
+      row.style.order = '0';
+      row.style.opacity = '0.3';
+      row.style.pointerEvents = 'none';
+      row.style.background = '';
+      row.classList.remove('active-search-item');
+    }
+  });
 }
 function addProd(ctx,nom){
   const p=pedidos.find(x=>x.id===curDetId);
@@ -464,9 +578,16 @@ function renderItems(ctx,locked=false){
   arr.forEach((item,i)=>{
     const row=document.createElement('div');
     row.className='irow'+(locked?' locked-row':'');
+    row.id = `${ctx}-item-${i}`;
     row.innerHTML=locked
       ?`<div class="iname">${item.n}</div><div style="font-size:14px;">${item.q}</div><div style="font-size:14px;font-weight:700;">${item.p?fmt(item.p):'—'}</div>`
-      :`<div class="iname">${item.n}</div><input class="iinput" type="text" placeholder="Ej: 2 kg" value="${item.q}" oninput="upItem('${ctx}',${i},'q',this.value)"><input class="iinput" type="number" placeholder="$0" value="${item.p}" oninput="upItem('${ctx}',${i},'p',this.value)"><button class="idel" onclick="remItem('${ctx}',${i})">×</button>`;
+      :`<div class="iname">${item.n}</div>
+        <input class="iinput" type="text" placeholder="Ej: 2 kg" value="${item.q}" oninput="upItem('${ctx}',${i},'q',this.value)" onkeydown="if(event.key==='Enter') validateItem('${ctx}', ${i})">
+        <input class="iinput" type="number" placeholder="$0" value="${item.p}" oninput="upItem('${ctx}',${i},'p',this.value)" onkeydown="if(event.key==='Enter') validateItem('${ctx}', ${i})">
+        <div class="iactions">
+          <button class="idel" onclick="upItem('${ctx}',${i},'q','');upItem('${ctx}',${i},'p','');renderItems('${ctx}');">×</button>
+          <button class="icheck" onclick="validateItem('${ctx}', ${i})">✅</button>
+        </div>`;
     list.appendChild(row);
   });
   upFact(ctx);
@@ -478,13 +599,14 @@ function upFact(ctx){
   const rows=document.getElementById(ctx+'-fr');
   const tot=document.getElementById(ctx+'-tot');
   let total=0;
-  rows.innerHTML=arr.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' — '+item.q:''}</span><span>${p?fmt(p):'—'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Agrega productos con el buscador</div>';
+  const validItems = arr.filter(i => String(i.q).trim() && i.p);
+  rows.innerHTML=validItems.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' — '+item.q:''}</span><span>${p?fmt(p):'—'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Ingresa cantidad y precio para agregar</div>';
   tot.textContent=fmt(total);
 }
 
 // ══════════════════════ KANBAN ══════════════════════
 function filterRender(){
-  const q=document.getElementById('srch').value.toLowerCase();
+  const q=normalizeStr(document.getElementById('srch').value);
   const est=document.getElementById('fest').value;
   const pag=document.getElementById('fpago').value;
   renderKanban('kboard',q,est,pag,false);
@@ -504,7 +626,7 @@ function renderKanban(boardId,q,est,pag,forAdmin){
   board.innerHTML='';
   ESTADOS.forEach(estado=>{
     let items=getPedidos().filter(p=>p.estado===estado);
-    if(q)items=items.filter(p=>p.cli.toLowerCase().includes(q)||p.dir.toLowerCase().includes(q)||p.hora.includes(q)||p.items.some(i=>i.n.toLowerCase().includes(q))||p.num.includes(q));
+    if(q)items=items.filter(p=>normalizeStr(p.cli).includes(q)||normalizeStr(p.dir).includes(q)||p.hora.includes(q)||p.items.some(i=>normalizeStr(i.n).includes(q))||p.num.includes(q));
     if(est&&est!==estado)items=[];
     if(pag)items=items.filter(p=>p.pago===pag);
 
@@ -518,6 +640,7 @@ function renderKanban(boardId,q,est,pag,forAdmin){
       const pid=e.dataTransfer.getData('pid');
       const p=pedidos.find(x=>x.id===pid);
       if(p&&p.estado!==estado&&!isLocked(p)){
+        if(estado==='cerrado'){openConfirmCobro(pid);return;}
         const prev=p.estado;p.estado=estado;
         p.hist.push({who:whoNow(),what:'Estado',t:nowH(),tipo:'estado',antes:EL[prev],despues:EL[estado]});
         renderPanel();renderAllAdmin();toast('Movido a '+EL[estado]);
@@ -547,7 +670,7 @@ function renderKanban(boardId,q,est,pag,forAdmin){
           ${locked?'<span class="lock-icon">🔒</span> Pagado y cerrado':'<span class="lock-icon">⏳</span> Sin cobrar'}
         </div>
       `;
-      card.addEventListener('click',()=>tryOpenDet(p.id,forAdmin));
+      card.addEventListener('click',()=>tryOpenDet(p.id));
       cb.appendChild(card);
     });
   });
@@ -582,12 +705,15 @@ function renderDomicilios(stripId){
 // ══════════════════════ ADMIN ══════════════════════
 function renderAllAdmin(){
   const dateInput = document.getElementById('ui-date');
+  const resDateInput = document.getElementById('ui-resumen-date');
   if(dateInput && !dateInput.value) dateInput.value = currentDateStr;
+  else if(dateInput) dateInput.value = currentDateStr;
+  if(resDateInput) resDateInput.value = currentDateStr;
+
   renderTotales();
   renderSwimlane();
   renderAdminList('');
   renderPapelera();
-  renderEditados();
 }
 
 function renderTotales(){
@@ -616,7 +742,7 @@ function renderTotales(){
 }
 
 function renderAdmKanban(){
-  const q=(document.getElementById('adm-srch')?.value||'').toLowerCase();
+  const q=normalizeStr(document.getElementById('adm-srch')?.value||'');
   const pag=document.getElementById('adm-fpago')?.value||'';
   const est=document.getElementById('adm-fest2')?.value||'';
   const fech=document.getElementById('adm-fecha')?.value||'';
@@ -628,30 +754,39 @@ function renderAdmKanban(){
   if(meta)meta.textContent=n+' pedidos'+(fech?' · '+fech:'');
 }
 
+function tryOpenTicketFromOrder(pid){
+  const t=tickets.find(tk=>tk.pedidoIds.includes(pid));
+  if(t){openTicket(t.id);}else{tryOpenDet(pid);}
+}
+
 function renderAdminList(q){
   const list=document.getElementById('adm-list');if(!list)return;
   const est=document.getElementById('adm-fest2')?.value||'';
   let items=getPedidos().filter(p=>p.estado!=='papelera');
-  if(q)items=items.filter(p=>p.cli.toLowerCase().includes(q.toLowerCase())||p.num.includes(q));
+  const query = normalizeStr(q||'');
+  if(query)items=items.filter(p=>normalizeStr(p.cli).includes(query)||p.num.includes(query));
   if(est)items=items.filter(p=>p.estado===est);
   items.sort((a,b)=>a.hora.localeCompare(b.hora));
   const ec={nuevo:'e1',preparando:'e2',listo:'e5',camino:'e3',entregado:'e4'};
-  let totalEnt=0;
   list.innerHTML=items.map(p=>{
     const tot=p.items.reduce((s,i)=>s+(parseInt(i.p)||0),0);
-    if(p.estado==='entregado'&&p.pagado)totalEnt+=tot;
     const urg=isUrg(p);
     const locked=isLocked(p);
-    return`<div class="hrow" onclick="tryOpenDet('${p.id}',true)" style="${urg?'background:var(--rc);':''}">
-      <div class="hnum">#${p.num}</div>
-      <div><div class="hcli">${p.cli}${urg?` <span style="color:var(--r);font-size:12px;font-weight:800;">⚠${mins(p.hora)}m</span>`:''}${locked?' 🔒':''}</div><div class="hdir">${p.dir.substring(0,40)}</div></div>
-      <div style="font-size:12px;color:var(--gt);font-weight:600;">${p.hora}</div>
-      <div><span class="ebadge ${ec[p.estado]||'e5'}">${EL[p.estado]||p.estado}</span></div>
-      <div><span class="pbadge ${pClass(p.pago)}" style="font-size:12px;">${tot?fmt(tot):pLabel(p.pago)}</span></div>
+    return`<div class="hrow" onclick="tryOpenTicketFromOrder('${p.id}')" style="display:flex; justify-content:space-between; align-items:center; ${urg?'background:var(--rc);':''}">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div class="hnum">#${p.num}</div>
+        <div>
+          <div class="hcli">${p.cli}${urg?` <span style="color:var(--r);font-size:12px;font-weight:800;">⚠${mins(p.hora)}m</span>`:''}${locked?' 🔒':''}</div>
+          <div class="hdir">${p.dir.substring(0,40)}</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:16px; align-items:center; text-align:right;">
+        <div style="font-size:13px;color:var(--gt);font-weight:600;">${p.hora}</div>
+        <div style="width:100px;text-align:center;"><span class="ebadge ${ec[p.estado]||'e5'}">${EL[p.estado]||p.estado}</span></div>
+        <div style="width:90px;font-weight:bold;">${tot?fmt(tot):''} <div style="font-size:11px;font-weight:normal;color:var(--gt);">${pLabel(p.pago)}</div></div>
+      </div>
     </div>`;
   }).join('')||'<div style="padding:20px;text-align:center;color:var(--gt);font-size:14px;">Sin resultados</div>';
-  const ttxt=document.getElementById('adm-total-txt');
-  if(ttxt)ttxt.textContent='Total cobrado: '+fmt(totalEnt);
 }
 
 function renderPapelera(){
@@ -667,20 +802,7 @@ function renderPapelera(){
     :'<div style="padding:20px;text-align:center;color:var(--gt);font-size:14px;">Sin pedidos en papelera</div>';
 }
 
-function renderEditados(){
-  const div=document.getElementById('adm-editados');if(!div)return;
-  const edits=[];
-  pedidos.forEach(p=>p.hist.filter(h=>h.tipo==='edit'||h.tipo==='estado').forEach(h=>edits.push({...h,pnum:p.num,pcli:p.cli})));
-  document.getElementById('edit-cnt').textContent='('+edits.length+')';
-  div.innerHTML=edits.length?[...edits].reverse().map(e=>`
-    <div class="elogcard">
-      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:14px;font-weight:800;">Pedido #${e.pnum} — ${e.pcli}</span><span style="font-size:12px;font-weight:700;color:var(--a);">✏️ ${e.t}</span></div>
-      <div style="font-size:15px;font-weight:800;margin-bottom:6px;">${e.what}</div>
-      ${e.antes!==null&&e.despues!==null?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;"><span class="diff-old">− ${e.antes}</span><span class="diff-arrow">→</span><span class="diff-new">+ ${e.despues}</span></div>`:''}
-      <div style="font-size:13px;color:var(--gt);">Por: ${e.who}</div>
-    </div>`).join('')
-    :'<div style="padding:20px;text-align:center;color:var(--gt);font-size:14px;">Sin cambios registrados</div>';
-}
+
 
 function switchMainTab(tab,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
@@ -695,10 +817,9 @@ function switchMainTab(tab,btn){
 function switchAdmTab(tab,btn){
   document.querySelectorAll('.atab').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
-  ['adm-todos','adm-papelera','adm-editados'].forEach(id=>document.getElementById(id).style.display='none');
+  ['adm-todos','adm-papelera'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('adm-'+tab).style.display='block';
   if(tab==='papelera')renderPapelera();
-  if(tab==='editados')renderEditados();
   if(tab==='todos')renderAdminList('');
 }
 
@@ -717,14 +838,14 @@ function tkNum(t){return 'T-'+String(tickets.indexOf(t)+1).padStart(2,'0');}
 
 function renderSwimlane(){
   const wrap=document.getElementById('swimlane');if(!wrap)return;
-  const q=(document.getElementById('srch')?.value||'').toLowerCase();
+  const q=normalizeStr(document.getElementById('srch')?.value||'');
   const pag=document.getElementById('fpago')?.value||'';
 
-  let tks=tickets;
+  let tks=tickets.filter(t=>t.fecha===currentDateStr);
   if(q)tks=tks.filter(t=>{
     const peds=t.pedidoIds.map(id=>pedidos.find(p=>p.id===id)).filter(Boolean);
-    return t.name.toLowerCase().includes(q)||t.phone.includes(q)||
-      peds.some(p=>p.dir.toLowerCase().includes(q)||p.items.some(i=>i.n.toLowerCase().includes(q))||p.num.includes(q));
+    return normalizeStr(t.name).includes(q)||t.phone.includes(q)||
+      peds.some(p=>normalizeStr(p.dir).includes(q)||p.items.some(i=>normalizeStr(i.n).includes(q))||p.num.includes(q));
   });
   if(pag)tks=tks.filter(t=>{
     const peds=t.pedidoIds.map(id=>pedidos.find(p=>p.id===id)).filter(Boolean);
@@ -775,29 +896,47 @@ function renderSwimlane(){
     else{badgeTxt='🆕 Nuevo';badgeCls='nuevo';}
 
     h+=`<div class="slane-tcell${isUrgTk?' urg':''}" onclick="openTicket('${t.id}')">
-      ${t.unreadCount?`<div class="tk-new-dot">${t.unreadCount}</div>`:''}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:3px;">
-        <div style="font-size:12px;font-weight:800;color:var(--gt);">${num}</div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          ${t.unreadCount?`<div class="tk-new-dot" style="animation:none;">${t.unreadCount}</div>`:''}
+          <div style="font-size:12px;font-weight:800;color:var(--gt);">${num}</div>
+        </div>
         ${isUrgTk
           ?`<div class="tk-urg"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${urgMin}min</div>`
           :''}
       </div>
-      <div class="tk-phone">📱 ${t.phone}</div>
-      <div class="tk-name">${t.name}</div>
-      <div class="tk-preview">${lastMsg.text}</div>
-      <div class="tk-foot">
-        <span class="tk-time">🕐 ${t.createdAt}</span>
-        <span class="tk-badge ${badgeCls}">${badgeTxt}</span>
+      <div class="tk-phone" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>📱 ${t.phone}</span>
+        <button onclick="event.stopPropagation(); toggleTk('${t.id}')" style="background:none; border:none; color:var(--gt); cursor:pointer; font-size:11px; font-weight:bold;">${t._collapsed ? 'Expandir ▼' : 'Contraer ▲'}</button>
       </div>
-      <button class="tk-ver-btn" onclick="event.stopPropagation();openTicket('${t.id}')">Ver conversación →</button>
-      <button class="tk-crear-btn" onclick="event.stopPropagation();createFromTicket('${t.id}')">+ Crear pedido de despacho</button>
+      <div class="tk-name">${t.name}</div>
+      ${t._collapsed ? '' : `
+        <div class="tk-preview">${lastMsg.text}</div>
+        <div class="tk-foot">
+          <span class="tk-time">🕐 ${t.createdAt}</span>
+          <span class="tk-badge ${badgeCls}">${badgeTxt}</span>
+        </div>
+        <button class="tk-ver-btn" onclick="event.stopPropagation();openTicket('${t.id}')">Ver conversación →</button>
+        <button class="tk-crear-btn" onclick="event.stopPropagation();createFromTicket('${t.id}')">+ Crear pedido de despacho</button>
+      `}
     </div>`;
+
+    const bgColors = {
+      nuevo: '#94A3B812',
+      preparando: '#F59E0B12',
+      listo: '#3B82F612',
+      camino: '#8B5CF612',
+      entregado: '#1A7A4A12',
+      cerrado: '#0F4F3012'
+    };
 
     // Celdas de estado
     ESTADOS.forEach((e,idx)=>{
       const inState=peds.filter(p=>p.estado===e);
-      if(inState.length){
-        h+=`<div class="slane-scell" style="align-items:flex-start;justify-content:flex-start;flex-direction:column;gap:7px;display:flex;" ondragover="event.preventDefault();this.style.background='#F0FAF4'" ondragleave="this.style.background=''" ondrop="dropDC(event,'${t.id}','${e}')">`;
+      if(t._collapsed) {
+        h+=`<div class="slane-scell" style="background:${bgColors[e]}; min-height:0; padding:2px; border-bottom:1px solid var(--brd);"></div>`;
+      } else if(inState.length){
+        h+=`<div class="slane-scell" style="background:${bgColors[e]}; align-items:flex-start;justify-content:flex-start;flex-direction:column;gap:7px;display:flex;" ondragover="event.preventDefault();this.style.filter='brightness(0.95)'" ondragleave="this.style.filter=''" ondrop="dropDC(event,'${t.id}','${e}')">`;
         inState.forEach(ped=>{
           const tot=ped.items.reduce((s,i)=>s+(parseInt(i.p)||0),0);
           const locked=isLocked(ped);
@@ -809,7 +948,7 @@ function renderSwimlane(){
               ${tot?`<div class="dc-tot">${fmt(tot)}</div>`:''}
               <div class="dc-nav">
                 <button class="dc-btn" title="Retroceder" ${(idx===0||locked)?'disabled':''} onclick="moveDC('${ped.id}',-1)">‹</button>
-                <button class="dc-det-btn" onclick="tryOpenDet('${ped.id}',true)">Ver detalle</button>
+                <button class="dc-det-btn" onclick="tryOpenDet('${ped.id}')">Ver detalle</button>
                 <button class="dc-btn" title="Avanzar" ${(idx===ESTADOS.length-1||locked)?'disabled':''} onclick="moveDC('${ped.id}',1)">›</button>
               </div>
             </div>
@@ -817,7 +956,7 @@ function renderSwimlane(){
         });
         h+='</div>';
       } else {
-        h+=`<div class="slane-scell" ondragover="event.preventDefault();this.style.background='#F0FAF4'" ondragleave="this.style.background=''" ondrop="dropDC(event,'${t.id}','${e}')"></div>`;
+        h+=`<div class="slane-scell" style="background:${bgColors[e]};" ondragover="event.preventDefault();this.style.filter='brightness(0.95)'" ondragleave="this.style.filter=''" ondrop="dropDC(event,'${t.id}','${e}')"></div>`;
       }
     });
   });
@@ -826,12 +965,21 @@ function renderSwimlane(){
   wrap.innerHTML=h;
 }
 
+function toggleTk(tid){
+  const t=tickets.find(x=>x.id===tid);
+  if(t){
+    t._collapsed = !t._collapsed;
+    renderSwimlane();
+  }
+}
+
 function moveDC(pid,dir){
   const p=pedidos.find(x=>x.id===pid);
   if(!p||isLocked(p))return;
   const idx=ESTADOS.indexOf(p.estado);
   const ni=idx+dir;
   if(ni<0||ni>=ESTADOS.length)return;
+  if(ESTADOS[ni]==='cerrado'){openConfirmCobro(pid);return;}
   const prev=p.estado;p.estado=ESTADOS[ni];
   p.hist.push({who:whoNow(),what:'Estado',t:nowH(),tipo:'estado',antes:EL[prev],despues:EL[p.estado]});
   renderSwimlane();renderAllAdmin();
@@ -840,7 +988,7 @@ function moveDC(pid,dir){
 
 function dropDC(e, targetTid, newEstado){
   e.preventDefault();
-  e.currentTarget.style.background='';
+  e.currentTarget.style.filter='';
   const pid = e.dataTransfer.getData('pid');
   const sourceTid = e.dataTransfer.getData('tid');
   if(sourceTid !== targetTid) {
@@ -849,6 +997,7 @@ function dropDC(e, targetTid, newEstado){
   }
   const p = pedidos.find(x=>x.id===pid);
   if(p && !isLocked(p) && p.estado !== newEstado){
+    if(newEstado==='cerrado'){openConfirmCobro(pid);return;}
     const prev = p.estado;
     p.estado = newEstado;
     p.hist.push({who:whoNow(),what:'Estado (Arrastrado)',t:nowH(),tipo:'estado',antes:EL[prev],despues:EL[newEstado]});
@@ -857,9 +1006,102 @@ function dropDC(e, targetTid, newEstado){
   }
 }
 
+function enviarFacturaChat(pid) {
+  const p = pedidos.find(x=>x.id===pid);
+  if(!p) return;
+  const t = tickets.find(tk=>tk.pedidoIds.includes(pid));
+  let currentItems = p.items;
+  if(document.getElementById('m-det') && document.getElementById('m-det').classList.contains('on') && curDetId === pid) {
+    currentItems = detItems.filter(i=>String(i.q).trim() && i.p);
+    
+    // Guardar en memoria para que no se pierdan al cerrar
+    p.items = currentItems.map(i=>({...i}));
+    const nn = document.getElementById('det-nom').value.trim();
+    if(nn) p.cli = nn;
+    const nd = document.getElementById('det-dir').value.trim();
+    if(nd) p.dir = nd;
+    const nt = document.getElementById('det-tel').value.trim();
+    if(nt) p.tel = nt;
+  }
+  const tot = currentItems.reduce((s,i)=>s+(parseInt(i.p)||0),0);
+
+  const pdfDiv = document.createElement('div');
+  pdfDiv.style.padding = '30px';
+  pdfDiv.style.background = '#fff';
+  pdfDiv.style.color = '#000';
+  pdfDiv.style.fontFamily = 'Arial, sans-serif';
+  pdfDiv.innerHTML = `
+    <div style="text-align:center; margin-bottom:20px;">
+      <h2 style="margin:0; color:#1A7A4A;">Fruver San Gabriel</h2>
+      <p style="margin:5px 0; color:#555;">Factura de Pedido #${p.num}</p>
+    </div>
+    <div style="margin-bottom:20px;">
+      <p><strong>Cliente:</strong> ${p.cli}</p>
+      <p><strong>Dirección:</strong> ${p.dir}</p>
+      <p><strong>Fecha:</strong> ${p.fecha} ${p.hora}</p>
+    </div>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <thead>
+        <tr style="border-bottom:2px solid #ddd; text-align:left;">
+          <th style="padding:8px 0;">Producto</th>
+          <th style="padding:8px 0;">Cant/Peso</th>
+          <th style="padding:8px 0; text-align:right;">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${currentItems.map(i => `
+          <tr style="border-bottom:1px solid #eee;">
+            <td style="padding:8px 0;">${i.n}</td>
+            <td style="padding:8px 0;">${i.q||'-'}</td>
+            <td style="padding:8px 0; text-align:right;">${fmt(parseInt(i.p)||0)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:right; font-size:18px; font-weight:bold; color:#1A7A4A;">
+      Total: ${fmt(tot)}
+    </div>
+    <div style="text-align:center; margin-top:30px; font-size:12px; color:#777;">
+      ¡Gracias por su compra!
+    </div>
+  `;
+  document.body.appendChild(pdfDiv);
+
+  if(window.html2pdf) {
+    html2pdf().set({
+      margin: 10,
+      filename: `Factura_Pedido_${p.num}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(pdfDiv).outputPdf('blob').then(blob => {
+      document.body.removeChild(pdfDiv);
+      const pdfUrl = URL.createObjectURL(blob);
+      const pdfLinkMsg = `📄 *Factura_Pedido_${p.num}.pdf*<br><a href="${pdfUrl}" download="Factura_Pedido_${p.num}.pdf" style="color:#1A7A4A; font-weight:bold; text-decoration:underline;">📥 Descargar PDF</a>`;
+
+      if(t) {
+        t.msgs.push({from: 'a', text: pdfLinkMsg, t: nowH(), isHtml: true});
+        closeModal('m-det');
+        openTicket(t.id);
+        toast('Factura enviada al chat (PDF)');
+      } else {
+        const a = document.createElement('a');
+        a.href = pdfUrl;
+        a.download = `Factura_Pedido_${p.num}.pdf`;
+        a.click();
+        toast('Factura PDF descargada');
+      }
+    });
+  } else {
+    document.body.removeChild(pdfDiv);
+    toast('Error: html2pdf no está cargado');
+  }
+}
+
 // ══════════════════════ MODAL TICKET ══════════════════════
 function openTicket(tid){
   const t=tickets.find(x=>x.id===tid);if(!t)return;
+  window._currentTkId = tid;
   if(t.unreadCount){ t.unreadCount = 0; renderSwimlane(); }
   const ped=t.pedidoId?pedidos.find(p=>p.id===t.pedidoId):null;
   document.getElementById('tk-tit').textContent='💬 '+t.name;
@@ -887,7 +1129,7 @@ function openTicket(tid){
           <span style="color:var(--gt);">Domiciliario</span><span style="font-weight:700;">${ped.dom||'Sin asignar'}</span>
           <span style="color:var(--gt);">Pago</span><span style="font-weight:800;color:${ped.pagado?'#2E7D32':'var(--a)'};">${ped.pagado?'✅ Cobrado':'⏳ Pendiente'}</span>
         </div>
-        <button class="bverde" style="width:100%;margin-top:9px;padding:8px;" onclick="closeModal('m-ticket');tryOpenDet('${ped.id}',true)">Ver pedido #${ped.num} →</button>
+        <button class="bverde" style="width:100%;margin-top:9px;padding:8px;" onclick="closeModal('m-ticket');tryOpenDet('${ped.id}')">Ver pedido #${ped.num} →</button>
       </div>`;
     });
     info.innerHTML=pHTML;
@@ -902,7 +1144,39 @@ function openTicket(tid){
       <button class="bsec" onclick="closeModal('m-ticket')">Cerrar</button>
       <button class="bpri" onclick="closeModal('m-ticket');createFromTicket('${tid}')">+ Crear pedido de despacho</button>`;
   }
-  document.getElementById('m-ticket').classList.add('on');
+  openModal('m-ticket');
+  
+  // also refresh order chat preview if order modal is open
+  const om = openMod();
+  if (om === 'm-det') {
+     const p=pedidos.find(x=>x.id===curDetId);
+     if(p && t.pedidoIds.includes(p.id)) _openDet(p.id);
+  }
+}
+
+function sendReply() {
+  const t = tickets.find(x => x.id === window._currentTkId);
+  if (!t) return;
+  const input = document.getElementById('tk-reply-input');
+  const text = input.value.trim();
+  if (!text) return;
+  t.msgs.push({from: 'a', text, t: nowH()});
+  input.value = '';
+  openTicket(t.id);
+  if (currentAdmTab === 'swimlane') renderSwimlane();
+}
+
+function createNewTicket() {
+  const phone = prompt("Ingresa el número de teléfono del cliente:");
+  if (!phone) return;
+  let name = prompt("Ingresa el nombre del cliente (opcional):");
+  if (!name) name = phone;
+  const id = 't_manual_' + Date.now();
+  tickets.unshift({
+    id, phone, name, pedidoIds: [], fecha: currentDateStr, createdAt: nowH(), msgs: [{from:'a', text:'Ticket creado manualmente por '+whoNow(), t:nowH()}], unreadCount: 0
+  });
+  if (currentAdmTab === 'swimlane') renderSwimlane();
+  toast('Ticket creado exitosamente');
 }
 
 function createFromTicket(tid){

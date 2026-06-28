@@ -1,1 +1,11 @@
 .antigravitycli/
+node_modules
+dist
+.env
+.env.local
+*.local
+
+# Design source files at root
+4ClientLogo.png
+4ClientLogoSinTexto.png
+

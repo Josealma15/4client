@@ -104,9 +104,9 @@
               <option value="">Todos los pagos</option>
               <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="casa">Cobra en casa</option>
             </select>
-            <button class="bnew" onclick="tryOpenNuevo()">
+            <button class="bnew" onclick="createNewTicket()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Nuevo pedido
+              Nuevo ticket
             </button>
           </div>
         </div>
@@ -115,7 +115,11 @@
 
       <!-- RESUMEN DEL DUEÑO -->
       <div id="adm-resumen" style="display:none;">
-        <div class="khead"><div><div class="ktit">Resumen del día</div><div class="kmeta" id="adm-rmeta">Totales en tiempo real</div></div></div>
+        <div class="khead"><div><div class="ktit">Resumen del día</div><div class="kmeta" id="adm-rmeta">Totales en tiempo real</div></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="ui-resumen-date" class="fsel" style="cursor:pointer;" onchange="changeDate(this.value)">
+          </div>
+        </div>
 
         <div class="agrid">
           <div class="acard"><div class="ai">📋</div><div class="av" id="a-tot">0</div><div class="al2">Pedidos totales</div></div>
@@ -133,17 +137,15 @@
         <div class="atabs">
           <button class="atab on" onclick="switchAdmTab('todos',this)">📋 Todos los pedidos</button>
           <button class="atab" onclick="switchAdmTab('papelera',this)">🗑 Papelera <span id="pap-cnt">(0)</span></button>
-          <button class="atab" onclick="switchAdmTab('editados',this)">✏️ Cambios <span id="edit-cnt">(0)</span></button>
         </div>
 
         <div id="adm-todos">
           <div class="htab">
-            <div class="hth">Pedidos <span id="adm-total-txt" style="font-size:13px;color:var(--gt);font-weight:400;"></span></div>
+            <div class="hth">Pedidos</div>
             <div id="adm-list"></div>
           </div>
         </div>
         <div id="adm-papelera" style="display:none;"></div>
-        <div id="adm-editados" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -193,14 +195,18 @@
 
 <!-- ════════ MODAL DETALLE ════════ -->
 <div class="moverlay" id="m-det">
-  <div class="mwin">
+  <div class="mwin" style="max-width:1000px; width:95%;">
     <div class="mhead">
       <div><div class="mtit" id="det-tit">Pedido</div><div class="msub" id="det-sub"></div></div>
       <button class="mclose" onclick="tryClose('m-det')">×</button>
     </div>
-    <div class="mbody">
-      <div id="det-top-banner"></div>
-      <div style="background:var(--vc);border-radius:var(--rad);padding:12px 16px;margin-bottom:16px;" id="det-info"></div>
+    <div class="mbody" style="display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;">
+      <div id="det-chat-wrap" style="display:none; flex:1; min-width:280px;">
+        <div id="det-chat-preview" style="background:#ECE5DD; border-radius:10px; padding:10px; max-height:600px; overflow-y:auto; border: 2px solid var(--v);"></div>
+      </div>
+      <div style="flex:2; min-width:320px;">
+        <div id="det-top-banner"></div>
+        <div style="background:var(--vc);border-radius:var(--rad);padding:12px 16px;margin-bottom:16px;" id="det-info"></div>
       <div class="stit">Mover pedido</div>
       <div class="movbtns" id="det-mover"></div>
       <div class="stit">Información del pedido</div>
@@ -218,13 +224,18 @@
         <div class="fg2"><label class="fl2">Domiciliario</label>
           <select class="fi2" id="det-dom" onchange="dirty('m-det')"><option value="">— Sin asignar —</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
       </div>
-      <div class="stit">Productos</div>
-      <div class="psearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gt)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="det-ps" type="text" placeholder="Agregar producto..." oninput="bProd(this.value,'det')"></div>
-      <div class="pdrop" id="det-pd"></div>
-      <div class="ilist" id="det-il"><div class="irow hdr"><div>Producto</div><div>Cantidad</div><div>Precio</div><div></div></div></div>
-      <div class="factbox" style="margin-top:12px;"><div style="font-size:12px;font-weight:800;color:var(--gt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">Factura</div>
-        <div id="det-fr"></div><div class="facttot"><span>Total</span><span id="det-tot">$0</span></div></div>
+      <div class="stit" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleProdList('det')">
+        <span>Productos</span>
+        <svg id="det-prod-tog-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition: transform 0.2s; transform: rotate(180deg);"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="det-prod-wrap">
+        <div class="psearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gt)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="det-ps" type="text" placeholder="Agregar producto..." oninput="bProd(this.value,'det')"></div>
+        <div class="pdrop" id="det-pd"></div>
+        <div class="ilist" id="det-il"><div class="irow hdr"><div>Producto</div><div>Cantidad</div><div>Precio</div><div></div></div></div>
+        <div class="factbox" style="margin-top:12px;"><div style="font-size:12px;font-weight:800;color:var(--gt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:9px;">Factura</div>
+          <div id="det-fr"></div><div class="facttot"><span>Total</span><span id="det-tot">$0</span></div></div>
+      </div>
       <!-- HISTORIAL solo dueño -->
       <div id="det-hist-wrap" style="display:none;">
         <div class="hist-toggle" id="det-hist-tog" onclick="toggleHist()">
@@ -235,24 +246,33 @@
         <div class="hist-body" id="det-hist-body"></div>
       </div>
       <div class="mactions" id="det-actions"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ════════ MODAL TICKET WPP ════════ -->
 <div class="moverlay" id="m-ticket">
-  <div class="mwin">
+  <div class="mwin" style="max-width:1000px; width:95%;">
     <div class="mhead">
       <div><div class="mtit" id="tk-tit">Conversación</div><div class="msub" id="tk-sub"></div></div>
       <button class="mclose" onclick="closeModal('m-ticket')">×</button>
     </div>
-    <div class="mbody">
-      <div style="background:var(--bg);border-radius:var(--rad);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--gt);font-weight:600;">
-        🔒 Este es el registro inmutable de la conversación de WhatsApp. No se puede modificar.
+    <div class="mbody" style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;">
+      <div style="flex:1; min-width:280px; max-width:400px;">
+        <div style="background:var(--bg);border-radius:var(--rad);padding:8px 12px;margin-bottom:12px;font-size:12px;color:var(--gt);font-weight:600;">
+          🔒 Este es el registro inmutable de la conversación de WhatsApp. No se puede modificar.
+        </div>
+        <div class="chat-outer" id="tk-chat" style="max-height:400px; flex:1;"></div>
+        <div style="display:flex; gap:6px; margin-bottom:12px;">
+          <input type="text" id="tk-reply-input" class="fi2" placeholder="Escribe un mensaje..." style="margin-bottom:0;" onkeydown="if(event.key==='Enter')sendReply()">
+          <button class="bpri" style="padding:0 15px; margin:0;" onclick="sendReply()">Enviar</button>
+        </div>
       </div>
-      <div class="chat-outer" id="tk-chat"></div>
-      <div id="tk-ped-info"></div>
-      <div class="mactions" id="tk-actions"></div>
+      <div style="flex:1; min-width:300px; display:flex; flex-direction:column;">
+        <div id="tk-ped-info" style="overflow-y:auto; max-height:450px; padding-right:10px;"></div>
+        <div class="mactions" id="tk-actions" style="margin-top:auto;"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -299,6 +319,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
