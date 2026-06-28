@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import crypto from 'crypto';
 import { config } from '../config.js';
+import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 
 interface MetaWebhookPayload {
   object: string;
@@ -90,6 +91,8 @@ async function ingestMessage(
     });
   }
 
+  const isNewTicket = !ticket || ticket.unread_count === 0;
+
   const message = await fastify.prisma.ticketMessage.create({
     data: {
       ticket_id: ticket.id,
@@ -102,6 +105,31 @@ async function ingestMessage(
   });
 
   const newUnread = (ticket.unread_count ?? 0) + 1;
+
+  // Auto-reply welcome message on first message of the day
+  if (isNewTicket && org.welcome_message) {
+    const provider = MetaCloudProvider.fromOrg(org);
+    if (provider) {
+      provider.sendText(phone, org.welcome_message)
+        .then(async ({ messageId }) => {
+          const autoReply = await fastify.prisma.ticketMessage.create({
+            data: {
+              ticket_id: ticket.id,
+              direction: 'out',
+              text: org.welcome_message!,
+              wpp_message_id: messageId,
+              sent_at: new Date(),
+            },
+          });
+          type MediaType = 'pdf' | 'image' | 'audio' | 'video';
+          fastify.io.to(`org:${org.id}`).emit('ticket:message', {
+            ticketId: ticket.id,
+            message: { ...autoReply, direction: 'out' as const, media_type: null as MediaType | null, sent_at: autoReply.sent_at.toISOString(), sent_by_name: null },
+          });
+        })
+        .catch(err => fastify.log.error({ err, ticketId: ticket.id }, 'WPP: error enviando auto-respuesta'));
+    }
+  }
   type MediaType = 'pdf' | 'image' | 'audio' | 'video';
   const socketMsg = {
     ...message,

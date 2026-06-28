@@ -17,6 +17,7 @@ model Organization {
   wpp_meta_phone_id   String?  @db.VarChar(100)
   wpp_meta_token      String?
   wpp_meta_app_secret String?
+  welcome_message     String?
   active              Boolean  @default(true)
   created_at          DateTime @default(now()) @db.Timestamptz
 

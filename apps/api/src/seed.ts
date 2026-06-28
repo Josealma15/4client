@@ -105,6 +105,21 @@ async function main() {
   });
   console.log(`✅ Admin: ${admin.email}`);
 
+  // Usuario dev (super-admin del sistema)
+  const devHash = await bcrypt.hash('dev5678!', 12);
+  await prisma.user.upsert({
+    where: { org_id_email: { org_id: org.id, email: 'dev@fruver.com' } },
+    update: {},
+    create: {
+      org_id: org.id,
+      email: 'dev@fruver.com',
+      password_hash: devHash,
+      name: 'Dev',
+      role: 'dev',
+    },
+  });
+  console.log('✅ Dev: dev@fruver.com');
+
   // Usuario encargado
   const encHash = await bcrypt.hash('encargado1234', 12);
   const encargado = await prisma.user.upsert({
@@ -152,7 +167,8 @@ async function main() {
   console.log('\n🎉 Seed completado!');
   console.log('─────────────────────────────────');
   console.log('Credenciales de acceso:');
-  console.log('  Admin:     admin@fruver.com    / admin1234');
+  console.log('  Admin:     admin@fruver.com     / admin1234');
+  console.log('  Dev:       dev@fruver.com       / dev5678!');
   console.log('  Encargado: encargado@fruver.com / encargado1234');
   console.log('─────────────────────────────────');
 }

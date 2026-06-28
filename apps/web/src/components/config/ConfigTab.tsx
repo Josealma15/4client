@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, RotateCcw, X, Check, Package, Truck, Users, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, X, Check, Package, Truck, Users, ChevronDown, ChevronRight, AlertTriangle, MessageSquare, Code2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
+import { useAuthStore } from '../../store/auth';
 
-type Section = 'productos' | 'domiciliarios' | 'usuarios';
+type Section = 'productos' | 'domiciliarios' | 'usuarios' | 'whatsapp' | 'dev';
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Administrador',
   encargado: 'Encargado',
   domiciliario: 'Domiciliario',
+  dev: 'Dev',
 };
 
 // ─── Simple confirmation dialog ───────────────────────────────────────────────
@@ -650,15 +652,140 @@ function UsersSection() {
   );
 }
 
+// ─── WhatsApp config section ──────────────────────────────────────────────────
+
+function WhatsAppSection() {
+  const qc = useQueryClient();
+  const { data: org, isLoading } = useQuery({
+    queryKey: ['config-org'],
+    queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
+  });
+
+  const [phoneId, setPhoneId] = useState('');
+  const [token, setToken] = useState('');
+  const [welcome, setWelcome] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  if (!loaded && org) {
+    setPhoneId(org.wpp_meta_phone_id ?? '');
+    setWelcome(org.welcome_message ?? '');
+    setLoaded(true);
+  }
+
+  const save = useMutation({
+    mutationFn: (data: any) => api.patch('/config/wpp', data),
+    onSuccess: () => { toast('Configuración WPP guardada'); qc.invalidateQueries({ queryKey: ['config-org'] }); },
+    onError: () => toast('Error al guardar', true),
+  });
+
+  function handleSave() {
+    const data: any = { welcome_message: welcome || null };
+    if (phoneId.trim()) data.wpp_meta_phone_id = phoneId.trim();
+    if (token.trim()) data.wpp_meta_token = token.trim();
+    save.mutate(data);
+  }
+
+  if (isLoading) return <div style={{ padding: 32, color: 'var(--gt)' }}>Cargando...</div>;
+
+  return (
+    <div style={{ maxWidth: 560, padding: '8px 0' }}>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 6 }}>Phone Number ID</div>
+          <input
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', fontFamily: 'monospace' }}
+            value={phoneId} onChange={e => setPhoneId(e.target.value)}
+            placeholder={org?.wpp_meta_phone_id ? '(configurado)' : 'ej: 1162357783628740'}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 6 }}>Access Token</div>
+          <input
+            type="password"
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', fontFamily: 'monospace' }}
+            value={token} onChange={e => setToken(e.target.value)}
+            placeholder="Dejar vacío para no cambiar"
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--gt)', marginBottom: 4 }}>Mensaje de bienvenida</div>
+          <div style={{ fontSize: 12, color: 'var(--gt)', marginBottom: 8 }}>Se envía automáticamente al primer mensaje del día de cada cliente. Dejar vacío para desactivar.</div>
+          <textarea
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', minHeight: 90, resize: 'vertical' }}
+            value={welcome} onChange={e => setWelcome(e.target.value)}
+            placeholder="ej: Hola 👋 Bienvenido a Fruver San Gabriel. En un momento serás atendido por nuestro personal."
+          />
+        </div>
+        <button className="bpri" onClick={handleSave} disabled={save.isPending}>
+          {save.isPending ? 'Guardando...' : 'Guardar configuración'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dev section ──────────────────────────────────────────────────────────────
+
+function DevSection() {
+  const { data: org } = useQuery({
+    queryKey: ['config-org'],
+    queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
+  });
+
+  return (
+    <div style={{ maxWidth: 560, padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 1 }}>Estado del sistema</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { label: 'Org ID', value: org?.id },
+            { label: 'Slug', value: org?.slug },
+            { label: 'Plan', value: org?.plan },
+            { label: 'WPP Phone ID', value: org?.wpp_meta_phone_id ?? '—' },
+            { label: 'WPP conectado', value: org?.wpp_meta_phone_id ? '✅ Sí' : '❌ No' },
+            { label: 'Mensaje bienvenida', value: org?.welcome_message ? '✅ Configurado' : '—' },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
+              <span style={{ color: 'var(--gt)', minWidth: 160 }}>{label}</span>
+              <span style={{ color: 'var(--n)', fontFamily: 'monospace', wordBreak: 'break-all' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Links rápidos</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { label: 'Railway (backend + BD)', url: 'https://railway.app' },
+            { label: 'Vercel (frontend)', url: 'https://vercel.com' },
+            { label: 'Sentry (errores)', url: 'https://sentry.io' },
+            { label: 'Meta Business (WPP)', url: 'https://business.facebook.com' },
+            { label: 'Cloudflare (DNS)', url: 'https://cloudflare.com' },
+          ].map(({ label, url }) => (
+            <a key={label} href={url} target="_blank" rel="noreferrer"
+              style={{ fontSize: 13, color: 'var(--v)', textDecoration: 'none' }}>
+              → {label}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ConfigTab root ───────────────────────────────────────────────────────────
 
 export default function ConfigTab() {
+  const user = useAuthStore(s => s.user);
+  const isDev = user?.role === 'dev';
   const [section, setSection] = useState<Section>('productos');
 
   const tabs: { key: Section; label: string; icon: React.ReactNode }[] = [
     { key: 'productos',     label: 'Productos',      icon: <Package size={15} /> },
     { key: 'domiciliarios', label: 'Domiciliarios',  icon: <Truck size={15} /> },
     { key: 'usuarios',      label: 'Usuarios',        icon: <Users size={15} /> },
+    { key: 'whatsapp',      label: 'WhatsApp',        icon: <MessageSquare size={15} /> },
+    ...(isDev ? [{ key: 'dev' as Section, label: 'Dev', icon: <Code2 size={15} /> }] : []),
   ];
 
   return (
@@ -666,7 +793,7 @@ export default function ConfigTab() {
       <div className="khead">
         <div>
           <div className="ktit">Configuración</div>
-          <div className="kmeta">Gestión de productos, domiciliarios y usuarios</div>
+          <div className="kmeta">Gestión de productos, domiciliarios, usuarios y sistema</div>
         </div>
       </div>
 
@@ -690,6 +817,8 @@ export default function ConfigTab() {
       {section === 'productos'     && <ProductsSection />}
       {section === 'domiciliarios' && <EmployeesSection />}
       {section === 'usuarios'      && <UsersSection />}
+      {section === 'whatsapp'      && <WhatsAppSection />}
+      {section === 'dev'           && isDev && <DevSection />}
     </div>
   );
 }

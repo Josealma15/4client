@@ -19,8 +19,9 @@ export async function authenticate(req: FastifyRequest, reply: FastifyReply) {
 
 export function requireRole(...roles: UserRole[]) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
-    if (!roles.includes(req.user.role as UserRole)) {
-      return reply.status(403).send({ error: 'Acceso denegado', code: 'FORBIDDEN' });
-    }
+    const role = req.user.role as UserRole;
+    // dev is a super-role that passes all role checks
+    if (role === 'dev' || roles.includes(role)) return;
+    return reply.status(403).send({ error: 'Acceso denegado', code: 'FORBIDDEN' });
   };
 }
