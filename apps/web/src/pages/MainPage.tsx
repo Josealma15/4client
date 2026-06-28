@@ -123,10 +123,43 @@ export default function MainPage() {
     <div className="al">
       <header className="ah">
         <div className="ht">
-          <div className="hlogo">
-            <img src="/icon.png" alt="4Client" style={{ height: 36, objectFit: 'contain' }} />
+          <div className="hleft">
+            <div className="hlogo">
+              <img src="/icon.png" alt="4Client" style={{ height: 34, objectFit: 'contain' }} />
+            </div>
+            <div className="tabs">
+              <button className={`tab${tab === 'swimlane' ? ' on' : ''}`} onClick={() => setTab('swimlane')}>
+                <ClipboardList size={15} /> Tickets & Pedidos
+              </button>
+              {isAdmin && (
+                <button className={`tab${tab === 'inbox' ? ' on' : ''}`}
+                  onClick={() => { setTab('inbox'); setUnreadWpp(0); }}>
+                  <MessageSquare size={15} /> Chats WPP
+                  {unreadWpp > 0 && (
+                    <span style={{
+                      position: 'absolute', top: 7, right: 6,
+                      minWidth: 16, height: 16, background: '#DC2626', borderRadius: 10,
+                      color: '#fff', fontSize: 9, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+                    }}>
+                      {unreadWpp > 99 ? '99+' : unreadWpp}
+                    </span>
+                  )}
+                </button>
+              )}
+              {isAdmin && (
+                <button className={`tab${tab === 'resumen' ? ' on' : ''}`} onClick={() => setTab('resumen')}>
+                  <BarChart2 size={15} /> Informe del día
+                </button>
+              )}
+              {isAdmin && (
+                <button className={`tab${tab === 'config' ? ' on' : ''}`} onClick={() => setTab('config')}>
+                  <Settings size={15} /> Configuración
+                </button>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div className="hright">
             <div className="huser">
               <div className={`uav${canManage ? ' adm' : ''}`}>{user?.name?.[0]?.toUpperCase() ?? 'U'}</div>
               <div>
@@ -138,38 +171,6 @@ export default function MainPage() {
             </div>
             <button className="bout" onClick={handleLogout}>Salir</button>
           </div>
-        </div>
-        <div className="tabs">
-          <button className={`tab${tab === 'swimlane' ? ' on' : ''}`} onClick={() => setTab('swimlane')}>
-            <ClipboardList size={15} /> Tickets & Pedidos
-          </button>
-          {isAdmin && (
-            <button className={`tab${tab === 'inbox' ? ' on' : ''}`}
-              onClick={() => { setTab('inbox'); setUnreadWpp(0); }}
-              style={{ position: 'relative' }}>
-              <MessageSquare size={15} /> Chats WPP
-              {unreadWpp > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 4,
-                  minWidth: 17, height: 17, background: '#DC2626', borderRadius: 10,
-                  color: '#fff', fontSize: 10, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-                }}>
-                  {unreadWpp > 99 ? '99+' : unreadWpp}
-                </span>
-              )}
-            </button>
-          )}
-          {isAdmin && (
-            <button className={`tab${tab === 'resumen' ? ' on' : ''}`} onClick={() => setTab('resumen')}>
-              <BarChart2 size={15} /> Informe del día
-            </button>
-          )}
-          {isAdmin && (
-            <button className={`tab${tab === 'config' ? ' on' : ''}`} onClick={() => setTab('config')}>
-              <Settings size={15} /> Configuración
-            </button>
-          )}
         </div>
       </header>
 

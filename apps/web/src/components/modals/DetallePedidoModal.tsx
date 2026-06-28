@@ -8,6 +8,17 @@ import { getSocket } from '../../lib/socket';
 import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { STATUS_LABEL, STATUS_ORDER, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
+
+const HIST_VAL_MAP: Record<string, string> = {
+  cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia',
+  nuevo: 'Nuevo', preparando: 'Preparando', listo: 'Listo',
+  camino: 'En camino', entregado: 'Entregado', cerrado: 'Cerrado',
+  whatsapp: 'WhatsApp', call: 'Llamada',
+};
+function fmtHistVal(v: string | null | undefined): string {
+  if (!v) return '';
+  return HIST_VAL_MAP[v] ?? v;
+}
 import { toast } from '../ui/Toast';
 import ProductSearch from '../orders/ProductSearch';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -259,7 +270,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   function copyInvoice() {
     if (!order) return;
     const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
-    const lines = [`Pedido #${order.num} — ${user?.orgName ?? '4Client'}`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
+    const lines = [`Pedido #${order.num} - ${user?.orgName ?? '4Client'}`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
     items.forEach(i => lines.push(`• ${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}: $${(parseFloat(i.price)||0).toLocaleString('es-CO')}`));
     lines.push('', `Total: $${total.toLocaleString('es-CO')}`, `Pago: ${PAYMENT_LABEL[pago] ?? pago}`);
     navigator.clipboard.writeText(lines.join('\n'));
@@ -378,11 +389,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 onKeyDown={handleChatKeyDown}
-                rows={1}
+                rows={3}
                 style={{
                   flex: 1, border: '1.5px solid var(--brd)', borderRadius: 8,
-                  padding: '6px 9px', fontSize: 12, resize: 'none', fontFamily: 'inherit',
-                  background: '#fff',
+                  padding: '8px 10px', fontSize: 13, resize: 'none', fontFamily: 'inherit',
+                  background: '#fff', lineHeight: 1.4,
                 }}
               />
               <button
@@ -417,7 +428,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 {order.channel === 'whatsapp' ? 'WhatsApp' : 'Llamada'}
                 {order.order_hour && (
                   <span style={{ marginLeft: 6, color: 'var(--gt)', fontWeight: 600 }}>
-                    — {formatHour(order.order_hour)}
+                    · {formatHour(order.order_hour)}
                   </span>
                 )}
               </div>
@@ -427,11 +438,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
           <div className="mbody">
             {/* Info summary */}
-            <div style={{ background: 'var(--vc)', borderRadius: 'var(--rad)', padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 14px', fontSize: 13 }}>
-              <div><span style={{ color: 'var(--gt)', fontWeight: 600 }}>Hora — </span><strong>{formatHour(order.order_hour)}</strong></div>
-              <div><span style={{ color: 'var(--gt)', fontWeight: 600 }}>Estado — </span><strong>{STATUS_LABEL[order.status] ?? order.status}</strong></div>
-              <div><span style={{ color: 'var(--gt)', fontWeight: 600 }}>Canal — </span><strong>{order.channel === 'whatsapp' ? 'WhatsApp' : 'Llamada'}</strong></div>
-              <div><span style={{ color: 'var(--gt)', fontWeight: 600 }}>Pago — </span><strong style={{ color: order.paid ? 'var(--v)' : '#DC2626' }}>{order.paid ? 'Pagado' : 'Pendiente'}</strong></div>
+            <div style={{ background: 'var(--vc)', borderRadius: 'var(--rad)', padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'max-content 1fr max-content 1fr', gap: '6px 12px', fontSize: 13, alignItems: 'center' }}>
+              <span style={{ color: 'var(--gt)', fontWeight: 600 }}>Hora:</span><strong>{formatHour(order.order_hour)}</strong>
+              <span style={{ color: 'var(--gt)', fontWeight: 600 }}>Estado:</span><strong>{STATUS_LABEL[order.status] ?? order.status}</strong>
+              <span style={{ color: 'var(--gt)', fontWeight: 600 }}>Canal:</span><strong>{order.channel === 'whatsapp' ? 'WhatsApp' : 'Llamada'}</strong>
+              <span style={{ color: 'var(--gt)', fontWeight: 600 }}>Pago:</span><strong style={{ color: order.paid ? 'var(--v)' : '#DC2626' }}>{order.paid ? 'Pagado' : 'Pendiente'}</strong>
             </div>
 
             {/* Cobro closure info (visible to all roles) */}
@@ -540,14 +551,14 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                         <div style={{ flex: 1 }}>
                           <div>
                             <span className="hwho">{h.actor?.name ?? 'Sistema'}</span>
-                            {' — '}
+                            {' - '}
                             <span className="hwhat">{h.field ?? h.action_type}</span>
                           </div>
                           {(h.value_before || h.value_after) && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                              {h.value_before && <span className="diff-old">— {h.value_before}</span>}
+                              {h.value_before && <span className="diff-old">- {fmtHistVal(h.value_before)}</span>}
                               {h.value_before && h.value_after && <span className="diff-arrow">→</span>}
-                              {h.value_after && <span className="diff-new">+ {h.value_after}</span>}
+                              {h.value_after && <span className="diff-new">+ {fmtHistVal(h.value_after)}</span>}
                             </div>
                           )}
                           {h.notes && <div style={{ fontSize: 12, color: 'var(--gt)', marginTop: 2 }}>{h.notes}</div>}
@@ -628,7 +639,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'center', marginBottom: 8 }}>Confirmar pago</div>
             <div style={{ textAlign: 'center', fontSize: 14, color: 'var(--gt)', marginBottom: 16 }}>
-              {order.customer_name} — Total: <strong>{fmtCOP(total)}</strong>
+              {order.customer_name} - Total: <strong>{fmtCOP(total)}</strong>
             </div>
             <div style={{ background: 'var(--ac)', borderRadius: 'var(--rad)', padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--a)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={14} /> Una vez confirmado, el pedido quedará bloqueado.

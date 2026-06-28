@@ -30,10 +30,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ background: 'linear-gradient(140deg,var(--vd) 0%,var(--v) 60%,#2eac62 100%)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="lbg">
+      <div className="lbg-overlay" />
       <div className="lcard">
         <div className="llogo">
-          <img src="/logo.png" alt="4Client" style={{ height: 80, objectFit: 'contain' }} />
+          <img src="/logo.png" alt="4Client" style={{ height: 120, objectFit: 'contain' }} />
         </div>
         <p className="lsub">Sistema de Gestión Operativa</p>
         <div className="fg">

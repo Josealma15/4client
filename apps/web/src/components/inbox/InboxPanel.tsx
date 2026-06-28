@@ -74,7 +74,7 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
       if (res?.wpp_status === 'failed') {
         toast(`Mensaje guardado pero falló el envío a WhatsApp: ${res.wpp_error ?? 'error Meta API'}`, true);
       } else if (res?.wpp_status === 'no_credentials') {
-        toast('Mensaje guardado. WPP sin configurar — revisa DevTools → WPP', true);
+        toast('Mensaje guardado. WPP sin configurar - revisa DevTools - WPP', true);
       }
     },
     onError: (e: any) => toast(e.message, true),
@@ -83,6 +83,13 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages?.length, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const handler = (e: Event) => { if ((e as globalThis.KeyboardEvent).key === 'Escape') setSelectedId(null); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedId]);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
