@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
+      - name: Type check API
+        run: pnpm --filter api exec tsc --noEmit
+
+      - name: Type check Web
+        run: pnpm --filter web exec tsc --noEmit
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: typecheck
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
+      - name: Build API
+        run: pnpm --filter api build
+
+      - name: Build Web
+        run: pnpm --filter web build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.4client.app' }}
