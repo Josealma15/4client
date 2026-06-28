@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, RotateCcw, X, Check, Package, Truck, Users, ChevronDown, ChevronRight, AlertTriangle, Code2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, X, Check, Package, Truck, Users, ChevronDown, ChevronRight, AlertTriangle, Code2, Database, MessageSquare, Settings, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
 import { useAuthStore } from '../../store/auth';
@@ -658,17 +658,16 @@ function UsersSection() {
 
 // ─── DevTools sub-panels ──────────────────────────────────────────────────────
 
-type DevTab = 'wpp' | 'seed' | 'bd' | 'sistema' | 'links';
+type DevTab = 'bd' | 'wpp' | 'sistema' | 'links';
 
-const DEV_TABS: { key: DevTab; label: string }[] = [
-  { key: 'bd',     label: '🗄️ BD' },
-  { key: 'seed',   label: '🌱 Seed' },
-  { key: 'wpp',    label: '📱 WhatsApp' },
-  { key: 'sistema',label: '⚙️ Sistema' },
-  { key: 'links',  label: '🔗 Links' },
+const DEV_TABS: { key: DevTab; label: string; icon: React.ReactNode }[] = [
+  { key: 'bd',      label: 'Base de datos', icon: <Database size={13} /> },
+  { key: 'wpp',     label: 'WhatsApp',      icon: <MessageSquare size={13} /> },
+  { key: 'sistema', label: 'Sistema',        icon: <Settings size={13} /> },
+  { key: 'links',   label: 'Links',          icon: <ExternalLink size={13} /> },
 ];
 
-const DB_TABLES = ['users', 'organizations', 'products', 'employees', 'orders', 'tickets', 'ticket_messages', 'refresh_tokens', 'order_history', 'daily_closes'];
+const DB_TABLES = ['users', 'organizations', 'products', 'employees', 'orders', 'tickets', 'ticket_messages', 'order_history', 'daily_closes'];
 
 function DevWppPanel() {
   const qc = useQueryClient();
@@ -737,7 +736,9 @@ function DevWppPanel() {
             {save.isPending ? 'Guardando...' : 'Guardar configuración'}
           </button>
           <div style={{ fontSize: 12, color: org?.wpp_meta_phone_id ? 'var(--v)' : 'var(--gt)' }}>
-            {org?.wpp_meta_phone_id ? '✅ Phone ID configurado' : '⚠️ Sin configurar'}
+            {org?.wpp_meta_phone_id
+            ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={13} color="var(--v)" /> Phone ID configurado</span>
+            : <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={13} color="var(--r)" /> Sin configurar</span>}
           </div>
         </div>
       </div>
@@ -745,46 +746,6 @@ function DevWppPanel() {
   );
 }
 
-function DevSeedPanel() {
-  const [logs, setLogs] = useState<string[]>([]);
-  const [confirm, setConfirm] = useState(false);
-
-  const run = useMutation({
-    mutationFn: () => api.post<{ logs: string[]; success: boolean }>('/dev/seed', {}).then(r => r),
-    onSuccess: (data: any) => { setConfirm(false); setLogs(data.logs ?? []); },
-    onError: (e: any) => { setConfirm(false); setLogs([`❌ ${e.message}`]); },
-  });
-
-  return (
-    <div style={{ maxWidth: 560 }}>
-      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Ejecutar Seed</div>
-        <p style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 14, lineHeight: 1.5 }}>
-          Crea la org y usuarios base. Idempotente (upsert). Bloqueado en producción.
-        </p>
-        <div style={{ background: 'var(--gm)', borderRadius: 8, padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', marginBottom: 16, color: 'var(--n)', lineHeight: 1.8 }}>
-          admin@fruver.com &nbsp;→ env: SEED_ADMIN_PASS<br />
-          dev@fruver.com &nbsp;&nbsp;&nbsp;→ env: SEED_DEV_PASS
-        </div>
-        {!confirm ? (
-          <button className="bdel" onClick={() => setConfirm(true)}>▶ Ejecutar seed</button>
-        ) : (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="bdel" onClick={() => run.mutate()} disabled={run.isPending}>
-              {run.isPending ? 'Ejecutando...' : '✓ Confirmar'}
-            </button>
-            <button className="bsec" onClick={() => setConfirm(false)}>Cancelar</button>
-          </div>
-        )}
-        {logs.length > 0 && (
-          <div style={{ marginTop: 16, background: '#0f172a', borderRadius: 8, padding: 14, fontSize: 12, fontFamily: 'monospace', color: '#94a3b8', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-            {logs.join('\n')}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function DevDbPanel() {
   const [table, setTable] = useState('users');
@@ -831,8 +792,8 @@ function DevDbPanel() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <button className="bsec" style={{ padding: '7px 14px', fontSize: 13 }} onClick={() => refetch()}>
-          {isFetching ? '...' : '↺ Refresh'}
+        <button className="bsec" style={{ padding: '7px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }} onClick={() => refetch()}>
+          <RotateCcw size={12} />{isFetching ? 'Cargando...' : 'Refrescar'}
         </button>
         <span style={{ fontSize: 12, color: 'var(--gt)' }}>
           {search ? `${rows.length} de ${allRows.length} filas (${total} total)` : `${total} filas totales`}
@@ -878,16 +839,16 @@ function DevDbPanel() {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12 }}
+        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
           disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-          ← Prev
+          <ChevronRight size={12} style={{ transform: 'rotate(180deg)' }} /> Anterior
         </button>
         <span style={{ fontSize: 12, color: 'var(--gt)' }}>
           {rows.length > 0 ? `${offset + 1}–${offset + rows.length} de ${total}` : '0 resultados'}
         </span>
-        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12 }}
+        <button className="bsec" style={{ padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
           disabled={rows.length < limit} onClick={() => setOffset(offset + limit)}>
-          Next →
+          Siguiente <ChevronRight size={12} />
         </button>
       </div>
     </div>
@@ -941,7 +902,7 @@ function DevSistemaPanel() {
               ['ID', org?.id],
               ['Slug', org?.slug],
               ['Plan', org?.plan],
-              ['WPP', org?.wpp_meta_phone_id ? '✅ configurado' : '❌ sin config'],
+              ['WPP', org?.wpp_meta_phone_id ? 'configurado' : 'sin config'],
               ['Bienvenida', org?.welcome_message ? '✅ activa' : '—'],
             ].map(([label, value]) => (
               <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
@@ -957,7 +918,7 @@ function DevSistemaPanel() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: 1 }}>API Health</div>
             <button className="bsec" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => pingHealth()} disabled={pinging}>
-              {pinging ? '...' : '▶ Ping'}
+              {pinging ? 'Cargando...' : 'Ping'}
             </button>
           </div>
           {h ? (
@@ -987,7 +948,7 @@ function DevSistemaPanel() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: 1 }}>Variables de entorno</div>
           <button className="bsec" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => fetchEnv()} disabled={loadingEnv}>
-            {loadingEnv ? '...' : '▶ Cargar'}
+            {loadingEnv ? 'Cargando...' : 'Cargar'}
           </button>
         </div>
         {env ? (
@@ -1001,8 +962,12 @@ function DevSistemaPanel() {
                     : 'var(--az)',
                 }} />
                 <span style={{ color: 'var(--gt)', fontFamily: 'monospace', fontSize: 11, flex: 1 }}>{k}</span>
-                <span style={{ color: sensitive ? (v === true ? 'var(--v)' : 'var(--r)') : 'var(--az)', fontSize: 11, fontFamily: 'monospace' }}>
-                  {sensitive ? (v === true ? '✓ set' : '✗ missing') : v}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, fontFamily: 'monospace', color: sensitive ? (v === true ? 'var(--v)' : 'var(--r)') : 'var(--az)' }}>
+                  {sensitive
+                    ? v === true
+                      ? <><CheckCircle size={11} color="var(--v)" /> set</>
+                      : <><XCircle size={11} color="var(--r)" /> missing</>
+                    : v}
                 </span>
               </div>
             ))}
@@ -1051,22 +1016,22 @@ function DevSection() {
             key={t.key}
             onClick={() => setTab(t.key)}
             style={{
+              display: 'flex', alignItems: 'center', gap: 6,
               padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
               border: `1.5px solid ${tab === t.key ? 'var(--v)' : 'var(--brd)'}`,
               background: tab === t.key ? 'var(--vc)' : 'var(--b)',
               color: tab === t.key ? 'var(--vd)' : 'var(--gt)',
               transition: 'all .12s',
             }}>
-            {t.label}
+            {t.icon}{t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'wpp'    && <DevWppPanel />}
-      {tab === 'seed'   && <DevSeedPanel />}
-      {tab === 'bd'     && <DevDbPanel />}
-      {tab === 'sistema'&& <DevSistemaPanel />}
-      {tab === 'links'  && <DevLinksPanel />}
+      {tab === 'bd'      && <DevDbPanel />}
+      {tab === 'wpp'     && <DevWppPanel />}
+      {tab === 'sistema' && <DevSistemaPanel />}
+      {tab === 'links'   && <DevLinksPanel />}
     </div>
   );
 }

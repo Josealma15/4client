@@ -75,10 +75,6 @@ export default async function devRoutes(fastify: FastifyInstance) {
 
   // GET /dev/db?table=users&limit=20&offset=0 — scoped to own org only
   fastify.get('/db', async (req: any, reply) => {
-    if (config.NODE_ENV === 'production') {
-      return reply.status(403).send({ error: 'Acceso directo a BD deshabilitado en producción', code: 'FORBIDDEN' });
-    }
-
     const { table = 'users', limit = '20', offset = '0' } = req.query as Record<string, string>;
 
     if (!ALLOWED_TABLES.includes(table as AllowedTable)) {
