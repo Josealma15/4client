@@ -5,6 +5,7 @@ import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/auth';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
@@ -43,10 +44,6 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     refetchInterval: 15000,
   });
 
-  const { data: org } = useQuery({
-    queryKey: ['config-org'],
-    queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
-  });
 
   const liveMessages: any[] = convoData?.messages ?? initialMessages ?? [];
 
@@ -63,6 +60,8 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     },
     onError: (e: any) => toast(e.message ?? 'Error al enviar', true),
   });
+
+  const orgSlug = useAuthStore((s) => s.user?.orgSlug);
 
   function handleSend() {
     if (!replyText.trim() || replyMut.isPending) return;
@@ -132,12 +131,12 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
             <div style={{ background: 'var(--vd)', color: '#fff', padding: '10px 12px', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Smartphone size={15} />
               <span style={{ flex: 1 }}>{preNombre || telefono}</span>
-              {org?.slug && (
+              {orgSlug && (
                 <button
-                  title="Insertar link del formulario de pedido"
+                  title="Enviar formulario de pedido al cliente"
                   onClick={() => {
-                    const link = `${window.location.origin}/form?org=${encodeURIComponent(org.slug)}`;
-                    setReplyText(prev => prev ? `${prev}\n${link}` : link);
+                    const link = `${window.location.origin}/form?org=${encodeURIComponent(orgSlug)}`;
+                    replyMut.mutate(link);
                   }}
                   style={{
                     background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',

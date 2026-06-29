@@ -4,7 +4,7 @@ import type { AuthPayload } from '@4client/shared';
 
 interface AuthState {
   accessToken: string | null;
-  user: (AuthPayload & { name: string; email: string; orgName?: string }) | null;
+  user: (AuthPayload & { name: string; email: string; orgName?: string; orgSlug?: string }) | null;
   setAuth: (tokens: { accessToken: string }, user: AuthState['user']) => void;
   clearAuth: () => void;
   setAccessToken: (token: string) => void;

@@ -70,6 +70,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
           id: user.id,
           org_id: user.org_id,
           org_name: user.org.name,
+          org_slug: user.org.slug,
           email: user.email,
           name: user.name,
           role: user.role,

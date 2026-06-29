@@ -20,7 +20,7 @@ export default function LoginPage() {
       const apiUser = res.data.user as any;
       setAuth(
         { accessToken: res.data.accessToken },
-        { ...apiUser, userId: apiUser.id, orgId: apiUser.org_id, orgName: apiUser.org_name },
+        { ...apiUser, userId: apiUser.id, orgId: apiUser.org_id, orgName: apiUser.org_name, orgSlug: apiUser.org_slug },
       );
     } catch (e: any) {
       setError(e.message === 'Credenciales incorrectas' ? 'Usuario o contraseña incorrectos' : 'Error al conectar con el servidor');

@@ -40,10 +40,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
     refetchInterval: 60000,
   });
 
-  const { data: org } = useQuery({
-    queryKey: ['config-org'],
-    queryFn: () => api.get<{ data: any }>('/config/org').then(r => r.data),
-  });
 
   // Real-time: reorder sidebar + refresh open conversation on any message
   useEffect(() => {
@@ -122,6 +118,7 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
     return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
   }
 
+  const orgSlug = useAuthStore((s) => s.user?.orgSlug);
   const selectedTicket = tickets.find((t: any) => t.id === selectedId);
 
   return (
@@ -206,12 +203,12 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
               <div style={{ fontSize: 13, color: 'var(--gt)' }}>{selectedTicket?.phone}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {org?.slug && (
+              {orgSlug && (
                 <button className="bsec" style={{ padding: '8px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                  title="Insertar link del formulario en el mensaje"
+                  title="Enviar formulario de pedido al cliente"
                   onClick={() => {
-                    const link = `${window.location.origin}/form?org=${encodeURIComponent(org.slug)}`;
-                    setReplyText(prev => prev ? `${prev}\n${link}` : link);
+                    const link = `${window.location.origin}/form?org=${encodeURIComponent(orgSlug)}`;
+                    replyMut.mutate(link);
                   }}>
                   <ClipboardList size={13} /> Lista
                 </button>

@@ -2,6 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 export default async function publicRoutes(fastify: FastifyInstance) {
+  // Allow any origin — these endpoints are genuinely public (client-facing form)
+  fastify.addHook('onRequest', async (_req, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type');
+  });
+  fastify.options('*', async (_req, reply) => reply.status(204).send());
+
   // GET /api/v1/public/org/:slug — verify org exists (for the client form)
   fastify.get('/org/:slug', async (req, reply) => {
     const { slug } = req.params as { slug: string };
