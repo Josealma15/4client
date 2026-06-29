@@ -3,8 +3,14 @@ import { useAuthStore } from './store/auth';
 import { tryRestoreSession } from './lib/api';
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage';
+import ClientFormPage from './pages/ClientFormPage';
 
 export default function App() {
+  // Public client form page — no auth required
+  if (window.location.pathname === '/form') {
+    return <ClientFormPage />;
+  }
+
   const token = useAuthStore((s) => s.accessToken);
   const [ready, setReady] = useState(false);
 

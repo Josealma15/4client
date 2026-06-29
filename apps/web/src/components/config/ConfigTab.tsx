@@ -40,6 +40,8 @@ interface ProductForm {
   category: string;
   newCategory: string;
   useNewCategory: boolean;
+  price_per_unit: string;
+  unit_type: string;
 }
 
 function ProductsSection() {
@@ -86,7 +88,7 @@ function ProductsSection() {
 
   function openCreate() {
     setEditId(null);
-    setForm({ name: '', category: existingCategories[0] ?? '', newCategory: '', useNewCategory: existingCategories.length === 0 });
+    setForm({ name: '', category: existingCategories[0] ?? '', newCategory: '', useNewCategory: existingCategories.length === 0, price_per_unit: '', unit_type: 'kg' });
   }
 
   function openEdit(p: any) {
@@ -97,6 +99,8 @@ function ProductsSection() {
       category: catExists ? (p.category ?? '') : '',
       newCategory: catExists ? '' : (p.category ?? ''),
       useNewCategory: !catExists && !!p.category,
+      price_per_unit: p.price_per_unit != null ? String(p.price_per_unit) : '',
+      unit_type: p.unit_type ?? 'kg',
     });
   }
 
@@ -107,7 +111,13 @@ function ProductsSection() {
   function handleSubmit() {
     if (!form?.name.trim()) return toast('El nombre es obligatorio', true);
     const category = resolvedCategory(form);
-    save.mutate({ name: form.name.trim(), category: category || undefined });
+    const price = parseFloat(form.price_per_unit);
+    save.mutate({
+      name: form.name.trim(),
+      category: category || undefined,
+      price_per_unit: !isNaN(price) && price > 0 ? price : undefined,
+      unit_type: form.unit_type.trim() || undefined,
+    });
   }
 
   function toggleCat(cat: string) {
@@ -181,6 +191,25 @@ function ProductsSection() {
                 </div>
               )}
             </div>
+            <div>
+              <label className="fl">Precio ref. por unidad</label>
+              <input className="fi" type="number" min="0" value={form.price_per_unit}
+                onChange={e => setForm(f => f && ({ ...f, price_per_unit: e.target.value }))}
+                placeholder="Ej: 3500" />
+            </div>
+            <div>
+              <label className="fl">Unidad</label>
+              <select className="fi" value={form.unit_type}
+                onChange={e => setForm(f => f && ({ ...f, unit_type: e.target.value }))}>
+                <option value="kg">kg</option>
+                <option value="unidad">Unidad</option>
+                <option value="libra">Libra</option>
+                <option value="bulto">Bulto</option>
+                <option value="caja">Caja</option>
+                <option value="canasta">Canasta</option>
+                <option value="manojo">Manojo</option>
+              </select>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 9 }}>
             <button className="bpri" style={{ flex: 0, padding: '10px 22px', margin: 0 }}
@@ -217,6 +246,11 @@ function ProductsSection() {
                   {(prods as any[]).map((p: any) => (
                     <div key={p.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--b)', padding: '10px 14px', gap: 10, borderTop: '1px solid var(--brd)' }}>
                       <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{p.name}</span>
+                      {p.price_per_unit != null && (
+                        <span style={{ fontSize: 12, color: 'var(--vd)', fontWeight: 700, background: 'var(--vc)', padding: '2px 8px', borderRadius: 12, whiteSpace: 'nowrap' }}>
+                          ${Number(p.price_per_unit).toLocaleString('es-CO')}/{p.unit_type ?? 'kg'}
+                        </span>
+                      )}
                       <button className="dc-btn" title="Editar" onClick={() => openEdit(p)}>
                         <Pencil size={13} />
                       </button>

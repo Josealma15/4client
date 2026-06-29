@@ -166,6 +166,17 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
               <div className="cierre-stit" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <AlertTriangle size={13} color="var(--a)" />
                 Pedidos pendientes - decide qué hacer ({pendingOrders.length})
+                <button
+                  className="bsec"
+                  style={{ marginLeft: 'auto', fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    const all: Record<string, Decision> = {};
+                    for (const o of pendingOrders) all[o.id] = 'manana';
+                    setDecisions(prev => ({ ...prev, ...all }));
+                  }}
+                >
+                  Pasar todo a mañana
+                </button>
               </div>
               {pendingSinDecision > 0 && (
                 <div style={{ background: 'var(--ac)', border: '1px solid var(--a)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 13, color: 'var(--a)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>

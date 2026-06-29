@@ -584,7 +584,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               )}
               <button className="bsec" onClick={handleClose}>Cerrar</button>
               {isDirty && !locked && (
-                <button className="bpri" onClick={() => saveMut.mutate()}
+                <button className="bpri"
+                  onClick={() => {
+                    if (items.length === 0) { toast('El pedido debe tener al menos un producto', true); return; }
+                    saveMut.mutate();
+                  }}
                   disabled={saveMut.isPending}
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <CheckCircle size={14} /> {saveMut.isPending ? 'Guardando...' : 'Guardar cambios'}

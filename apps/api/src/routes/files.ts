@@ -52,7 +52,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     if (storage.isConfigured()) {
       const buf = await storage.download(`invoices/${filename}`);
       reply.header('Content-Type', 'application/pdf');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      reply.header('Content-Disposition', `inline; filename="${filename}"`);
       return reply.send(buf);
     }
 
@@ -64,7 +64,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Archivo no encontrado' });
     }
     reply.header('Content-Type', 'application/pdf');
-    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    reply.header('Content-Disposition', `inline; filename="${filename}"`);
     return reply.send(fs.createReadStream(filepath));
   });
 }

@@ -236,6 +236,7 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
         }}
         draggable={!ord.locked && !isGhost}
         onDragStart={(e) => !isGhost && handleDragStart(e, ord, ticketId)}
+        onClick={() => setDetailId(ord.id)}
       >
         {(isGhost || isDeferred) && (
           <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--az)', background: 'var(--azc)', padding: '2px 7px', borderRadius: 20, marginBottom: 5, display: 'inline-block' }}>
@@ -279,15 +280,15 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
         <div className="dc-nav">
           <button className="dc-btn" title="Retroceder"
             disabled={ord.locked || STATUS_ORDER.indexOf(ord.status) === 0}
-            onClick={() => movePrev(ord)}>
+            onClick={(e) => { e.stopPropagation(); movePrev(ord); }}>
             <ChevronLeft size={14} />
           </button>
-          <button className="dc-det-btn" onClick={() => setDetailId(ord.id)}>
+          <button className="dc-det-btn" onClick={(e) => { e.stopPropagation(); setDetailId(ord.id); }}>
             <Eye size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Ver
           </button>
           <button className="dc-btn" title="Avanzar"
             disabled={ord.locked || ord.status === 'cerrado' || ord.status === 'entregado'}
-            onClick={() => moveNext(ord)}>
+            onClick={(e) => { e.stopPropagation(); moveNext(ord); }}>
             <ChevronRight size={14} />
           </button>
         </div>

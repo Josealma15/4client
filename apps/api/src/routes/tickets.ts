@@ -8,7 +8,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
     const query = z.object({ fecha: z.string().optional() }).parse(req.query);
     const fecha = query.fecha ? new Date(query.fecha) : new Date();
 
-    const tickets = await fastify.prisma.ticket.findMany({
+    const allTickets = await fastify.prisma.ticket.findMany({
       where: { org_id: req.user.orgId, OR: [{ fecha }, { deferred_to: fecha }] },
       include: {
         messages: { orderBy: { sent_at: 'asc' } },
@@ -18,6 +18,14 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
         },
       },
       orderBy: { created_at: 'asc' },
+    });
+
+    // Deduplicate by phone: keep only the first per phone (prefer fecha match over deferred_to match)
+    const seenPhones = new Set<string>();
+    const tickets = allTickets.filter(t => {
+      if (seenPhones.has(t.phone)) return false;
+      seenPhones.add(t.phone);
+      return true;
     });
 
     return reply.send({ data: tickets });
@@ -36,7 +44,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
 
     const ticket = await fastify.prisma.ticket.upsert({
       where: { org_id_phone_fecha: { org_id: req.user.orgId, phone: body.data.phone, fecha: today } },
-      update: {},
+      update: { customer_name: body.data.customer_name ?? body.data.phone },
       create: {
         org_id: req.user.orgId,
         phone: body.data.phone,

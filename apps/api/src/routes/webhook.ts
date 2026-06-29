@@ -69,20 +69,40 @@ async function ingestMessage(
     where: { org_id: org.id, phone, fecha: todayLocal },
   });
 
-  // True only when no ticket exists yet today — first message of the day
-  const isNewTicket = !ticket;
+  let isNewTicket = false;
 
   if (!ticket) {
-    ticket = await fastify.prisma.ticket.create({
-      data: {
-        org_id: org.id,
-        phone,
-        customer_name: name,
-        fecha: todayLocal,
-        last_message_at: sentAt,
-        unread_count: 1,
-      },
+    // Check if there's a deferred ticket from a previous day arriving today
+    const deferred = await fastify.prisma.ticket.findFirst({
+      where: { org_id: org.id, phone, deferred_to: todayLocal },
+      orderBy: { created_at: 'desc' },
     });
+
+    if (deferred) {
+      // Reuse the deferred ticket: move it to today and clear the deferral
+      ticket = await fastify.prisma.ticket.update({
+        where: { id: deferred.id },
+        data: {
+          fecha: todayLocal,
+          deferred_to: null,
+          customer_name: name,
+          unread_count: { increment: 1 },
+          last_message_at: sentAt,
+        },
+      });
+    } else {
+      isNewTicket = true;
+      ticket = await fastify.prisma.ticket.create({
+        data: {
+          org_id: org.id,
+          phone,
+          customer_name: name,
+          fecha: todayLocal,
+          last_message_at: sentAt,
+          unread_count: 1,
+        },
+      });
+    }
   } else {
     await fastify.prisma.ticket.update({
       where: { id: ticket.id },
