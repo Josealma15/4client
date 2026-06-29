@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
+import { config } from '../config.js';
 
 export default async function inboxRoutes(fastify: FastifyInstance) {
   // GET /api/v1/inbox — lista de todas las conversaciones, solo admin
@@ -106,5 +107,33 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     }
 
     return reply.status(201).send({ data: message, wpp_status, wpp_error });
+  });
+
+  // GET /api/v1/inbox/:ticketId/form-link — genera link firmado para el formulario del cliente
+  fastify.get('/:ticketId/form-link', { preHandler: [authenticate] }, async (req, reply) => {
+    const { ticketId } = req.params as { ticketId: string };
+
+    const ticket = await fastify.prisma.ticket.findFirst({
+      where: { id: ticketId, org_id: req.user.orgId },
+      include: { org: { select: { name: true, slug: true } } },
+    });
+    if (!ticket) return reply.status(404).send({ error: 'Conversación no encontrada', code: 'NOT_FOUND' });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const token = (fastify.jwt.sign as any)(
+      {
+        type: 'form_link',
+        ticketId: ticket.id,
+        orgId: req.user.orgId,
+        clientName: ticket.customer_name,
+        clientPhone: ticket.phone,
+        orgName: ticket.org.name,
+      },
+      { expiresIn: '7d' },
+    ) as string;
+
+    const frontendUrl = config.FRONTEND_URL.split(',')[0].trim();
+    const url = `${frontendUrl}/form?t=${token}`;
+    return reply.send({ data: { url } });
   });
 }

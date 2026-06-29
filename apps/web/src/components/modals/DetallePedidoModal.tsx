@@ -85,6 +85,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const [showCobro, setShowCobro] = useState(openCobro ?? false);
   const [replyText, setReplyText] = useState('');
   const [cobroRec, setCobroRec] = useState('');
+  const [cobroPass, setCobroPass] = useState('');
   const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void; danger?: boolean } | null>(null);
 
   useEffect(() => {
@@ -280,7 +281,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const cobroMut = useMutation({
     mutationFn: () => api.post(`/orders/${orderId}/cobro`, {
       amount_received: parseFloat(cobroRec) || 0,
-      paid_by: user?.userId,
+      password: cobroPass,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
@@ -319,7 +320,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const recibido = parseFloat(cobroRec) || 0;
   const devolucion = recibido - total;
   const faltaOSobra = recibido > 0 ? (devolucion >= 0 ? `Vuelto: ${fmtCOP(devolucion)}` : `Falta: ${fmtCOP(-devolucion)}`) : null;
-  const cobroValido = recibido >= total && recibido > 0;
+  const cobroValido = recibido >= total && recibido > 0 && cobroPass.trim().length > 0;
   const hasChatPanel = !!order.ticket_id;
 
   return (
@@ -671,11 +672,21 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 </div>
               )}
             </div>
+            <div className="fg2" style={{ marginTop: 12 }}>
+              <label className="fl2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                🔒 Tu contraseña para confirmar <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span>
+              </label>
+              <input className="fi2" type="password" placeholder="Contraseña de tu sesión"
+                value={cobroPass} onChange={(e) => setCobroPass(e.target.value)}
+                autoComplete="current-password" />
+              <div style={{ fontSize: 12, color: 'var(--gt)', marginTop: 4 }}>
+                Requerida para evitar cobros no autorizados
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 9, marginTop: 20 }}>
-              <button className="bsec" onClick={() => { setShowCobro(false); onClose(); }}>Cancelar</button>
+              <button className="bsec" onClick={() => { setShowCobro(false); setCobroPass(''); }}>Cancelar</button>
               <button className="bpri" onClick={() => cobroMut.mutate()}
                 disabled={cobroMut.isPending || !cobroValido}
-                title={!cobroValido && recibido > 0 ? `Faltan ${fmtCOP(total - recibido)}` : undefined}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: cobroValido ? 1 : 0.5 }}>
                 {cobroMut.isPending ? 'Confirmando...' : <><CheckCircle size={15} /> Confirmar pago</>}
               </button>

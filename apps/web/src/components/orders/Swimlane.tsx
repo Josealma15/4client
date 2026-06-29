@@ -17,7 +17,7 @@ interface Order {
   paid: boolean; locked: boolean; payment_method: string;
   address: string; employee?: { name: string };
   items: { product_name?: string; quantity_label?: string; price: number }[];
-  ticket_id?: string; order_hour?: string;
+  ticket_id?: string; order_hour?: string; source?: string;
   created_at: string; paid_at?: string | null;
 }
 
@@ -254,6 +254,11 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
                 animation: urg ? 'pulse 1.5s infinite' : undefined,
               }}>
                 {mins}min
+              </div>
+            )}
+            {ord.source === 'form' && (
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', padding: '2px 6px', borderRadius: 20 }}>
+                Formulario
               </div>
             )}
             {ord.paid && (

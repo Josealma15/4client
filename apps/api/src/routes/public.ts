@@ -1,6 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+interface FormTokenPayload {
+  type: string;
+  ticketId: string;
+  orgId: string;
+  clientName: string;
+  clientPhone: string;
+  orgName: string;
+}
+
 export default async function publicRoutes(fastify: FastifyInstance) {
   // Allow any origin — these endpoints are genuinely public (client-facing form)
   fastify.addHook('onRequest', async (_req, reply) => {
@@ -10,7 +19,180 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   });
   fastify.options('*', async (_req, reply) => reply.status(204).send());
 
-  // GET /api/v1/public/org/:slug — verify org exists (for the client form)
+  function verifyFormToken(token: string): FormTokenPayload {
+    const payload = fastify.jwt.verify(token) as FormTokenPayload;
+    if (payload.type !== 'form_link') throw new Error('invalid type');
+    return payload;
+  }
+
+  // GET /api/v1/public/form-info?t=TOKEN — verifica token y devuelve info del cliente
+  fastify.get('/form-info', async (req, reply) => {
+    const q = z.object({ t: z.string().min(1) }).safeParse(req.query);
+    if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
+    try {
+      const payload = verifyFormToken(q.data.t);
+      return reply.send({
+        data: {
+          clientName: payload.clientName,
+          orgName: payload.orgName,
+          orgId: payload.orgId,
+        },
+      });
+    } catch {
+      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    }
+  });
+
+  // GET /api/v1/public/products?t=TOKEN — catálogo público (sin precios)
+  fastify.get('/products', async (req, reply) => {
+    const q = z.object({ t: z.string().min(1) }).safeParse(req.query);
+    if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
+    try {
+      const payload = verifyFormToken(q.data.t);
+      const products = await fastify.prisma.product.findMany({
+        where: { org_id: payload.orgId, active: true },
+        select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
+        orderBy: [{ category: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
+      });
+      return reply.send({ data: products });
+    } catch {
+      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    }
+  });
+
+  // POST /api/v1/public/submit — cliente envía su pedido → crea Order directamente
+  fastify.post('/submit', async (req, reply) => {
+    const body = z.object({
+      token: z.string().min(1),
+      items: z.array(z.object({
+        product_name:   z.string().min(1).max(200),
+        quantity_label: z.string().max(100),
+      })).min(1).max(100),
+    }).safeParse(req.body);
+    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+
+    let payload: FormTokenPayload;
+    try {
+      payload = verifyFormToken(body.data.token);
+    } catch {
+      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    }
+
+    // Fetch ticket to get org and validate it still exists
+    const ticket = await fastify.prisma.ticket.findFirst({
+      where: { id: payload.ticketId, org_id: payload.orgId },
+    });
+    if (!ticket) return reply.status(404).send({ error: 'Ticket no encontrado', code: 'NOT_FOUND' });
+
+    // Use first active admin/encargado as registered_by (system actor for form orders)
+    const systemUser = await fastify.prisma.user.findFirst({
+      where: { org_id: payload.orgId, active: true, role: { in: ['admin', 'encargado'] } },
+      orderBy: { created_at: 'asc' },
+    });
+    if (!systemUser) return reply.status(500).send({ error: 'Organización sin usuarios activos', code: 'NO_USER' });
+
+    // Fetch product prices from catalog
+    const productNames = body.data.items.map(i => i.product_name);
+    const catalogProducts = await fastify.prisma.product.findMany({
+      where: { org_id: payload.orgId, name: { in: productNames }, active: true },
+      select: { name: true, price_per_unit: true },
+    });
+    const priceMap = new Map(catalogProducts.map(p => [p.name, Number(p.price_per_unit ?? 0)]));
+
+    // Colombia UTC-5 local date for fecha
+    const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
+
+    // Generate order num
+    const count = await fastify.prisma.order.count({
+      where: { org_id: payload.orgId, fecha: todayLocal },
+    });
+    const num = String(count + 1).padStart(3, '0');
+
+    const orderItems = body.data.items.map((item, idx) => ({
+      product_name: item.product_name,
+      quantity_label: item.quantity_label,
+      price: priceMap.get(item.product_name) ?? 0,
+      sort_order: idx,
+    }));
+
+    const order = await fastify.prisma.order.create({
+      data: {
+        org_id: payload.orgId,
+        ticket_id: ticket.id,
+        num,
+        customer_name: payload.clientName,
+        customer_phone: payload.clientPhone,
+        address: 'Pendiente de confirmar',
+        channel: 'whatsapp',
+        payment_method: 'transfer',
+        status: 'nuevo',
+        source: 'form',
+        registered_by: systemUser.id,
+        fecha: todayLocal,
+        items: { create: orderItems },
+      },
+      include: {
+        items: { orderBy: { sort_order: 'asc' } },
+        employee: { select: { id: true, name: true } },
+        registeredBy: { select: { id: true, name: true } },
+        paidBy: { select: { id: true, name: true } },
+      },
+    });
+
+    // Mensaje en el chat del ticket
+    const total = orderItems.reduce((s, i) => s + i.price, 0);
+    const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
+    const msgText = `🛒 *Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\nTotal estimado: $${total.toLocaleString('es-CO')}` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
+
+    const message = await fastify.prisma.ticketMessage.create({
+      data: {
+        ticket_id: ticket.id,
+        direction: 'in',
+        text: msgText,
+        sent_at: new Date(),
+      },
+    });
+
+    await fastify.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { unread_count: { increment: 1 }, last_message_at: new Date() },
+    });
+
+    // Historial del pedido
+    await fastify.prisma.orderHistory.create({
+      data: {
+        org_id: payload.orgId,
+        order_id: order.id,
+        actor_id: systemUser.id,
+        action_type: 'create',
+        notes: 'Pedido creado desde formulario enviado al cliente',
+      },
+    });
+
+    // Socket events
+    fastify.io.to(`org:${payload.orgId}`).emit('order:created', order as any);
+    fastify.io.to(`org:${payload.orgId}`).emit('ticket:message', {
+      ticketId: ticket.id,
+      message: {
+        id: message.id,
+        ticket_id: ticket.id,
+        direction: 'in' as const,
+        text: message.text,
+        media_url: null, media_type: null, media_caption: null,
+        sent_by: null, sent_by_name: null, wpp_message_id: null,
+        sent_at: message.sent_at.toISOString(),
+        delivered: false, read_by_client: false,
+      },
+    });
+    fastify.io.to(`org:${payload.orgId}`).emit('ticket:unread', {
+      ticketId: ticket.id,
+      count: (ticket.unread_count ?? 0) + 1,
+    });
+
+    return reply.status(201).send({ data: { ok: true, orderId: order.id, num: order.num } });
+  });
+
+  // Legacy: GET /api/v1/public/org/:slug — kept for backward compat
   fastify.get('/org/:slug', async (req, reply) => {
     const { slug } = req.params as { slug: string };
     const org = await fastify.prisma.organization.findFirst({
@@ -19,108 +201,5 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     });
     if (!org) return reply.status(404).send({ error: 'Organización no encontrada', code: 'NOT_FOUND' });
     return reply.send({ data: org });
-  });
-
-  // GET /api/v1/public/products?org_slug=SLUG — catálogo público (sin precios)
-  fastify.get('/products', async (req, reply) => {
-    const query = z.object({ org_slug: z.string().min(1) }).safeParse(req.query);
-    if (!query.success) return reply.status(400).send({ error: 'org_slug requerido', code: 'VALIDATION_ERROR' });
-
-    const org = await fastify.prisma.organization.findFirst({
-      where: { slug: query.data.org_slug, active: true },
-      select: { id: true },
-    });
-    if (!org) return reply.status(404).send({ error: 'Organización no encontrada', code: 'NOT_FOUND' });
-
-    const products = await fastify.prisma.product.findMany({
-      where: { org_id: org.id, active: true },
-      select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
-      orderBy: [{ category: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
-    });
-
-    return reply.send({ data: products });
-  });
-
-  // POST /api/v1/public/register — cliente envía nombre, teléfono y lista de productos
-  fastify.post('/register', async (req, reply) => {
-    const body = z.object({
-      org_slug:      z.string().min(1).max(50),
-      customer_name: z.string().min(1).max(200),
-      phone:         z.string().min(7).max(20),
-      items:         z.array(z.object({
-        product_name:   z.string().min(1).max(200),
-        quantity_label: z.string().max(100),
-      })).max(100).optional(),
-    }).safeParse(req.body);
-    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
-
-    const org = await fastify.prisma.organization.findFirst({
-      where: { slug: body.data.org_slug, active: true },
-    });
-    if (!org) return reply.status(404).send({ error: 'Organización no encontrada', code: 'NOT_FOUND' });
-
-    // Colombia UTC-5 local date
-    const today = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
-
-    const ticket = await fastify.prisma.ticket.upsert({
-      where: { org_id_phone_fecha: { org_id: org.id, phone: body.data.phone, fecha: today } },
-      update: { customer_name: body.data.customer_name },
-      create: {
-        org_id: org.id,
-        phone: body.data.phone,
-        customer_name: body.data.customer_name,
-        fecha: today,
-        last_message_at: new Date(),
-      },
-    });
-
-    // Si hay productos seleccionados, crear mensaje en el ticket
-    if (body.data.items && body.data.items.length > 0) {
-      const lines = body.data.items.map(i =>
-        `• ${i.product_name}${i.quantity_label ? `: ${i.quantity_label}` : ''}`
-      );
-      const text = `🛒 Pedido desde el formulario:\n${lines.join('\n')}`;
-
-      const message = await fastify.prisma.ticketMessage.create({
-        data: {
-          ticket_id: ticket.id,
-          direction: 'in',
-          text,
-          sent_at: new Date(),
-        },
-      });
-
-      await fastify.prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { unread_count: { increment: 1 }, last_message_at: new Date() },
-      });
-
-      // Notificar en tiempo real al encargado
-      fastify.io.to(`org:${org.id}`).emit('ticket:message', {
-        ticketId: ticket.id,
-        message: {
-          id: message.id,
-          ticket_id: ticket.id,
-          direction: 'in' as const,
-          text: message.text,
-          media_url: null,
-          media_type: null,
-          media_caption: null,
-          sent_by: null,
-          sent_by_name: null,
-          wpp_message_id: null,
-          sent_at: message.sent_at.toISOString(),
-          delivered: false,
-          read_by_client: false,
-        },
-      });
-
-      fastify.io.to(`org:${org.id}`).emit('ticket:unread', {
-        ticketId: ticket.id,
-        count: (ticket.unread_count ?? 0) + 1,
-      });
-    }
-
-    return reply.status(201).send({ data: { ok: true, ticketId: ticket.id } });
   });
 }

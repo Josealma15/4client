@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import bcrypt from 'bcrypt';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 const orderItemSchema = z.object({
@@ -36,7 +37,7 @@ function buildOrderSelect(includeHistory = false) {
   return {
     id: true, org_id: true, ticket_id: true, num: true,
     customer_name: true, customer_phone: true, address: true,
-    channel: true, payment_method: true, status: true,
+    channel: true, payment_method: true, status: true, source: true,
     employee_id: true, registered_by: true, fecha: true, order_hour: true,
     paid: true, paid_at: true, paid_by: true, amount_received: true,
     change_amount: true, locked: true, caja_cerrada: true, notes: true,
@@ -281,8 +282,18 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = z.object({
       amount_received: z.number().min(0).max(99_999_999),
+      password: z.string().min(1),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+
+    // Verify current user's password before allowing cobro
+    const currentUser = await fastify.prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { password_hash: true },
+    });
+    if (!currentUser) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
+    const passwordValid = await bcrypt.compare(body.data.password, currentUser.password_hash);
+    if (!passwordValid) return reply.status(403).send({ error: 'Contraseña incorrecta', code: 'INVALID_PASSWORD' });
 
     const existing = await fastify.prisma.order.findFirst({
       where: { id, org_id: req.user.orgId },

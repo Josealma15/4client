@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "source" VARCHAR(20) NOT NULL DEFAULT 'encargado';

@@ -16,19 +16,14 @@ function groupByCategory(products: Product[]) {
 }
 
 export default function ClientFormPage() {
-  const slug = new URLSearchParams(window.location.search).get('org') ?? '';
-  const [orgName, setOrgName] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const token = new URLSearchParams(window.location.search).get('t') ?? '';
 
-  // Step: 'info' | 'catalog' | 'done'
-  const [step, setStep] = useState<'info' | 'catalog' | 'done'>('info');
-
-  const [nombre, setNombre] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [infoError, setInfoError] = useState('');
+  const [state, setState] = useState<'loading' | 'invalid' | 'catalog' | 'done'>('loading');
+  const [clientName, setClientName] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
   const [search, setSearch] = useState('');
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -37,29 +32,21 @@ export default function ClientFormPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!slug) { setNotFound(true); return; }
-    fetch(`${API}/api/v1/public/org/${encodeURIComponent(slug)}`)
-      .then(r => r.json())
-      .then(r => { if (r.data?.name) setOrgName(r.data.name); else setNotFound(true); })
-      .catch(() => setNotFound(true));
-  }, [slug]);
-
-  function handleInfoSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!nombre.trim()) { setInfoError('Ingresa tu nombre'); return; }
-    if (!telefono.trim()) { setInfoError('Ingresa tu número de WhatsApp'); return; }
-    setInfoError('');
-    setLoadingProducts(true);
-    setStep('catalog');
-    fetch(`${API}/api/v1/public/products?org_slug=${encodeURIComponent(slug)}`)
-      .then(r => r.json())
-      .then(r => { if (r.data) setProducts(r.data); })
-      .catch(() => {})
-      .finally(() => {
-        setLoadingProducts(false);
+    if (!token) { setState('invalid'); setErrorMsg('Link inválido. Pide un nuevo link al negocio.'); return; }
+    Promise.all([
+      fetch(`${API}/api/v1/public/form-info?t=${encodeURIComponent(token)}`).then(r => r.json()),
+      fetch(`${API}/api/v1/public/products?t=${encodeURIComponent(token)}`).then(r => r.json()),
+    ])
+      .then(([info, prods]) => {
+        if (!info.data?.clientName) { setState('invalid'); setErrorMsg(info.error ?? 'Link inválido o expirado.'); return; }
+        setClientName(info.data.clientName);
+        setOrgName(info.data.orgName ?? '');
+        setProducts(prods.data ?? []);
+        setState('catalog');
         setTimeout(() => searchRef.current?.focus(), 100);
-      });
-  }
+      })
+      .catch(() => { setState('invalid'); setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.'); });
+  }, [token]);
 
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
@@ -85,20 +72,18 @@ export default function ClientFormPage() {
     setSubmitError('');
     setSubmitting(true);
     try {
-      const res = await fetch(`${API}/api/v1/public/register`, {
+      const res = await fetch(`${API}/api/v1/public/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          org_slug: slug,
-          customer_name: nombre.trim(),
-          phone: telefono.trim(),
-          items: selected,
-        }),
+        body: JSON.stringify({ token, items: selected }),
       });
-      if (!res.ok) throw new Error();
-      setStep('done');
-    } catch {
-      setSubmitError('Hubo un problema. Intenta de nuevo.');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Error');
+      }
+      setState('done');
+    } catch (e: any) {
+      setSubmitError(e.message === 'Link inválido o expirado' ? 'Este link ya expiró. Pide uno nuevo.' : 'Hubo un problema. Intenta de nuevo.');
     } finally {
       setSubmitting(false);
     }
@@ -107,97 +92,53 @@ export default function ClientFormPage() {
   // ─── Estilos ────────────────────────────────────────────────────────────────
   const page: React.CSSProperties = {
     minHeight: '100vh', fontFamily: 'system-ui, -apple-system, sans-serif',
-    background: '#f0f4f8', padding: '0 0 80px',
+    background: '#f0f4f8', padding: '0 0 100px',
   };
   const header: React.CSSProperties = {
-    background: '#1A7A4A', color: '#fff', padding: '18px 20px',
+    background: '#1A7A4A', color: '#fff', padding: '16px 20px',
     position: 'sticky', top: 0, zIndex: 10,
     display: 'flex', alignItems: 'center', gap: 10,
-  };
-  const card: React.CSSProperties = {
-    background: '#fff', borderRadius: 18, boxShadow: '0 2px 12px rgba(0,0,0,.1)',
-    margin: '20px 16px', padding: '28px 20px',
-  };
-  const label: React.CSSProperties = { display: 'block', fontSize: 18, fontWeight: 700, color: '#333', marginBottom: 8 };
-  const input: React.CSSProperties = {
-    width: '100%', fontSize: 20, padding: '14px 16px',
-    border: '2px solid #ddd', borderRadius: 12, outline: 'none',
-    boxSizing: 'border-box', fontFamily: 'inherit', color: '#111',
   };
   const btn: React.CSSProperties = {
     width: '100%', fontSize: 20, fontWeight: 800,
     padding: '16px 0', background: '#1A7A4A', color: '#fff',
-    border: 'none', borderRadius: 14, cursor: 'pointer', marginTop: 10,
+    border: 'none', borderRadius: 14, cursor: 'pointer',
   };
-  const errStyle: React.CSSProperties = { color: '#DC2626', fontSize: 16, fontWeight: 600, marginTop: 10 };
 
-  if (notFound) return (
+  if (state === 'loading') return (
     <div style={page}>
-      <div style={card}>
-        <div style={{ textAlign: 'center', color: '#DC2626', fontSize: 18, fontWeight: 700 }}>
-          Enlace inválido. Pide un nuevo enlace al negocio.
-        </div>
+      <div style={{ textAlign: 'center', padding: 60, color: '#888', fontSize: 18 }}>Cargando...</div>
+    </div>
+  );
+
+  if (state === 'invalid') return (
+    <div style={page}>
+      <div style={{ background: '#fff', borderRadius: 18, margin: '24px 16px', padding: '32px 20px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,.1)' }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#DC2626', marginBottom: 8 }}>Link inválido</div>
+        <div style={{ fontSize: 15, color: '#666' }}>{errorMsg}</div>
       </div>
     </div>
   );
 
-  if (!orgName) return (
-    <div style={page}>
-      <div style={{ textAlign: 'center', padding: 40, color: '#888', fontSize: 18 }}>Cargando...</div>
-    </div>
-  );
-
-  if (step === 'done') return (
+  if (state === 'done') return (
     <div style={page}>
       <div style={header}>
         <span style={{ fontSize: 22 }}>🛒</span>
         <span style={{ fontWeight: 800, fontSize: 18 }}>{orgName}</span>
       </div>
-      <div style={{ ...card, textAlign: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 18, margin: '24px 16px', padding: '36px 20px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,.1)' }}>
         <div style={{ fontSize: 64, marginBottom: 12 }}>✅</div>
         <div style={{ fontSize: 24, fontWeight: 800, color: '#1A7A4A', marginBottom: 10 }}>¡Pedido enviado!</div>
         <div style={{ fontSize: 17, color: '#555', lineHeight: 1.6 }}>
-          Tu lista fue enviada a <strong>{orgName}</strong>.<br />En breve te atenderemos por WhatsApp.
+          Tu pedido fue enviado a <strong>{orgName}</strong>.<br />
+          En breve te atenderemos por WhatsApp.
         </div>
       </div>
     </div>
   );
 
-  // ─── Step info ───────────────────────────────────────────────────────────────
-  if (step === 'info') return (
-    <div style={page}>
-      <div style={header}>
-        <span style={{ fontSize: 22 }}>🛒</span>
-        <span style={{ fontWeight: 800, fontSize: 18 }}>{orgName}</span>
-      </div>
-      <div style={card}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#1A7A4A', marginBottom: 6 }}>Hola 👋</div>
-        <div style={{ fontSize: 16, color: '#555', marginBottom: 28 }}>
-          Ingresa tus datos para ver el catálogo y hacer tu pedido.
-        </div>
-        <form onSubmit={handleInfoSubmit} autoComplete="on">
-          <div style={{ marginBottom: 20 }}>
-            <label style={label} htmlFor="nombre">Tu nombre</label>
-            <input id="nombre" style={input} type="text"
-              placeholder="Ej: María González"
-              value={nombre} onChange={e => setNombre(e.target.value)}
-              autoComplete="name" autoFocus />
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label style={label} htmlFor="telefono">Tu número de WhatsApp</label>
-            <input id="telefono" style={input} type="tel"
-              placeholder="Ej: 3001234567"
-              value={telefono} onChange={e => setTelefono(e.target.value)}
-              autoComplete="tel" inputMode="numeric" />
-          </div>
-          {infoError && <div style={errStyle}>{infoError}</div>}
-          <button type="submit" style={btn}>Ver catálogo →</button>
-        </form>
-      </div>
-    </div>
-  );
-
-  // ─── Step catalog ────────────────────────────────────────────────────────────
+  // Catálogo
   const selectedCount = selected.length;
 
   return (
@@ -205,7 +146,10 @@ export default function ClientFormPage() {
       {/* Header fijo */}
       <div style={header}>
         <span style={{ fontSize: 22 }}>🛒</span>
-        <span style={{ fontWeight: 800, fontSize: 18, flex: 1 }}>{orgName}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>{orgName}</div>
+          {clientName && <div style={{ fontSize: 13, opacity: 0.85 }}>Hola, {clientName} 👋</div>}
+        </div>
         {selectedCount > 0 && (
           <span style={{ background: '#fff', color: '#1A7A4A', fontWeight: 800, fontSize: 13, padding: '3px 10px', borderRadius: 20 }}>
             {selectedCount} ítem{selectedCount > 1 ? 's' : ''}
@@ -236,11 +180,7 @@ export default function ClientFormPage() {
 
       {/* Catálogo */}
       <div style={{ padding: '0 16px' }}>
-        {loadingProducts && (
-          <div style={{ textAlign: 'center', color: '#888', padding: 32, fontSize: 17 }}>Cargando catálogo...</div>
-        )}
-
-        {!loadingProducts && visibleGroups.length === 0 && (
+        {visibleGroups.length === 0 && (
           <div style={{ textAlign: 'center', color: '#888', padding: 32, fontSize: 17 }}>
             {search ? `Sin resultados para "${search}"` : 'Sin productos disponibles'}
           </div>
@@ -248,7 +188,6 @@ export default function ClientFormPage() {
 
         {visibleGroups.map(group => (
           <div key={group.category} style={{ marginBottom: 8 }}>
-            {/* Cabecera de categoría */}
             <div style={{
               fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.7px',
               color: '#1A7A4A', padding: '10px 4px 4px', borderBottom: '2px solid #1A7A4A22',
@@ -267,7 +206,6 @@ export default function ClientFormPage() {
                   borderRadius: hasQty ? 10 : 0,
                   transition: 'background .12s',
                 }}>
-                  {/* Nombre */}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 17, fontWeight: hasQty ? 700 : 500, color: hasQty ? '#1A7A4A' : '#111' }}>
                       {p.name}
@@ -277,8 +215,6 @@ export default function ClientFormPage() {
                       <div style={{ fontSize: 13, color: '#888', marginTop: 1 }}>{p.unit_type}</div>
                     )}
                   </div>
-
-                  {/* Cantidad */}
                   <input
                     type="text"
                     placeholder={p.unit_type ? `Ej: 2 ${p.unit_type}` : 'Cantidad'}
@@ -306,7 +242,7 @@ export default function ClientFormPage() {
           background: '#fff', borderTop: '2px solid #e0e0e0',
           padding: '12px 16px',
         }}>
-          <div style={{ marginBottom: 8 }}>
+          <div style={{ marginBottom: 8, maxHeight: 120, overflowY: 'auto' }}>
             {selected.map(s => (
               <div key={s.product_name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, color: '#333', marginBottom: 2 }}>
                 <span>{s.product_name}</span>
@@ -314,11 +250,11 @@ export default function ClientFormPage() {
               </div>
             ))}
           </div>
-          {submitError && <div style={{ ...errStyle, marginBottom: 6 }}>{submitError}</div>}
+          {submitError && <div style={{ color: '#DC2626', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{submitError}</div>}
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            style={{ ...btn, marginTop: 0, fontSize: 18, padding: '14px 0', opacity: submitting ? 0.7 : 1 }}
+            style={{ ...btn, opacity: submitting ? 0.7 : 1 }}
           >
             {submitting ? 'Enviando...' : `Enviar pedido (${selectedCount} producto${selectedCount > 1 ? 's' : ''}) ✓`}
           </button>

@@ -118,7 +118,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
     return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
   }
 
-  const orgSlug = useAuthStore((s) => s.user?.orgSlug);
   const selectedTicket = tickets.find((t: any) => t.id === selectedId);
 
   return (
@@ -203,12 +202,14 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
               <div style={{ fontSize: 13, color: 'var(--gt)' }}>{selectedTicket?.phone}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {orgSlug && (
+              {selectedId && (
                 <button className="bsec" style={{ padding: '8px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                   title="Enviar formulario de pedido al cliente"
-                  onClick={() => {
-                    const link = `${window.location.origin}/form?org=${encodeURIComponent(orgSlug)}`;
-                    replyMut.mutate(link);
+                  onClick={async () => {
+                    try {
+                      const res = await api.get<{ data: { url: string } }>(`/inbox/${selectedId}/form-link`);
+                      replyMut.mutate(res.data.url);
+                    } catch { toast('No se pudo generar el link', true); }
                   }}>
                   <ClipboardList size={13} /> Lista
                 </button>

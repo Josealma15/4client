@@ -5,7 +5,6 @@ import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { api } from '../../lib/api';
-import { useAuthStore } from '../../store/auth';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
@@ -60,8 +59,6 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     },
     onError: (e: any) => toast(e.message ?? 'Error al enviar', true),
   });
-
-  const orgSlug = useAuthStore((s) => s.user?.orgSlug);
 
   function handleSend() {
     if (!replyText.trim() || replyMut.isPending) return;
@@ -131,12 +128,14 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
             <div style={{ background: 'var(--vd)', color: '#fff', padding: '10px 12px', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Smartphone size={15} />
               <span style={{ flex: 1 }}>{preNombre || telefono}</span>
-              {orgSlug && (
+              {ticketId && (
                 <button
                   title="Enviar formulario de pedido al cliente"
-                  onClick={() => {
-                    const link = `${window.location.origin}/form?org=${encodeURIComponent(orgSlug)}`;
-                    replyMut.mutate(link);
+                  onClick={async () => {
+                    try {
+                      const res = await api.get<{ data: { url: string } }>(`/inbox/${ticketId}/form-link`);
+                      replyMut.mutate(res.data.url);
+                    } catch { toast('No se pudo generar el link', true); }
                   }}
                   style={{
                     background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
