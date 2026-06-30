@@ -351,37 +351,61 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
 
       {resumenTab === 'cambios' && (
         <div style={{ padding: '4px 0' }}>
-          {history.length === 0 && (
+          {history.length === 0 ? (
             <div style={{ padding: '24px', textAlign: 'center', color: 'var(--gt)', fontSize: 14 }}>
               No hay cambios registrados
             </div>
-          )}
-          {history.map((h: any, i: number) => (
-            <div key={i} className="elogcard">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                <span style={{ fontSize: 14, fontWeight: 800 }}>
-                  Pedido #{h.order?.num ?? '?'} - {h.order?.customer_name ?? ''}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--a)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <History size={11} /> {new Date(h.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6, color: 'var(--n)' }}>
-                {h.field ?? h.action_type}
-              </div>
-              {h.value_before != null && h.value_after != null && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
-                  <span className="diff-old">- {PAYMENT_LABEL[h.value_before] ?? STATUS_LABEL[h.value_before] ?? h.value_before}</span>
-                  <span className="diff-arrow">→</span>
-                  <span className="diff-new">+ {PAYMENT_LABEL[h.value_after] ?? STATUS_LABEL[h.value_after] ?? h.value_after}</span>
-                </div>
-              )}
-              {h.notes && !h.value_before && !h.value_after && (
-                <div style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 5 }}>{h.notes}</div>
-              )}
-              <div style={{ fontSize: 13, color: 'var(--gt)' }}>Por: {h.actor?.name ?? 'Sistema'}</div>
+          ) : (
+            <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>Fecha / Hora</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Pedido</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Quién</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Campo / Acción</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Antes</th>
+                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)' }}>Después</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h: any, i: number) => {
+                    const isRemove = h.action_type === 'producto_eliminado';
+                    const isAdd = h.action_type === 'producto_agregado';
+                    const isCobro = h.action_type === 'cobro';
+                    const before = h.value_before ? (PAYMENT_LABEL[h.value_before] ?? STATUS_LABEL[h.value_before] ?? h.value_before) : '';
+                    const after = h.value_after ? (PAYMENT_LABEL[h.value_after] ?? STATUS_LABEL[h.value_after] ?? h.value_after) : '';
+                    return (
+                      <tr key={i} style={{ background: isRemove ? '#FEF2F2' : isAdd ? '#F0FDF4' : i % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap', color: 'var(--gt)' }}>
+                          {new Date(h.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 700 }}>
+                          #{h.order?.num ?? '?'}
+                          <div style={{ fontSize: 11, color: 'var(--gt)', fontWeight: 400 }}>{h.order?.customer_name ?? ''}</div>
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 700 }}>
+                          {h.actor?.name ?? 'Sistema'}
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 600,
+                          color: isRemove ? '#DC2626' : isAdd ? 'var(--v)' : isCobro ? 'var(--v)' : 'var(--n)',
+                        }}>
+                          {h.field ?? h.action_type}
+                          {h.notes && !isCobro && <div style={{ fontWeight: 400, color: 'var(--gt)', fontSize: 11, marginTop: 1 }}>{h.notes}</div>}
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: '#DC2626' }}>
+                          {before || (isCobro ? h.notes : '') || '—'}
+                        </td>
+                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', color: 'var(--v)' }}>
+                          {after || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       )}
     </>

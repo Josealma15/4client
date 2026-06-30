@@ -762,7 +762,7 @@ function DevWppPanel() {
           <textarea
             style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--brd)', borderRadius: 8, fontSize: 14, background: 'var(--bg)', color: 'var(--n)', minHeight: 90, resize: 'vertical' }}
             value={welcome} onChange={e => setWelcome(e.target.value)}
-            placeholder="ej: Hola 👋 Bienvenido a Fruver San Gabriel. En un momento serás atendido por nuestro personal."
+            placeholder="ej: Hola, bienvenido a Fruver San Gabriel. En un momento serás atendido por nuestro personal."
           />
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -804,7 +804,7 @@ function DevDbPanel() {
   function fmtVal(col: string, val: any): string {
     if (val === null || val === undefined) return '—';
     if (SECRET_COLS.has(col)) return '••••••••';
-    if (typeof val === 'boolean') return val ? '✓' : '✗';
+    if (typeof val === 'boolean') return val ? 'Sí' : 'No';
     const s = String(val);
     return s.length > 60 ? s.slice(0, 57) + '...' : s;
   }
@@ -937,7 +937,7 @@ function DevSistemaPanel() {
               ['Slug', org?.slug],
               ['Plan', org?.plan],
               ['WPP', org?.wpp_meta_phone_id ? 'configurado' : 'sin config'],
-              ['Bienvenida', org?.welcome_message ? '✅ activa' : '—'],
+              ['Bienvenida', org?.welcome_message ? 'activa' : '—'],
             ].map(([label, value]) => (
               <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
                 <span style={{ color: 'var(--gt)', minWidth: 80, flexShrink: 0 }}>{label}</span>

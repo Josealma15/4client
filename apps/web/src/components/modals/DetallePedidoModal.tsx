@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Banknote, AlertTriangle, CheckCircle, ChevronDown, FileText, Send } from 'lucide-react';
+import { Trash2, Banknote, AlertTriangle, CheckCircle, ChevronDown, FileText, Send, Lock } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
@@ -81,6 +81,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const [items, setItems] = useState<any[]>([]);
   const [catalogDirty, setCatalogDirty] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [catalogClearKey, setCatalogClearKey] = useState(0);
   const [showHist, setShowHist] = useState(false);
   const [showCobro, setShowCobro] = useState(openCobro ?? false);
   const [replyText, setReplyText] = useState('');
@@ -149,6 +150,8 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['order', orderId] });
       setIsDirty(false);
+      setCatalogDirty(false);
+      setCatalogClearKey(k => k + 1);
       toast('Cambios guardados');
     },
     onError: (e: any) => toast(e.message, true),
@@ -527,6 +530,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               locked={locked}
               onChange={(it) => { setItems(it); markDirty(); }}
               onLocalDirty={setCatalogDirty}
+              clearKey={catalogClearKey}
             />
 
             {/* Admin-only history */}
@@ -540,35 +544,48 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   </span>
                 </div>
                 {showHist && (
-                  <div className="hist-body open">
-                    {order.history.map((h: any, i: number) => (
-                      <div key={i} className="hitem">
-                        <div className="hdot" style={{
-                          background: h.action_type === 'producto_eliminado' ? '#DC2626'
-                            : h.action_type === 'producto_agregado' ? 'var(--v)'
-                            : h.action_type === 'cobro' ? 'var(--v)'
-                            : 'var(--gt)',
-                        }} />
-                        <div style={{ flex: 1 }}>
-                          <div>
-                            <span className="hwho">{h.actor?.name ?? 'Sistema'}</span>
-                            {' - '}
-                            <span className="hwhat">{h.field ?? h.action_type}</span>
-                          </div>
-                          {(h.value_before || h.value_after) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                              {h.value_before && <span className="diff-old">- {fmtHistVal(h.value_before)}</span>}
-                              {h.value_before && h.value_after && <span className="diff-arrow">→</span>}
-                              {h.value_after && <span className="diff-new">+ {fmtHistVal(h.value_after)}</span>}
-                            </div>
-                          )}
-                          {h.notes && <div style={{ fontSize: 12, color: 'var(--gt)', marginTop: 2 }}>{h.notes}</div>}
-                          <div className="hwhen">
-                            {new Date(h.created_at).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden', marginBottom: 14 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg)' }}>
+                          <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>Fecha / Hora</th>
+                          <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Quién</th>
+                          <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Campo / Acción</th>
+                          <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Antes</th>
+                          <th style={{ textAlign: 'left', padding: '7px 10px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)' }}>Después</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {order.history.map((h: any, i: number) => {
+                          const isRemove = h.action_type === 'producto_eliminado';
+                          const isAdd = h.action_type === 'producto_agregado';
+                          const isCobro = h.action_type === 'cobro';
+                          const rowBg = isRemove ? '#FEF2F2' : isAdd ? '#F0FDF4' : i % 2 === 0 ? 'var(--b)' : 'var(--bg)';
+                          return (
+                            <tr key={i} style={{ background: rowBg }}>
+                              <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap', color: 'var(--gt)' }}>
+                                {new Date(h.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 700, color: 'var(--n)' }}>
+                                {h.actor?.name ?? 'Sistema'}
+                              </td>
+                              <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 600,
+                                color: isRemove ? '#DC2626' : isAdd ? 'var(--v)' : isCobro ? 'var(--v)' : 'var(--n)',
+                              }}>
+                                {h.field ?? h.action_type}
+                                {h.notes && !isCobro && <div style={{ fontWeight: 400, color: 'var(--gt)', fontSize: 11, marginTop: 2 }}>{h.notes}</div>}
+                              </td>
+                              <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: '#DC2626' }}>
+                                {fmtHistVal(h.value_before) || (isCobro ? h.notes : '') || '—'}
+                              </td>
+                              <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', color: 'var(--v)' }}>
+                                {fmtHistVal(h.value_after) || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -674,7 +691,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             </div>
             <div className="fg2" style={{ marginTop: 12 }}>
               <label className="fl2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                🔒 Tu contraseña para confirmar <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span>
+                <Lock size={13} /> Tu contraseña para confirmar <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span>
               </label>
               <input className="fi2" type="password" placeholder="Contraseña de tu sesión"
                 value={cobroPass} onChange={(e) => setCobroPass(e.target.value)}

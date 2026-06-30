@@ -131,7 +131,7 @@ export default function MainPage() {
               <button className={`tab${tab === 'swimlane' ? ' on' : ''}`} onClick={() => setTab('swimlane')}>
                 <ClipboardList size={15} /> Tickets & Pedidos
               </button>
-              {isAdmin && (
+              {canManage && (
                 <button className={`tab${tab === 'inbox' ? ' on' : ''}`}
                   onClick={() => { setTab('inbox'); setUnreadWpp(0); }}>
                   <MessageSquare size={15} /> Chats WPP
@@ -214,7 +214,7 @@ export default function MainPage() {
           </>
         )}
 
-        {tab === 'inbox' && isAdmin && (
+        {tab === 'inbox' && canManage && (
           <>
             <div className="khead" style={{ marginBottom: 0, flexShrink: 0 }}>
               <div>

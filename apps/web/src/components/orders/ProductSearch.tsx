@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, KeyboardEvent } from 'react';
+import { Check, Pencil } from 'lucide-react';
 
 interface Product { id: string; name: string; category: string; }
 interface Item { product_name: string; quantity_label: string; price: string; }
@@ -9,6 +10,7 @@ interface Props {
   locked?: boolean;
   onChange: (items: Item[]) => void;
   onLocalDirty?: (dirty: boolean) => void;
+  clearKey?: number;
 }
 
 function groupByCategory(products: Product[]) {
@@ -21,12 +23,18 @@ function groupByCategory(products: Product[]) {
   return order.map(cat => ({ category: cat, products: groups[cat] }));
 }
 
-export default function ProductSearch({ products, items, locked, onChange, onLocalDirty }: Props) {
+export default function ProductSearch({ products, items, locked, onChange, onLocalDirty, clearKey }: Props) {
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  // Local typing state per product — not committed until Enter or ✓
   const [localInputs, setLocalInputs] = useState<Record<string, { qty: string; price: string }>>({});
+
+  // Clear local inputs when parent signals a save (clearKey increments)
+  useEffect(() => {
+    if (clearKey == null) return;
+    setLocalInputs({});
+    onLocalDirty?.(false);
+  }, [clearKey]);
 
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
@@ -108,26 +116,37 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
 
   const total = items.reduce((s, i) => s + (parseFloat(i.price) || 0), 0);
 
-  // Locked mode: simple read-only factbox
+  // Locked mode: read-only table
   if (locked) {
     return (
-      <div className="factbox">
-        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 9 }}>
-          Factura
-        </div>
-        {items.length === 0 && <div style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 8 }}>Sin productos registrados</div>}
-        {items.map(i => (
-          <div key={i.product_name} className="factrow">
-            <span>{i.product_name}{i.quantity_label && ` - ${i.quantity_label}`}</span>
-            <span>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</span>
-          </div>
-        ))}
-        {items.length > 0 && (
-          <div className="facttot">
-            <span>Total</span>
-            <span>${total.toLocaleString('es-CO')}</span>
-          </div>
-        )}
+      <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden', marginBottom: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg)' }}>
+              <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Producto</th>
+              <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>Cantidad</th>
+              <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)' }}>Precio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 && (
+              <tr><td colSpan={3} style={{ padding: '12px', color: 'var(--gt)', textAlign: 'center' }}>Sin productos</td></tr>
+            )}
+            {items.map((i, idx) => (
+              <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
+                <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)' }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
+              </tr>
+            ))}
+            {items.length > 0 && (
+              <tr style={{ background: 'var(--vc)' }}>
+                <td colSpan={2} style={{ padding: '9px 12px', fontWeight: 800, color: 'var(--vd)', borderRight: '1px solid var(--brd)' }}>Total</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--vd)', fontSize: 14 }}>${total.toLocaleString('es-CO')}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -207,7 +226,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                     }}>
                       <div style={{ fontSize: 13, fontWeight: isCommitted ? 700 : 400, color: isCommitted ? 'var(--vd)' : 'var(--n)' }}>
                         {p.name}
-                        {isCommitted && <span style={{ marginLeft: 5, fontSize: 11, color: 'var(--v)' }}>✓</span>}
+                        {isCommitted && <Check size={11} color="var(--v)" style={{ marginLeft: 5, display: 'inline', verticalAlign: 'middle' }} />}
                       </div>
                       <input
                         className="iinput"
@@ -240,7 +259,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         }}
                         title="Agregar al pedido (o presiona Enter)"
                       >
-                        ✓
+                        <Check size={13} />
                       </button>
                     </div>
                   );
@@ -251,47 +270,51 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
         </>
       )}
 
-      {/* Factbox — committed items with × remove */}
-      <div className="factbox">
-        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 9 }}>
-          Resumen del pedido
-        </div>
-        {items.length === 0 && (
-          <div style={{ fontSize: 13, color: 'var(--gt)', marginBottom: 8 }}>
-            Filtra el catálogo, llena cantidad/precio y presiona Enter para agregar
-          </div>
-        )}
-        {items.map(i => (
-          <div key={i.product_name} className="factrow">
-            <span>{i.product_name}{i.quantity_label && ` - ${i.quantity_label}`}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}
-              <button
-                onClick={() => editItem(i)}
-                title="Editar cantidad/precio"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--az)', fontSize: 13, lineHeight: 1, padding: '0 2px',
-                  display: 'flex', alignItems: 'center',
-                }}
-              >✏️</button>
-              <button
-                onClick={() => removeItem(i.product_name)}
-                title="Quitar del pedido"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#DC2626', fontSize: 16, lineHeight: 1, padding: '0 2px', fontWeight: 700,
-                }}
-              >×</button>
-            </span>
-          </div>
-        ))}
-        {items.length > 0 && (
-          <div className="facttot">
-            <span>Total</span>
-            <span>${total.toLocaleString('es-CO')}</span>
-          </div>
-        )}
+      {/* Factbox — committed items table with edit/remove */}
+      <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden', marginBottom: 14 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg)' }}>
+              <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Producto</th>
+              <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>Cantidad</th>
+              <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Precio</th>
+              <th style={{ padding: '8px 6px', borderBottom: '2px solid var(--brd)', width: 52 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 && (
+              <tr><td colSpan={4} style={{ padding: '12px', color: 'var(--gt)', textAlign: 'center', fontSize: 12 }}>
+                Filtra el catálogo, llena cantidad/precio y presiona Enter para agregar
+              </td></tr>
+            )}
+            {items.map((i, idx) => (
+              <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
+                <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
+                <td style={{ padding: '6px', borderBottom: '1px solid var(--brd)', textAlign: 'center' }}>
+                  <span style={{ display: 'inline-flex', gap: 4 }}>
+                    <button onClick={() => editItem(i)} title="Editar"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--az)', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <Pencil size={12} />
+                    </button>
+                    <button onClick={() => removeItem(i.product_name)} title="Quitar"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', padding: 2, fontSize: 15, fontWeight: 700, lineHeight: 1 }}>
+                      ×
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {items.length > 0 && (
+              <tr style={{ background: 'var(--vc)' }}>
+                <td colSpan={2} style={{ padding: '9px 12px', fontWeight: 800, color: 'var(--vd)', borderRight: '1px solid var(--brd)' }}>Total</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--vd)', fontSize: 14 }}>${total.toLocaleString('es-CO')}</td>
+                <td style={{ borderLeft: '1px solid var(--brd)' }}></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </>
   );

@@ -152,8 +152,8 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                         {STATUS_LABEL[o.status] ?? o.status} · {fmtCOP(total)}
                       </div>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--v)', background: 'var(--vc)', padding: '4px 10px', borderRadius: 20 }}>
-                      ✓ Completado
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--v)', background: 'var(--vc)', padding: '4px 10px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <CheckCircle size={12} /> Completado
                     </span>
                   </div>
                 );

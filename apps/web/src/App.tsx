@@ -6,20 +6,17 @@ import MainPage from './pages/MainPage';
 import ClientFormPage from './pages/ClientFormPage';
 
 export default function App() {
-  // Public client form page — no auth required
-  if (window.location.pathname === '/form') {
-    return <ClientFormPage />;
-  }
+  const isForm = window.location.pathname === '/form';
 
   const token = useAuthStore((s) => s.accessToken);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // If user profile in sessionStorage but access token gone (page refresh),
-    // try to restore via HttpOnly cookie
+    if (isForm) { setReady(true); return; }
     tryRestoreSession().finally(() => setReady(true));
-  }, []);
+  }, [isForm]);
 
+  if (isForm) return <ClientFormPage />;
   if (!ready) return null;
   return token ? <MainPage /> : <LoginPage />;
 }

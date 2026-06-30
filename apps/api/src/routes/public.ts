@@ -142,20 +142,21 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // Mensaje en el chat del ticket
     const total = orderItems.reduce((s, i) => s + i.price, 0);
     const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
-    const msgText = `🛒 *Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\nTotal estimado: $${total.toLocaleString('es-CO')}` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
+    const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\nTotal estimado: $${total.toLocaleString('es-CO')}` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
 
     const message = await fastify.prisma.ticketMessage.create({
       data: {
         ticket_id: ticket.id,
-        direction: 'in',
+        direction: 'out',
         text: msgText,
         sent_at: new Date(),
+        sent_by: systemUser.id,
       },
     });
 
     await fastify.prisma.ticket.update({
       where: { id: ticket.id },
-      data: { unread_count: { increment: 1 }, last_message_at: new Date() },
+      data: { last_message_at: new Date() },
     });
 
     // Historial del pedido
@@ -176,17 +177,13 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       message: {
         id: message.id,
         ticket_id: ticket.id,
-        direction: 'in' as const,
+        direction: 'out' as const,
         text: message.text,
         media_url: null, media_type: null, media_caption: null,
-        sent_by: null, sent_by_name: null, wpp_message_id: null,
+        sent_by: systemUser.id, sent_by_name: systemUser.name, wpp_message_id: null,
         sent_at: message.sent_at.toISOString(),
         delivered: false, read_by_client: false,
       },
-    });
-    fastify.io.to(`org:${payload.orgId}`).emit('ticket:unread', {
-      ticketId: ticket.id,
-      count: (ticket.unread_count ?? 0) + 1,
     });
 
     return reply.status(201).send({ data: { ok: true, orderId: order.id, num: order.num } });

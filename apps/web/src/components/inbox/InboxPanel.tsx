@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Plus, Send, Eye, ClipboardList } from 'lucide-react';
+import { MessageSquare, Plus, Send, Eye, ClipboardList, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
@@ -274,7 +274,7 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
                     }}>
                     <Eye size={11} />
                     #{o.num} · {STATUS_LABEL[o.status] ?? o.status} · {fmtCOP(total)}
-                    {o.paid && ' ✓'}
+                    {o.paid && <Check size={11} style={{ marginLeft: 3 }} />}
                   </button>
                 );
               })}
