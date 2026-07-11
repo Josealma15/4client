@@ -60,6 +60,8 @@ async function start() {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
       cb(new Error('Not allowed by CORS'), false);
     },
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
 
