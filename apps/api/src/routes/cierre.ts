@@ -58,7 +58,10 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
         if (!validOrderIds.has(orderId)) continue;
 
         if (decision === 'manana') {
-          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { fecha: tomorrow, notes: `pasado_manana:${fechaStr}` } });
+          const existingOrder = pendientes.find(p => p.id === orderId);
+          const marker = `pasado_manana:${fechaStr}`;
+          const newNotes = existingOrder?.notes ? `${existingOrder.notes}\n${marker}` : marker;
+          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { fecha: tomorrow, notes: newNotes } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
           });

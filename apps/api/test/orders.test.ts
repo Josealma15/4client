@@ -1,0 +1,226 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildTestServer, createTestOrg, createTestUser } from './helpers.js';
+
+async function login(app: FastifyInstance, email: string, password: string): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: { email, password },
+  });
+  expect(res.statusCode).toBe(200);
+  return res.json().data.accessToken as string;
+}
+
+function authHeader(token: string) {
+  return { authorization: `Bearer ${token}` };
+}
+
+const ENCARGADO_PASS = 'EncargadoPass1!';
+const DOMICILIARIO_PASS = 'DomiciliarioPass1!';
+
+function sampleOrderPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    customer_name: 'Cliente de Prueba',
+    address: 'Calle Falsa 123',
+    channel: 'call',
+    payment_method: 'cash',
+    items: [
+      { product_name: 'Papa Criolla', quantity_label: '2 kg', price: 5000, sort_order: 0 },
+      { product_name: 'Cebolla Roja', quantity_label: '1 kg', price: 3000, sort_order: 1 },
+    ],
+    ...overrides,
+  };
+}
+
+describe('orders routes', () => {
+  let app: FastifyInstance;
+
+  // Org A: primary org under test
+  let orgAId: string;
+  let encargadoToken: string;
+  let domiciliarioToken: string;
+
+  // Org B: used only for multi-tenant isolation assertions
+  let orgBId: string;
+  let orgBEncargadoToken: string;
+
+  beforeAll(async () => {
+    app = await buildTestServer();
+
+    const orgA = await createTestOrg(app.prisma);
+    orgAId = orgA.id;
+    const encargado = await createTestUser(app.prisma, orgAId, 'encargado', ENCARGADO_PASS);
+    const domiciliario = await createTestUser(app.prisma, orgAId, 'domiciliario', DOMICILIARIO_PASS);
+    encargadoToken = await login(app, encargado.email, ENCARGADO_PASS);
+    domiciliarioToken = await login(app, domiciliario.email, DOMICILIARIO_PASS);
+
+    const orgB = await createTestOrg(app.prisma);
+    orgBId = orgB.id;
+    const orgBEncargado = await createTestUser(app.prisma, orgBId, 'encargado', ENCARGADO_PASS, {
+      email: `orgb-encargado-${Date.now()}@example.com`,
+    });
+    orgBEncargadoToken = await login(app, orgBEncargado.email, ENCARGADO_PASS);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('creates an order as encargado -> 201, with sequential num', async () => {
+    const fecha = '2026-01-10';
+
+    const res1 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha }),
+    });
+    expect(res1.statusCode).toBe(201);
+    const order1 = res1.json().data;
+    expect(order1.num).toBe('001');
+
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha }),
+    });
+    expect(res2.statusCode).toBe(201);
+    const order2 = res2.json().data;
+    expect(order2.num).toBe('002');
+  });
+
+  it('forbids creating an order as domiciliario -> 403', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(domiciliarioToken),
+      payload: sampleOrderPayload({ fecha: '2026-01-11' }),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('FORBIDDEN');
+  });
+
+  it('GET /orders?fecha=X only returns orders for the requesting user org (multi-tenant isolation)', async () => {
+    const fecha = '2026-01-12';
+
+    const createA = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha, customer_name: 'Cliente Org A' }),
+    });
+    expect(createA.statusCode).toBe(201);
+    const orderAId = createA.json().data.id;
+
+    const createB = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(orgBEncargadoToken),
+      payload: sampleOrderPayload({ fecha, customer_name: 'Cliente Org B' }),
+    });
+    expect(createB.statusCode).toBe(201);
+    const orderBId = createB.json().data.id;
+
+    const listA = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orders?fecha=${fecha}`,
+      headers: authHeader(encargadoToken),
+    });
+    expect(listA.statusCode).toBe(200);
+    const idsA: string[] = listA.json().data.map((o: { id: string }) => o.id);
+    expect(idsA).toContain(orderAId);
+    expect(idsA).not.toContain(orderBId);
+
+    const listB = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orders?fecha=${fecha}`,
+      headers: authHeader(orgBEncargadoToken),
+    });
+    expect(listB.statusCode).toBe(200);
+    const idsB: string[] = listB.json().data.map((o: { id: string }) => o.id);
+    expect(idsB).toContain(orderBId);
+    expect(idsB).not.toContain(orderAId);
+  });
+
+  it('PATCH /orders/:id/status -> 200, creates an OrderHistory entry with correct value_before/value_after', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha: '2026-01-13' }),
+    });
+    expect(create.statusCode).toBe(201);
+    const order = create.json().data;
+    expect(order.status).toBe('nuevo');
+
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/orders/${order.id}/status`,
+      headers: authHeader(encargadoToken),
+      payload: { status: 'preparando' },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(patch.json().data.status).toBe('preparando');
+
+    const historyEntry = await app.prisma.orderHistory.findFirst({
+      where: { order_id: order.id, action_type: 'estado' },
+    });
+    expect(historyEntry).not.toBeNull();
+    expect(historyEntry!.value_before).toBe('nuevo');
+    expect(historyEntry!.value_after).toBe('preparando');
+  });
+
+  it('POST /orders/:id/cobro with wrong password -> 403 INVALID_PASSWORD, order not marked paid', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha: '2026-01-14' }),
+    });
+    const order = create.json().data;
+
+    const cobro = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orders/${order.id}/cobro`,
+      headers: authHeader(encargadoToken),
+      payload: { amount_received: 8000, password: 'not-the-real-password' },
+    });
+    expect(cobro.statusCode).toBe(403);
+    expect(cobro.json().code).toBe('INVALID_PASSWORD');
+
+    const fresh = await app.prisma.order.findUnique({ where: { id: order.id } });
+    expect(fresh!.paid).toBe(false);
+    expect(fresh!.locked).toBe(false);
+  });
+
+  it('POST /orders/:id/cobro with correct password -> 200, paid+locked; second cobro -> 409 ORDER_LOCKED', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha: '2026-01-15' }),
+    });
+    const order = create.json().data;
+
+    const cobro = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orders/${order.id}/cobro`,
+      headers: authHeader(encargadoToken),
+      payload: { amount_received: 8000, password: ENCARGADO_PASS },
+    });
+    expect(cobro.statusCode).toBe(200);
+    expect(cobro.json().data.paid).toBe(true);
+    expect(cobro.json().data.locked).toBe(true);
+
+    const secondCobro = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orders/${order.id}/cobro`,
+      headers: authHeader(encargadoToken),
+      payload: { amount_received: 8000, password: ENCARGADO_PASS },
+    });
+    expect(secondCobro.statusCode).toBe(409);
+    expect(secondCobro.json().code).toBe('ORDER_LOCKED');
+  });
+});

@@ -72,7 +72,10 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     }
   }
 
-  const hasDirty = !!(nombre.trim() || telefono.trim() || direccion.trim() || items.length > 0);
+  const hasDirty = nombre.trim() !== (preNombre ?? '').trim()
+    || telefono.trim() !== (prePhone ?? '').trim()
+    || direccion.trim() !== ''
+    || items.length > 0;
   const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void } | null>(null);
 
   function handleClose() {

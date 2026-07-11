@@ -5,6 +5,7 @@ import {
   MessageSquare, MessageCircleOff, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
+import HistoryTable from '../ui/HistoryTable';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   nuevo: { bg: '#F8FAFC', fg: '#94A3B8' },
@@ -283,26 +284,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
                               <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 6 }}>
                                 Historial de cambios
                               </div>
-                              {orderHist.map((h: any, i: number) => (
-                                <div key={i} className="ord-hist-line">
-                                  <div className="ord-hist-dot" />
-                                  <div style={{ flex: 1 }}>
-                                    <span style={{ fontWeight: 700 }}>{h.actor?.name ?? 'Sistema'}</span>
-                                    <span style={{ color: 'var(--gt)', margin: '0 6px' }}>·</span>
-                                    <span>{h.field ?? h.action_type}</span>
-                                    {h.value_before != null && h.value_after != null && (
-                                      <span style={{ marginLeft: 8 }}>
-                                        <span className="diff-old">− {h.value_before}</span>
-                                        <span className="diff-arrow">→</span>
-                                        <span className="diff-new">+ {h.value_after}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: 11, color: 'var(--gt)', flexShrink: 0 }}>
-                                    {new Date(h.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-                                  </div>
-                                </div>
-                              ))}
+                              <HistoryTable history={orderHist} />
                             </>
                           )}
                           {orderHist.length === 0 && (
@@ -356,55 +338,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
               No hay cambios registrados
             </div>
           ) : (
-            <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg)' }}>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap' }}>Fecha / Hora</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Pedido</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Quién</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Campo / Acción</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>Antes</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 800, color: 'var(--gt)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.4px', borderBottom: '2px solid var(--brd)' }}>Después</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((h: any, i: number) => {
-                    const isRemove = h.action_type === 'producto_eliminado';
-                    const isAdd = h.action_type === 'producto_agregado';
-                    const isCobro = h.action_type === 'cobro';
-                    const before = h.value_before ? (PAYMENT_LABEL[h.value_before] ?? STATUS_LABEL[h.value_before] ?? h.value_before) : '';
-                    const after = h.value_after ? (PAYMENT_LABEL[h.value_after] ?? STATUS_LABEL[h.value_after] ?? h.value_after) : '';
-                    return (
-                      <tr key={i} style={{ background: isRemove ? '#FEF2F2' : isAdd ? '#F0FDF4' : i % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', whiteSpace: 'nowrap', color: 'var(--gt)' }}>
-                          {new Date(h.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 700 }}>
-                          #{h.order?.num ?? '?'}
-                          <div style={{ fontSize: 11, color: 'var(--gt)', fontWeight: 400 }}>{h.order?.customer_name ?? ''}</div>
-                        </td>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 700 }}>
-                          {h.actor?.name ?? 'Sistema'}
-                        </td>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', fontWeight: 600,
-                          color: isRemove ? '#DC2626' : isAdd ? 'var(--v)' : isCobro ? 'var(--v)' : 'var(--n)',
-                        }}>
-                          {h.field ?? h.action_type}
-                          {h.notes && !isCobro && <div style={{ fontWeight: 400, color: 'var(--gt)', fontSize: 11, marginTop: 1 }}>{h.notes}</div>}
-                        </td>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: '#DC2626' }}>
-                          {before || (isCobro ? h.notes : '') || '—'}
-                        </td>
-                        <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--brd)', color: 'var(--v)' }}>
-                          {after || '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <HistoryTable history={history} showOrder />
           )}
         </div>
       )}

@@ -11,6 +11,7 @@ const envSchema = z.object({
   META_PHONE_NUMBER_ID:      z.string().optional(),
   META_ACCESS_TOKEN:         z.string().optional(),
   META_APP_SECRET:           z.string().optional(),
+  WPP_TOKEN_ENC_KEY:         z.string().regex(/^[0-9a-f]{64}$/, 'debe ser 64 hex chars (32 bytes)').optional(),
   R2_ACCOUNT_ID:             z.string().optional(),
   R2_ACCESS_KEY_ID:          z.string().optional(),
   R2_SECRET_ACCESS_KEY:      z.string().optional(),

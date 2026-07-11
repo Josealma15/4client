@@ -1,3 +1,5 @@
+import { decryptSecret } from '../../lib/crypto.js';
+
 const META_API_BASE = 'https://graph.facebook.com/v22.0';
 
 export class MetaCloudProvider {
@@ -48,6 +50,8 @@ export class MetaCloudProvider {
 
   static fromOrg(org: { wpp_meta_phone_id: string | null; wpp_meta_token: string | null }): MetaCloudProvider | null {
     if (!org.wpp_meta_phone_id || !org.wpp_meta_token) return null;
-    return new MetaCloudProvider(org.wpp_meta_phone_id, org.wpp_meta_token);
+    const token = decryptSecret(org.wpp_meta_token);
+    if (!token) return null;
+    return new MetaCloudProvider(org.wpp_meta_phone_id, token);
   }
 }

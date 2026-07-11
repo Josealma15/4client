@@ -12,7 +12,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   const MAX_BASE64_BYTES = 28_000_000; // ~20 MB decoded
 
   // POST /api/v1/files/invoice — save base64 PDF, return download URL
-  fastify.post('/invoice', { preHandler: [authenticate] }, async (req, reply) => {
+  fastify.post('/invoice', { preHandler: [authenticate], bodyLimit: MAX_BASE64_BYTES + 1_000_000 }, async (req, reply) => {
     const body = z.object({
       data: z.string().min(1).max(MAX_BASE64_BYTES),
       num: z.string().regex(/^[a-zA-Z0-9_-]{1,20}$/, 'num inválido'),
@@ -57,10 +57,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     }
 
     const filepath = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(filepath)) {
+      return reply.status(404).send({ error: 'Archivo no encontrado' });
+    }
     // Prevent symlink traversal
-    const realpath = fs.realpathSync(filepath).startsWith(fs.realpathSync(UPLOADS_DIR))
-      ? filepath : null;
-    if (!realpath || !fs.existsSync(filepath)) {
+    const isInsideUploads = fs.realpathSync(filepath).startsWith(fs.realpathSync(UPLOADS_DIR));
+    if (!isInsideUploads) {
       return reply.status(404).send({ error: 'Archivo no encontrado' });
     }
     reply.header('Content-Type', 'application/pdf');

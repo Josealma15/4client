@@ -3,6 +3,7 @@ node_modules
 dist
 .env
 .env.local
+.env.test
 *.local
 
 # Design source files at root

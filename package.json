@@ -8,6 +8,10 @@
     "build:web": "pnpm --filter web build"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "bcrypt", "esbuild", "prisma"]
+    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "bcrypt", "esbuild", "prisma"],
+    "overrides": {
+      "ws": "^8.21.0",
+      "tar": "^7.5.19"
+    }
   }
 }

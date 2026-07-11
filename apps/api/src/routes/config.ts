@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { encryptSecret } from '../lib/crypto.js';
 
 export default async function configRoutes(fastify: FastifyInstance) {
   // GET /api/v1/config/org — get org config visible to admin/dev
@@ -29,9 +30,14 @@ export default async function configRoutes(fastify: FastifyInstance) {
 
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
 
+    const { wpp_meta_token, ...rest } = body.data;
+
     const updated = await fastify.prisma.organization.update({
       where: { id: req.user.orgId },
-      data: body.data,
+      data: {
+        ...rest,
+        ...(wpp_meta_token !== undefined ? { wpp_meta_token: encryptSecret(wpp_meta_token) } : {}),
+      },
       select: {
         wpp_meta_phone_id: true, wpp_phone: true, welcome_message: true,
       },

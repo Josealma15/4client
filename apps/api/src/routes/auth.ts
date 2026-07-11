@@ -61,6 +61,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
       data: { last_login: new Date() },
     });
 
+    // Best-effort cleanup of this user's stale tokens — keeps the table from growing forever.
+    fastify.prisma.refreshToken.deleteMany({
+      where: { user_id: user.id, OR: [{ revoked: true }, { expires_at: { lt: new Date() } }] },
+    }).catch((err) => fastify.log.warn({ err }, 'No se pudo limpiar refresh tokens vencidos'));
+
     reply.setCookie('rf', rawRefresh, COOKIE_OPTS);
 
     return reply.send({
@@ -91,12 +96,30 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     const tokenHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
 
+    // Look up regardless of revoked status so we can distinguish "never existed"
+    // from "already used" — the latter means the token was stolen and replayed.
     const stored = await fastify.prisma.refreshToken.findFirst({
-      where: { token_hash: tokenHash, revoked: false },
+      where: { token_hash: tokenHash },
       include: { user: { include: { org: true } } },
     });
 
-    if (!stored || stored.expires_at <= new Date()) {
+    if (!stored) {
+      reply.clearCookie('rf', { path: '/api/v1/auth' });
+      return reply.status(401).send({ error: 'Token inválido o expirado', code: 'INVALID_REFRESH_TOKEN' });
+    }
+
+    if (stored.revoked) {
+      // Reuse of an already-rotated token: possible theft. Revoke the entire family
+      // so a stolen token can't keep refreshing even if the thief races us here.
+      await fastify.prisma.refreshToken.updateMany({
+        where: { user_id: stored.user_id, revoked: false },
+        data: { revoked: true },
+      });
+      reply.clearCookie('rf', { path: '/api/v1/auth' });
+      return reply.status(401).send({ error: 'Sesión inválida, inicia sesión de nuevo', code: 'TOKEN_REUSE_DETECTED' });
+    }
+
+    if (stored.expires_at <= new Date()) {
       reply.clearCookie('rf', { path: '/api/v1/auth' });
       return reply.status(401).send({ error: 'Token inválido o expirado', code: 'INVALID_REFRESH_TOKEN' });
     }

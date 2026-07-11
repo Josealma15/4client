@@ -37,10 +37,60 @@ jobs:
       - name: Type check Web
         run: pnpm --filter web exec tsc --noEmit
 
+      - name: Audit production dependencies
+        run: pnpm audit --prod
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: typecheck
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fourclient
+          POSTGRES_PASSWORD: fourclient1234
+          POSTGRES_DB: fourclient_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm --filter api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://fourclient:fourclient1234@localhost:5432/fourclient_test
+
+      - name: Run API tests
+        run: pnpm --filter api test
+        env:
+          DATABASE_URL: postgresql://fourclient:fourclient1234@localhost:5432/fourclient_test
+          JWT_SECRET: test-secret-at-least-32-characters-long-for-ci
+          JWT_REFRESH_SECRET: test-refresh-secret-at-least-32-characters-long
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: typecheck
+    needs: [typecheck, test]
 
     steps:
       - uses: actions/checkout@v4

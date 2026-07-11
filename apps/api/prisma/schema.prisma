@@ -212,17 +212,6 @@ model OrderHistory {
   @@map("order_history")
 }
 
-model OrderTrash {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  org_id     String   @db.Uuid
-  order_id   String   @db.Uuid
-  deleted_by String   @db.Uuid
-  reason     String?
-  deleted_at DateTime @default(now()) @db.Timestamptz
-
-  @@map("order_trash")
-}
-
 model DailyClose {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   org_id         String   @db.Uuid

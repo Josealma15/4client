@@ -1,7 +1,32 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth.js';
+
+// Computes the next sequential order number for org+fecha and creates the order,
+// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])) caused
+// by two concurrent requests computing the same count before either commits.
+async function createOrderWithRetryNum<T>(
+  prisma: PrismaClient,
+  orgId: string,
+  fecha: Date,
+  createFn: (num: string) => Promise<T>,
+): Promise<T> {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const count = await prisma.order.count({ where: { org_id: orgId, fecha } });
+    const num = String(count + 1).padStart(3, '0');
+    try {
+      return await createFn(num);
+    } catch (error) {
+      const isCollision = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+      if (!isCollision || attempt === MAX_ATTEMPTS) throw error;
+    }
+  }
+  // Unreachable, but keeps TS happy about a guaranteed return/throw.
+  throw new Error('No se pudo generar un número de pedido único');
+}
 
 const orderItemSchema = z.object({
   product_name:   z.string().min(1).max(200),
@@ -90,22 +115,20 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     // Parse YYYY-MM-DD as UTC midnight to avoid timezone drift
     const todayUTC = new Date().toISOString().split('T')[0];
     const fechaDate = new Date(fecha ?? todayUTC);
-    const count = await fastify.prisma.order.count({
-      where: { org_id: req.user.orgId, fecha: fechaDate },
-    });
-    const num = String(count + 1).padStart(3, '0');
 
-    const order = await fastify.prisma.order.create({
-      data: {
-        ...rest,
-        org_id: req.user.orgId,
-        num,
-        registered_by: req.user.userId,
-        fecha: fechaDate,
-        items: { create: items },
-      },
-      select: buildOrderSelect(false),
-    });
+    const order = await createOrderWithRetryNum(fastify.prisma, req.user.orgId, fechaDate, (num) =>
+      fastify.prisma.order.create({
+        data: {
+          ...rest,
+          org_id: req.user.orgId,
+          num,
+          registered_by: req.user.userId,
+          fecha: fechaDate,
+          items: { create: items },
+        },
+        select: buildOrderSelect(false),
+      }),
+    );
 
     // Audit log
     await fastify.prisma.orderHistory.create({

@@ -166,7 +166,11 @@ async function ingestMessage(
 
 export default async function webhookRoutes(fastify: FastifyInstance) {
   if (!config.META_APP_SECRET) {
-    fastify.log.warn('⚠️  META_APP_SECRET no configurado — webhook acepta solicitudes sin verificar firma HMAC');
+    if (config.NODE_ENV === 'production') {
+      // Fail closed: without HMAC verification the webhook would accept forged messages.
+      throw new Error('META_APP_SECRET es obligatorio en producción — configúralo antes de desplegar');
+    }
+    fastify.log.warn('⚠️  META_APP_SECRET no configurado — webhook acepta solicitudes sin verificar firma HMAC (solo permitido fuera de producción)');
   }
   // Capture raw body for HMAC validation before JSON parsing
   fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {

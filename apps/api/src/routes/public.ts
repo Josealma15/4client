@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 interface FormTokenPayload {
   type: string;
@@ -8,6 +9,34 @@ interface FormTokenPayload {
   clientName: string;
   clientPhone: string;
   orgName: string;
+}
+
+// Max orders a single form link (ticket) may generate — the link is valid for 7 days
+// with no revocation, so this caps spam from a leaked/shared link.
+const MAX_FORM_ORDERS_PER_TICKET = 3;
+
+// Computes the next sequential order number for org+fecha and creates the order,
+// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])) caused
+// by two concurrent submissions computing the same count before either commits.
+async function createOrderWithRetryNum<T>(
+  prisma: PrismaClient,
+  orgId: string,
+  fecha: Date,
+  createFn: (num: string) => Promise<T>,
+): Promise<T> {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const count = await prisma.order.count({ where: { org_id: orgId, fecha } });
+    const num = String(count + 1).padStart(3, '0');
+    try {
+      return await createFn(num);
+    } catch (error) {
+      const isCollision = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+      if (!isCollision || attempt === MAX_ATTEMPTS) throw error;
+    }
+  }
+  // Unreachable, but keeps TS happy about a guaranteed return/throw.
+  throw new Error('No se pudo generar un número de pedido único');
 }
 
 export default async function publicRoutes(fastify: FastifyInstance) {
@@ -61,7 +90,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/public/submit — cliente envía su pedido → crea Order directamente
-  fastify.post('/submit', async (req, reply) => {
+  // Rate limited to 5/min per IP — dedicated cap on top of the global limit, since a
+  // form link is valid for 7 days with no revocation.
+  fastify.post('/submit', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = z.object({
       token: z.string().min(1),
       items: z.array(z.object({
@@ -84,6 +115,15 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     });
     if (!ticket) return reply.status(404).send({ error: 'Ticket no encontrado', code: 'NOT_FOUND' });
 
+    // Cap orders generated per form link — the token stays valid for 7 days with no
+    // revocation, so without this a single leaked/shared link could spam-create orders.
+    const existingFormOrders = await fastify.prisma.order.count({
+      where: { ticket_id: ticket.id, source: 'form' },
+    });
+    if (existingFormOrders >= MAX_FORM_ORDERS_PER_TICKET) {
+      return reply.status(429).send({ error: 'Límite de pedidos alcanzado para este link', code: 'FORM_LIMIT_REACHED' });
+    }
+
     // Use first active admin/encargado as registered_by (system actor for form orders)
     const systemUser = await fastify.prisma.user.findFirst({
       where: { org_id: payload.orgId, active: true, role: { in: ['admin', 'encargado'] } },
@@ -102,12 +142,6 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // Colombia UTC-5 local date for fecha
     const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
 
-    // Generate order num
-    const count = await fastify.prisma.order.count({
-      where: { org_id: payload.orgId, fecha: todayLocal },
-    });
-    const num = String(count + 1).padStart(3, '0');
-
     const orderItems = body.data.items.map((item, idx) => ({
       product_name: item.product_name,
       quantity_label: item.quantity_label,
@@ -115,34 +149,39 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       sort_order: idx,
     }));
 
-    const order = await fastify.prisma.order.create({
-      data: {
-        org_id: payload.orgId,
-        ticket_id: ticket.id,
-        num,
-        customer_name: payload.clientName,
-        customer_phone: payload.clientPhone,
-        address: 'Pendiente de confirmar',
-        channel: 'whatsapp',
-        payment_method: 'transfer',
-        status: 'nuevo',
-        source: 'form',
-        registered_by: systemUser.id,
-        fecha: todayLocal,
-        items: { create: orderItems },
-      },
-      include: {
-        items: { orderBy: { sort_order: 'asc' } },
-        employee: { select: { id: true, name: true } },
-        registeredBy: { select: { id: true, name: true } },
-        paidBy: { select: { id: true, name: true } },
-      },
-    });
+    const order = await createOrderWithRetryNum(fastify.prisma, payload.orgId, todayLocal, (num) =>
+      fastify.prisma.order.create({
+        data: {
+          org_id: payload.orgId,
+          ticket_id: ticket.id,
+          num,
+          customer_name: payload.clientName,
+          customer_phone: payload.clientPhone,
+          address: 'Pendiente de confirmar',
+          channel: 'whatsapp',
+          payment_method: 'transfer',
+          status: 'nuevo',
+          source: 'form',
+          registered_by: systemUser.id,
+          fecha: todayLocal,
+          items: { create: orderItems },
+        },
+        include: {
+          items: { orderBy: { sort_order: 'asc' } },
+          employee: { select: { id: true, name: true } },
+          registeredBy: { select: { id: true, name: true } },
+          paidBy: { select: { id: true, name: true } },
+        },
+      }),
+    );
+    const num = order.num;
 
     // Mensaje en el chat del ticket
     const total = orderItems.reduce((s, i) => s + i.price, 0);
     const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
-    const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\nTotal estimado: $${total.toLocaleString('es-CO')}` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
+    // "quantity_label" is free text (e.g. "2 kg"), so this sum is per-unit catalog price,
+    // not a real total — labeled as a rough reference, not a firm estimate.
+    const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\n_Precio referencial (según catálogo, sin confirmar cantidades): $${total.toLocaleString('es-CO')}_` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
 
     const message = await fastify.prisma.ticketMessage.create({
       data: {

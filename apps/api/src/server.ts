@@ -23,7 +23,7 @@ import configRoutes from './routes/config.js';
 import devRoutes from './routes/dev.js';
 import publicRoutes from './routes/public.js';
 import { authenticate } from './middleware/auth.js';
-import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest, FastifyReply, FastifyError } from 'fastify';
 
 if (config.SENTRY_DSN) {
   Sentry.init({
@@ -41,7 +41,7 @@ const fastify = Fastify({
   trustProxy: true,
 });
 
-fastify.setErrorHandler((error, _req, reply) => {
+fastify.setErrorHandler((error: FastifyError, _req, reply) => {
   if (config.SENTRY_DSN) Sentry.captureException(error);
   fastify.log.error(error);
   const status = error.statusCode ?? 500;
