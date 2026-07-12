@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Plus, Send, Eye, ClipboardList, Check } from 'lucide-react';
+import { MessageSquare, Send } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
-import { STATUS_LABEL, fmtCOP } from '../../lib/format';
 import { toast } from '../ui/Toast';
 
 // Safe URL regex — no backtracking ambiguity, no ReDoS risk
@@ -22,12 +21,9 @@ function renderText(text: string) {
   });
 }
 
-interface Props {
-  onCreateFromTicket: (ticket: any) => void;
-  onOpenOrder: (orderId: string) => void;
-}
-
-export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
+// Messages only — viewing and replying. Creating/opening pedidos from a chat happens
+// in "Ver conversación" (TicketModal), not here.
+export default function InboxPanel() {
   const qc = useQueryClient();
   const accessToken = useAuthStore((s) => s.accessToken);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -160,7 +156,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
 
         {(tickets as any[]).map((t) => {
           const lastMsg = t.messages?.[0];
-          const ordCount = t.orders?.length ?? 0;
           return (
             <div
               key={t.id}
@@ -182,19 +177,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
               {lastMsg && (
                 <div className="inbox-item-preview">
                   {lastMsg.direction === 'out' ? '› ' : ''}{lastMsg.text}
-                </div>
-              )}
-              {ordCount > 0 && (
-                <div style={{ marginTop: 4, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  {(t.orders as any[]).map((o: any) => (
-                    <span key={o.id} style={{
-                      fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 8,
-                      background: o.paid ? 'var(--vc)' : 'var(--gm)',
-                      color: o.paid ? 'var(--vd)' : 'var(--gt)',
-                    }}>
-                      #{o.num} · {STATUS_LABEL[o.status] ?? o.status}
-                    </span>
-                  ))}
                 </div>
               )}
             </div>
@@ -219,25 +201,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
                 {selectedTicket?.customer_name || selectedTicket?.phone}
               </div>
               <div style={{ fontSize: 13, color: 'var(--gt)' }}>{selectedTicket?.phone}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {selectedId && (
-                <button className="bsec" style={{ padding: '8px 12px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                  title="Enviar formulario de pedido al cliente"
-                  onClick={async () => {
-                    try {
-                      const res = await api.get<{ data: { url: string } }>(`/inbox/${selectedId}/form-link`);
-                      replyMut.mutate(res.data.url);
-                    } catch { toast('No se pudo generar el link', true); }
-                  }}>
-                  <ClipboardList size={13} /> Lista
-                </button>
-              )}
-              <button className="bnew" style={{ padding: '8px 14px', fontSize: 13 }}
-                onClick={() => selectedTicket && onCreateFromTicket(selectedTicket)}>
-                <Plus size={13} strokeWidth={3} />
-                {(selectedTicket?.orders?.length ?? 0) > 0 ? 'Otro pedido' : 'Crear pedido'}
-              </button>
             </div>
           </div>
 
@@ -274,31 +237,6 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
             })}
             <div ref={messagesEndRef} />
           </div>
-
-          {/* Linked orders bar */}
-          {conversation?.orders && conversation.orders.length > 0 && (
-            <div className="inbox-orders-bar">
-              <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--vd)', marginRight: 4 }}>
-                Pedidos:
-              </span>
-              {(conversation.orders as any[]).map((o: any) => {
-                const total = (o.items ?? []).reduce((s: number, i: any) => s + Number(i.price), 0);
-                return (
-                  <button key={o.id} onClick={() => onOpenOrder(o.id)}
-                    style={{
-                      background: o.paid ? 'var(--vd)' : 'var(--v)',
-                      color: '#fff', border: 'none', borderRadius: 8,
-                      padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                    }}>
-                    <Eye size={11} />
-                    #{o.num} · {STATUS_LABEL[o.status] ?? o.status} · {fmtCOP(total)}
-                    {o.paid && <Check size={11} style={{ marginLeft: 3 }} />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
 
           {/* Reply bar */}
           <div className="inbox-reply">
