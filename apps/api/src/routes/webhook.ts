@@ -78,10 +78,26 @@ async function ingestMessage(
       orderBy: { created_at: 'desc' },
     });
 
-    if (deferred) {
-      // Reuse the deferred ticket: move it to today and clear the deferral
+    // Even without an explicit defer, yesterday's ticket for this phone might still be
+    // the live thread — e.g. all its orders were already closed so cierre never had a
+    // reason to defer it, but staff kept working the conversation past midnight anyway.
+    // Rolling it forward here (like the explicit-defer branch above) keeps that one
+    // ticket as the single source of truth; without this, the customer's next reply
+    // opens a second ticket that the order/staff view never finds, which is exactly
+    // what fragmented "Pedidos"/"Ver conversación" from "Chats WPP" for the same chat.
+    // Bounded to yesterday only (not an unbounded lookback) so a customer coming back
+    // after a real multi-day gap still starts a clean new ticket as before.
+    const yesterday = new Date(todayLocal);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const carriedOver = deferred ?? await fastify.prisma.ticket.findFirst({
+      where: { org_id: org.id, phone, fecha: yesterday, deferred_to: null },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (carriedOver) {
+      // Reuse the ticket: move it to today and clear any deferral
       ticket = await fastify.prisma.ticket.update({
-        where: { id: deferred.id },
+        where: { id: carriedOver.id },
         data: {
           fecha: todayLocal,
           deferred_to: null,
