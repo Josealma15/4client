@@ -64,65 +64,36 @@ async function ingestMessage(
   const localMs = sentAt.getTime() + (-5 * 60 * 60 * 1000);
   const todayLocal = new Date(new Date(localMs).toISOString().split('T')[0]);
 
-  // Find or create today's ticket for this phone
+  // One ticket per (org, phone), forever — not per day. A customer who wrote a month
+  // ago and writes again today continues the exact same ticket; there's no other
+  // ticket for this phone this could possibly collide with (enforced by the
+  // @@unique([org_id, phone]) constraint), so this is just find-or-create.
   let ticket = await fastify.prisma.ticket.findFirst({
-    where: { org_id: org.id, phone, fecha: todayLocal },
+    where: { org_id: org.id, phone },
   });
 
   let isNewTicket = false;
 
   if (!ticket) {
-    // Check if there's a deferred ticket from a previous day arriving today
-    const deferred = await fastify.prisma.ticket.findFirst({
-      where: { org_id: org.id, phone, deferred_to: todayLocal },
-      orderBy: { created_at: 'desc' },
+    isNewTicket = true;
+    ticket = await fastify.prisma.ticket.create({
+      data: {
+        org_id: org.id,
+        phone,
+        customer_name: name,
+        fecha: todayLocal,
+        last_message_at: sentAt,
+        unread_count: 1,
+      },
     });
-
-    // Even without an explicit defer, yesterday's ticket for this phone might still be
-    // the live thread — e.g. all its orders were already closed so cierre never had a
-    // reason to defer it, but staff kept working the conversation past midnight anyway.
-    // Rolling it forward here (like the explicit-defer branch above) keeps that one
-    // ticket as the single source of truth; without this, the customer's next reply
-    // opens a second ticket that the order/staff view never finds, which is exactly
-    // what fragmented "Pedidos"/"Ver conversación" from "Chats WPP" for the same chat.
-    // Bounded to yesterday only (not an unbounded lookback) so a customer coming back
-    // after a real multi-day gap still starts a clean new ticket as before.
-    const yesterday = new Date(todayLocal);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const carriedOver = deferred ?? await fastify.prisma.ticket.findFirst({
-      where: { org_id: org.id, phone, fecha: yesterday, deferred_to: null },
-      orderBy: { created_at: 'desc' },
-    });
-
-    if (carriedOver) {
-      // Reuse the ticket: move it to today and clear any deferral
-      ticket = await fastify.prisma.ticket.update({
-        where: { id: carriedOver.id },
-        data: {
-          fecha: todayLocal,
-          deferred_to: null,
-          customer_name: name,
-          unread_count: { increment: 1 },
-          last_message_at: sentAt,
-        },
-      });
-    } else {
-      isNewTicket = true;
-      ticket = await fastify.prisma.ticket.create({
-        data: {
-          org_id: org.id,
-          phone,
-          customer_name: name,
-          fecha: todayLocal,
-          last_message_at: sentAt,
-          unread_count: 1,
-        },
-      });
-    }
   } else {
-    await fastify.prisma.ticket.update({
+    // Roll it forward to today (and drop any stale "queued for a specific day" flag)
+    // so the board/informe pick it up wherever the conversation actually is now.
+    ticket = await fastify.prisma.ticket.update({
       where: { id: ticket.id },
       data: {
+        fecha: todayLocal,
+        deferred_to: null,
         unread_count: { increment: 1 },
         last_message_at: sentAt,
         customer_name: name,

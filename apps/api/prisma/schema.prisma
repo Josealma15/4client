@@ -117,7 +117,13 @@ model Ticket {
   messages TicketMessage[]
   orders   Order[]
 
-  @@unique([org_id, phone, fecha])
+  // One ticket per customer, forever — not per day. `fecha` still tracks the most
+  // recent day this ticket was active (or is queued for, via `deferred_to`) so the
+  // day-scoped board/informe queries keep working, but it's no longer part of the
+  // ticket's identity: a customer writing again next week continues the same ticket
+  // instead of forking a new one that the rest of the app (orders, staff replies)
+  // has no way to find.
+  @@unique([org_id, phone])
   @@index([org_id, fecha])
   @@index([org_id, deferred_to])
   @@index([org_id, last_message_at])

@@ -86,7 +86,7 @@ describe('cierre routes', () => {
     expect(updated!.notes).toBe(`${originalNotes}\n${marker}`);
   });
 
-  it('deferring a ticket to "manana" merges into a same-phone ticket that already exists for that date, instead of leaving a dead duplicate (fragmentation fix)', async () => {
+  it('a phone can only ever have one ticket per org (@@unique(org_id, phone)) — deferring to "manana" just re-flags the same row, never forks a second one', async () => {
     const fecha = '2026-02-12';
     const tomorrow = new Date(fecha);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -101,24 +101,17 @@ describe('cierre routes', () => {
     expect(create.statusCode).toBe(201);
     const order = create.json().data;
 
-    // Ticket A: today's ticket, holds the order and an older message.
-    const ticketA = await app.prisma.ticket.create({
+    const ticket = await app.prisma.ticket.create({
       data: { org_id: orgId, phone, customer_name: 'Cliente Cierre', fecha: new Date(fecha) },
     });
-    await app.prisma.order.update({ where: { id: order.id }, data: { ticket_id: ticketA.id } });
-    await app.prisma.ticketMessage.create({
-      data: { ticket_id: ticketA.id, direction: 'out', text: 'Mensaje de ayer' },
-    });
+    await app.prisma.order.update({ where: { id: order.id }, data: { ticket_id: ticket.id } });
 
-    // Ticket B: the customer already texted again on "tomorrow" before this cierre ran,
-    // so the webhook (which only checks exact-fecha / already-deferred matches) had no
-    // choice but to open a second ticket for the same phone+day.
-    const ticketB = await app.prisma.ticket.create({
-      data: { org_id: orgId, phone, customer_name: 'Cliente Cierre', fecha: tomorrow, unread_count: 1 },
-    });
-    await app.prisma.ticketMessage.create({
-      data: { ticket_id: ticketB.id, direction: 'in', text: 'Mensaje de mañana' },
-    });
+    // A second ticket for the same org+phone is a DB-level impossibility now, not just
+    // something the app happens to avoid — this is what actually prevents the
+    // "Pedidos"/"Ver conversación" vs "Chats WPP" split from ever recurring.
+    await expect(
+      app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Cierre', fecha: tomorrow } })
+    ).rejects.toThrow();
 
     const cierre = await app.inject({
       method: 'POST',
@@ -128,19 +121,10 @@ describe('cierre routes', () => {
     });
     expect(cierre.statusCode).toBe(200);
 
-    // Ticket A is gone — nothing should still point new messages there.
-    const staleTicket = await app.prisma.ticket.findUnique({ where: { id: ticketA.id } });
-    expect(staleTicket).toBeNull();
-
-    // The order now follows the conversation to wherever it actually landed.
-    const updatedOrder = await app.prisma.order.findUnique({ where: { id: order.id } });
-    expect(updatedOrder!.ticket_id).toBe(ticketB.id);
-
-    // Both messages — the old one and the one that arrived "tomorrow" — live on the
-    // single surviving ticket, so every view (Pedidos, Ver conversación, Chats WPP)
-    // resolves to the same complete thread instead of splitting across two rows.
-    const messages = await app.prisma.ticketMessage.findMany({ where: { ticket_id: ticketB.id } });
-    expect(messages.map(m => m.text).sort()).toEqual(['Mensaje de ayer', 'Mensaje de mañana'].sort());
+    const stillOneTicket = await app.prisma.ticket.findMany({ where: { org_id: orgId, phone } });
+    expect(stillOneTicket).toHaveLength(1);
+    expect(stillOneTicket[0].id).toBe(ticket.id);
+    expect(stillOneTicket[0].deferred_to?.toISOString().split('T')[0]).toBe(tomorrow.toISOString().split('T')[0]);
   });
 
   it('cierre without a decision for a pending order -> 400 MISSING_DECISIONS', async () => {

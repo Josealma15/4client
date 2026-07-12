@@ -50,8 +50,8 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
       }),
     ]);
 
-    // Same phone dedup as GET /tickets — without it a stray duplicate ticket for the
-    // same phone+day (see cierre.ts deferOrMergeTicket) would count as two chats here.
+    // Same phone dedup as GET /tickets — belt-and-suspenders now that a phone can
+    // only ever have one ticket row (@@unique(org_id, phone) on Ticket).
     const seenPhones = new Set<string>();
     const tickets_ = tickets.filter(t => {
       if (seenPhones.has(t.phone)) return false;
