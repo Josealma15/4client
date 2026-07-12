@@ -62,7 +62,14 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
       toast('Caja cerrada correctamente');
       onClose();
     },
-    onError: (e: any) => toast(e.message ?? 'Error al cerrar caja', true),
+    onError: (e: any) => {
+      if (e.code === 'MISSING_DECISIONS' && Array.isArray(e.data?.pending) && e.data.pending.length > 0) {
+        const nums = e.data.pending.map((p: any) => `#${p.num} (${p.customer_name})`).join(', ');
+        toast(`Faltan decisiones: ${nums}`, true);
+        return;
+      }
+      toast(e.message ?? 'Error al cerrar caja', true);
+    },
   });
 
   function downloadCSV() {
