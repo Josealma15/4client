@@ -53,7 +53,12 @@ async function doRefresh(): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // No body is sent — the refresh token lives in the HttpOnly cookie, nothing else
+      // is needed. A 'Content-Type: application/json' header with no body made Fastify
+      // reject every single refresh attempt with 400 FST_ERR_CTP_EMPTY_JSON_BODY before
+      // the route handler (and its cookie check) ever ran — this is THE actual cause of
+      // "session closes on reload/refresh": refresh never worked, full stop, regardless
+      // of the cookie's SameSite/Secure attributes being correct.
       credentials: 'include', // HttpOnly cookie sent automatically
     });
     if (!res.ok) {
