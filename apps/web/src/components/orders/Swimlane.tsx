@@ -222,14 +222,18 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
     const hasMore = ord.items.length > 2;
 
     // Deferred badge logic
-    // notes contains 'pasado_manana:TARGET_DATE' (the date the order was deferred TO)
+    // notes contains 'pasado_manana:SOURCE_DATE' — the date cierre de caja ran when this
+    // order got deferred (see cierre.ts), i.e. the day it was moved AWAY FROM, not the
+    // day it moved to. The order's own `fecha` field (ordFecha) is its real, current date.
     const deferredMatch = (ord as any).notes?.match(/pasado_manana:(\d{4}-\d{2}-\d{2})/);
-    const targetFecha: string | null = deferredMatch ? deferredMatch[1] : null;
+    const sourceFecha: string | null = deferredMatch ? deferredMatch[1] : null;
     const ordFecha: string | null = (ord as any).fecha ? new Date((ord as any).fecha).toISOString().split('T')[0] : null;
-    // Ghost: viewing the original day (ordFecha === fecha) but order is deferred to another day
-    const isGhost = !!targetFecha && ordFecha !== null && ordFecha === fecha;
-    // Deferred: viewing the target day (order arrived from previous day)
-    const isDeferred = !!targetFecha && targetFecha === fecha;
+    // Ghost: viewing the original day it was deferred FROM — this board no longer owns
+    // it (it lives on ordFecha now), show as a dimmed, non-interactive trace.
+    const isGhost = !!sourceFecha && sourceFecha === fecha;
+    // Arrived: viewing the day it's actually on now (its real, current fecha) — fully
+    // active/interactive, just flagged with a badge noting it came from a deferral.
+    const isDeferred = !!sourceFecha && ordFecha !== null && ordFecha === fecha;
 
     return (
       <div
