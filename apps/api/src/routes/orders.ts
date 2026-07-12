@@ -5,8 +5,17 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 // Computes the next sequential order number for org+fecha and creates the order,
-// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])) caused
-// by two concurrent requests computing the same count before either commits.
+// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])).
+//
+// Uses MAX(num)+1, not COUNT(*)+1 — a deferred order (cierre.ts, decision "manana")
+// keeps its ORIGINAL num when its fecha moves to the next day, so that day's number
+// space can already have gaps/low numbers "occupied" that have nothing to do with how
+// many orders exist there. COUNT(*)+1 doesn't see that and can guess a num that's
+// already taken; worse, since count doesn't change between retries with no concurrent
+// insert, every retry recomputed the exact same doomed num and collided identically
+// until attempts ran out and the raw Prisma error was thrown as a 500. MAX+1 always
+// lands past everything actually on that day, deferred-in orders included; the
+// attempt-based nudge below is just a safety net for genuine concurrent double-submits.
 async function createOrderWithRetryNum<T>(
   prisma: PrismaClient,
   orgId: string,
@@ -15,8 +24,9 @@ async function createOrderWithRetryNum<T>(
 ): Promise<T> {
   const MAX_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const count = await prisma.order.count({ where: { org_id: orgId, fecha } });
-    const num = String(count + 1).padStart(3, '0');
+    const existing = await prisma.order.findMany({ where: { org_id: orgId, fecha }, select: { num: true } });
+    const maxNum = existing.reduce((max, o) => Math.max(max, parseInt(o.num, 10) || 0), 0);
+    const num = String(maxNum + attempt).padStart(3, '0');
     try {
       return await createFn(num);
     } catch (error) {

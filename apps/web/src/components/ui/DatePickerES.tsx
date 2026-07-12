@@ -141,11 +141,7 @@ export default function DatePickerES({ value, onChange, className }: Props) {
             })}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: '1px solid var(--brd)', paddingTop: 10 }}>
-            <button type="button" onClick={() => setOpen(false)}
-              style={{ flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 700, background: 'var(--bg)', color: 'var(--n)', border: '1px solid var(--brd)', borderRadius: 8, cursor: 'pointer' }}>
-              Limpiar
-            </button>
+          <div style={{ display: 'flex', marginTop: 12, borderTop: '1px solid var(--brd)', paddingTop: 10 }}>
             <button type="button" onClick={() => { onChange(today); setOpen(false); }}
               style={{ flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 700, background: 'var(--v)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
               Hoy
