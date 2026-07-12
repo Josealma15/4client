@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, CheckCircle, XCircle, Check, Plus, Trash2 } from 'lucide-react';
+import { ShoppingCart, CheckCircle, XCircle, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
@@ -33,7 +33,7 @@ export default function ClientFormPage() {
   const [pendingQty, setPendingQty] = useState<Record<string, string>>({});
   // confirmed items list
   const [selected, setSelected] = useState<SelectedItem[]>([]);
-  const [showSummary, setShowSummary] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   // becomes true once we've attempted to restore a persisted draft, so the
@@ -41,6 +41,7 @@ export default function ClientFormPage() {
   const [hydrated, setHydrated] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) { setState('invalid'); setErrorMsg('Link inválido. Pide un nuevo link al negocio.'); return; }
@@ -125,7 +126,7 @@ export default function ClientFormPage() {
     if (!window.confirm('¿Borrar todo el pedido? Se perderán los productos agregados.')) return;
     setSelected([]);
     setPendingQty({});
-    setShowSummary(false);
+    setSummaryExpanded(false);
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
   }
 
@@ -223,21 +224,19 @@ export default function ClientFormPage() {
           {clientName && <div style={{ fontSize: 12, opacity: 0.85 }}>Hola, {clientName}</div>}
         </div>
         {selectedCount > 0 && (
-          <button
-            onClick={() => setShowSummary(s => !s)}
-            style={{ background: '#fff', color: GREEN, fontWeight: 800, fontSize: 13, padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ background: '#fff', color: GREEN, fontWeight: 800, fontSize: 13, padding: '4px 12px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
             <Check size={13} /> {selectedCount} ítem{selectedCount > 1 ? 's' : ''}
-          </button>
+          </div>
         )}
       </div>
 
-      {/* Summary panel (collapsible) */}
-      {showSummary && selectedCount > 0 && (
-        <div style={{ background: '#fff', margin: '0 0 2px', padding: '12px 16px', borderBottom: '2px solid #e0e0e0' }}>
+      {/* Summary panel — always visible once something's added, collapses past 2 items */}
+      {selectedCount > 0 && (
+        <div ref={summaryRef} style={{ background: '#fff', margin: '0 0 2px', padding: '12px 16px', borderBottom: '2px solid #e0e0e0' }}>
           <div style={{ fontWeight: 800, fontSize: 13, color: GREEN, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-            Productos agregados
+            Productos agregados ({selectedCount})
           </div>
-          {selected.map(s => (
+          {(summaryExpanded ? selected : selected.slice(0, 2)).map(s => (
             <div key={s.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{s.product_name}</div>
@@ -250,10 +249,14 @@ export default function ClientFormPage() {
             </div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <button onClick={() => setShowSummary(false)}
-              style={{ fontSize: 13, color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-              Ocultar resumen
-            </button>
+            {selectedCount > 2 ? (
+              <button onClick={() => setSummaryExpanded(e => !e)}
+                style={{ fontSize: 13, color: GREEN, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                {summaryExpanded
+                  ? <><ChevronUp size={14} /> Ver menos</>
+                  : <><ChevronDown size={14} /> Ver los {selectedCount}</>}
+              </button>
+            ) : <span />}
             <button onClick={clearOrder}
               style={{ fontSize: 13, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
               <Trash2 size={14} /> Borrar todo
@@ -381,7 +384,8 @@ export default function ClientFormPage() {
           {submitError && <div style={{ color: '#DC2626', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{submitError}</div>}
           <div style={{ display: 'flex', gap: 10 }}>
             <button
-              onClick={() => setShowSummary(s => !s)}
+              onClick={() => summaryRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              title="Ver productos agregados"
               style={{
                 flex: '0 0 auto', padding: '14px 16px',
                 background: '#f0f4f8', color: '#333', border: '2px solid #ddd',

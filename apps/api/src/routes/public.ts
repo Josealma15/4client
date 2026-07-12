@@ -97,13 +97,26 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/public/submit — cliente envía su pedido → crea Order directamente
-  // Rate limited per IP — dedicated cap on top of the global limit, since a form link
-  // is valid for 7 days with no revocation. MAX_FORM_ORDERS_PER_TICKET below is the
-  // real anti-abuse guard (caps actual orders created per link); this is just a
-  // backstop against a script hammering the endpoint, not meant to throttle a person
-  // clicking submit a few times while testing/fixing their order — 5/min genuinely
-  // wasn't enough headroom for that and was blocking real use.
-  fastify.post('/submit', { config: { rateLimit: { max: 15, timeWindow: '1 minute' } } }, async (req, reply) => {
+  // Rate limited per FORM LINK (token), not per IP — a per-IP key means every phone
+  // behind the same shared connection (mobile carrier CGNAT, mall/office wifi) draws
+  // from the same bucket, so unrelated customers' submissions — or even one person
+  // testing a couple of different chats' links back to back — can exhaust it for
+  // everyone sharing that IP, with no way to tell it apart from real abuse. Keying by
+  // token instead means only repeated hits on *that specific* link count against it.
+  // `hook: 'preHandler'` runs after body parsing so the token is actually readable
+  // here (the default 'onRequest' hook fires before that). MAX_FORM_ORDERS_PER_TICKET
+  // below is the real anti-abuse guard (caps actual orders created per link); this is
+  // just a backstop against a script hammering one specific link's submit endpoint.
+  fastify.post('/submit', {
+    config: {
+      rateLimit: {
+        max: 15,
+        timeWindow: '1 minute',
+        hook: 'preHandler',
+        keyGenerator: (req) => (req.body as { token?: string } | undefined)?.token || req.ip,
+      },
+    },
+  }, async (req, reply) => {
     const body = z.object({
       token: z.string().min(1),
       items: z.array(z.object({
