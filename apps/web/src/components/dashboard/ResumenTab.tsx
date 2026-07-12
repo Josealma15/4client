@@ -95,7 +95,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
           <div className="kmeta">Tiempo real - actualización automática</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" className="fsel" value={fecha} style={{ cursor: 'pointer' }}
+          <input type="date" className="fsel" lang="es" value={fecha} style={{ cursor: 'pointer' }}
             onChange={(e) => setFecha(e.target.value)} />
           <button onClick={onCierreCaja}
             style={{ background: 'var(--vd)', color: '#fff', border: 'none', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>

@@ -65,6 +65,8 @@ model RefreshToken {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
+  @@unique([token_hash])
+  @@index([user_id])
   @@map("refresh_tokens")
 }
 
@@ -116,6 +118,9 @@ model Ticket {
   orders   Order[]
 
   @@unique([org_id, phone, fecha])
+  @@index([org_id, fecha])
+  @@index([org_id, deferred_to])
+  @@index([org_id, last_message_at])
   @@map("tickets")
 }
 
@@ -136,6 +141,7 @@ model TicketMessage {
   ticket  Ticket @relation(fields: [ticket_id], references: [id])
   sender  User?  @relation(fields: [sent_by], references: [id])
 
+  @@index([ticket_id, sent_at])
   @@map("ticket_messages")
 }
 
@@ -175,6 +181,9 @@ model Order {
   history      OrderHistory[]
 
   @@unique([org_id, num, fecha])
+  @@index([org_id, fecha])
+  @@index([ticket_id])
+  @@index([org_id, status])
   @@map("orders")
 }
 
@@ -190,6 +199,7 @@ model OrderItem {
 
   order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
 
+  @@index([order_id])
   @@map("order_items")
 }
 
@@ -209,6 +219,8 @@ model OrderHistory {
   order Order        @relation(fields: [order_id], references: [id])
   actor User         @relation(fields: [actor_id], references: [id])
 
+  @@index([order_id])
+  @@index([org_id, created_at])
   @@map("order_history")
 }
 

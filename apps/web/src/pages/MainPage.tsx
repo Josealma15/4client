@@ -9,6 +9,7 @@ import { useDashboard } from '../hooks/useDashboard';
 import { api } from '../lib/api';
 import { todayStr } from '../lib/format';
 import { getSocket, disconnectSocket } from '../lib/socket';
+import { useIdleLogout } from '../hooks/useIdleLogout';
 import { useQueryClient } from '@tanstack/react-query';
 import Swimlane from '../components/orders/Swimlane';
 import NuevoPedidoModal from '../components/modals/NuevoPedidoModal';
@@ -28,6 +29,7 @@ interface Ticket {
 }
 
 export default function MainPage() {
+  useIdleLogout();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -198,7 +200,7 @@ export default function MainPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input type="date" className="fsel" value={fecha} style={{ cursor: 'pointer' }}
+                <input type="date" className="fsel" lang="es" value={fecha} style={{ cursor: 'pointer' }}
                   onChange={(e) => setFecha(e.target.value)} />
                 <select className="fsel" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
                   <option value="">Todos los pagos</option>
