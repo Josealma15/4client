@@ -133,6 +133,12 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
       });
     });
 
+    // Cierre can move/close/cancel many orders and defer many tickets at once, but
+    // never told anyone — no other connected staff (or even this same browser on a
+    // different tab) had any signal to refetch, so "Informe del día" and the board
+    // could sit showing pre-cierre numbers indefinitely.
+    fastify.io.to(`org:${req.user.orgId}`).emit('cierre:done', { fecha: body.data.fecha });
+
     return reply.send({
       data: {
         fecha: body.data.fecha,

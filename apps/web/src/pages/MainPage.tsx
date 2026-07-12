@@ -116,9 +116,19 @@ export default function MainPage() {
       qc.invalidateQueries({ queryKey: ['inbox'] });
       qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
     };
+    // Cierre touches whichever orders/tickets it closes/defers, which can span the
+    // fecha being closed AND wherever deferred orders land (tomorrow) — not just
+    // whatever date this browser happens to be looking at right now, so this
+    // invalidates every cached date instead of only `fecha`.
+    const onCierreDone = () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    };
 
     socket.on('ticket:message', onTicketMessage);
     socket.on('ticket:unread', onTicketUnread);
+    socket.on('cierre:done', onCierreDone);
 
     return () => {
       socket.off('connect', joinRooms);
@@ -128,6 +138,7 @@ export default function MainPage() {
       socket.off('order:paid');
       socket.off('ticket:message', onTicketMessage);
       socket.off('ticket:unread', onTicketUnread);
+      socket.off('cierre:done', onCierreDone);
     };
   }, [accessToken, fecha]);
 
