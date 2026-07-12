@@ -23,7 +23,12 @@ export default function LoginPage() {
         { ...apiUser, userId: apiUser.id, orgId: apiUser.org_id, orgName: apiUser.org_name, orgSlug: apiUser.org_slug },
       );
     } catch (e: any) {
-      setError(e.message === 'Credenciales incorrectas' ? 'Usuario o contraseña incorrectos' : 'Error al conectar con el servidor');
+      // Always the same message no matter what actually failed (wrong password, unknown
+      // email, validation error, network failure...) — a message that varies by failure
+      // reason is exactly the kind of signal that lets an attacker enumerate valid emails
+      // or probe the backend. Real reason still goes to the console for our own debugging.
+      console.error('[login] failed', e);
+      setError('Usuario o contraseña incorrectos');
     } finally {
       setLoading(false);
     }
