@@ -59,19 +59,31 @@ export default function MainPage() {
     socket.emit('join:org', user?.orgId ?? '');
     socket.emit('join:date', fecha);
 
+    // Informe del día (dashboard) has its own totals/status counts computed
+    // server-side — it must be invalidated on every event that can change them,
+    // same as orders/tickets, or it silently drifts out of sync with the board.
     socket.on('order:created', () => {
       qc.invalidateQueries({ queryKey: ['orders', fecha] });
       qc.invalidateQueries({ queryKey: ['tickets', fecha] }); // re-link order to ticket row
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
     });
     socket.on('order:updated', () => {
       qc.invalidateQueries({ queryKey: ['orders', fecha] });
       qc.invalidateQueries({ queryKey: ['tickets', fecha] });
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
     });
-    socket.on('order:moved', () => qc.invalidateQueries({ queryKey: ['orders', fecha] }));
-    socket.on('order:paid', () => qc.invalidateQueries({ queryKey: ['orders', fecha] }));
+    socket.on('order:moved', () => {
+      qc.invalidateQueries({ queryKey: ['orders', fecha] });
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
+    });
+    socket.on('order:paid', () => {
+      qc.invalidateQueries({ queryKey: ['orders', fecha] });
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
+    });
     const onTicketMessage = (data: { ticketId: string; message?: { direction?: string } }) => {
       qc.invalidateQueries({ queryKey: ['tickets', fecha] });
       qc.invalidateQueries({ queryKey: ['inbox'] });
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
       if (data?.ticketId) {
         qc.invalidateQueries({ queryKey: ['inbox-convo', data.ticketId] });
         qc.invalidateQueries({ queryKey: ['ticket', data.ticketId] });
@@ -84,6 +96,7 @@ export default function MainPage() {
     const onTicketUnread = () => {
       qc.invalidateQueries({ queryKey: ['tickets', fecha] });
       qc.invalidateQueries({ queryKey: ['inbox'] });
+      qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
     };
 
     socket.on('ticket:message', onTicketMessage);

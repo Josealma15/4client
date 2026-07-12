@@ -12,6 +12,13 @@ function getClient(): S3Client {
         accessKeyId: config.R2_ACCESS_KEY_ID!,
         secretAccessKey: config.R2_SECRET_ACCESS_KEY!,
       },
+      // Recent @aws-sdk/client-s3 versions default to adding a flexible checksum
+      // header (x-amz-checksum-*) on every request. R2 is S3-compatible but doesn't
+      // support that AWS-specific extension, so uploads/downloads fail against R2
+      // unless this is explicitly turned off — a well-known AWS SDK v3 + R2
+      // incompatibility, not an R2 credentials/bucket problem.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
   }
   return _client;
