@@ -328,7 +328,6 @@ export default function ClientFormPage() {
                         borderRadius: 10, outline: 'none', textAlign: 'center',
                         fontFamily: 'inherit', color: '#111', background: '#fff',
                       }}
-                      inputMode="decimal"
                     />
                     <button
                       onClick={() => addProduct(p)}
@@ -344,6 +343,20 @@ export default function ClientFormPage() {
                     >
                       <Plus size={18} strokeWidth={3} />
                     </button>
+                    {isAdded && (
+                      <button
+                        onClick={() => removeSelected(p.id)}
+                        style={{
+                          width: 38, height: 38, borderRadius: '50%', border: '2px solid #F5C6C6',
+                          background: '#fff', color: '#DC2626', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                        title="Quitar este producto"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

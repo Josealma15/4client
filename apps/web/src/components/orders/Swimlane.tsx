@@ -7,7 +7,7 @@ import DetallePedidoModal from '../modals/DetallePedidoModal';
 
 interface Ticket {
   id: string; phone: string; customer_name: string;
-  unread_count: number; last_message_at: string;
+  unread_count: number; last_message_at: string; created_at: string;
   messages: { text: string; direction: string; created_at?: string }[];
   orders: { id: string; num: string; status: string; paid: boolean }[];
 }
@@ -53,7 +53,10 @@ function minsSinceDate(dateStr: string): number {
 // - All orders done, no new message → 0 (idle, nothing to alert)
 function ticketElapsedMins(ticket: Ticket, ticketOrders: Order[]): number {
   if (ticketOrders.length === 0) {
-    return minsSinceDate(ticket.last_message_at);
+    // Since the FIRST message, not the last — otherwise the client sending another
+    // message while still unattended keeps resetting the clock instead of the wait
+    // actually getting more urgent the longer it drags on.
+    return minsSinceDate(ticket.created_at);
   }
 
   const doneOrders = ticketOrders.filter(o => o.paid && o.status === 'cerrado');
@@ -102,8 +105,9 @@ function isTicketUrg(ticket: Ticket, ticketOrders: Order[]): boolean {
   const elapsed = ticketElapsedMins(ticket, ticketOrders);
   if (elapsed === 0) return false;
   const hasActive = ticketOrders.some(o => !o.paid || o.status !== 'cerrado');
-  // No orders: urg after 15min | active order: urg after 20min | re-engaged: urg after 10min
-  if (ticketOrders.length === 0) return elapsed > 15;
+  // No orders: urg after 20min (since first message) | active order: urg after 20min
+  // (since created) | re-engaged after a closed cycle: urg after 10min
+  if (ticketOrders.length === 0) return elapsed > 20;
   if (hasActive) return elapsed > 20;
   return elapsed > 10;
 }
@@ -320,12 +324,10 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
         }}>
           <Siren size={18} color="#991B1B" />
           <span style={{ fontSize: 13, fontWeight: 800, color: '#991B1B' }}>
-            ZONA ROJA - {urgTickets.length} ticket{urgTickets.length > 1 ? 's' : ''} sin atender
+            ZONA ROJA - {urgTickets.length} chat{urgTickets.length > 1 ? 's' : ''} sin resolver
           </span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {urgTickets.map((t) => {
-              const tOrds = filteredOrders.filter((o) => t.orders.some((to) => to.id === o.id));
-              const m = ticketElapsedMins(t, tOrds);
               const tNum = `T-${String(filteredTickets.indexOf(t) + 1).padStart(2, '0')}`;
               return (
                 <button key={t.id} onClick={() => onOpenTicket(t.id)}
@@ -336,7 +338,7 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                   }}>
                   <AlertTriangle size={11} />
-                  {tNum} · {t.customer_name.split(' ')[0]} · {m}min
+                  {tNum}
                 </button>
               );
             })}

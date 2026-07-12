@@ -27,7 +27,9 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
+  const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [localInputs, setLocalInputs] = useState<Record<string, { qty: string; price: string }>>({});
+  const [focusTarget, setFocusTarget] = useState<string | null>(null);
 
   // Clear local inputs when parent signals a save (clearKey increments)
   useEffect(() => {
@@ -111,8 +113,23 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
     setSearch(item.product_name);
     setCollapsed(false);
     onLocalDirty?.(true);
-    requestAnimationFrame(() => searchRef.current?.focus());
+    // Land the cursor on this row's own quantity field, not the catalog filter bar —
+    // the filter narrows to this single product, so the qty box is what the user
+    // actually came here to edit.
+    setFocusTarget(item.product_name);
   }
+
+  // Runs once the filtered row for focusTarget has actually rendered (search state
+  // change + collapsed=false both need a render pass before the ref exists).
+  useEffect(() => {
+    if (!focusTarget) return;
+    const el = qtyRefs.current[focusTarget];
+    if (el) {
+      el.focus();
+      el.select();
+      setFocusTarget(null);
+    }
+  }, [focusTarget, visibleGroups]);
 
   const total = items.reduce((s, i) => s + (parseFloat(i.price) || 0), 0);
 
@@ -229,6 +246,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         {isCommitted && <Check size={11} color="var(--v)" style={{ marginLeft: 5, display: 'inline', verticalAlign: 'middle' }} />}
                       </div>
                       <input
+                        ref={el => { qtyRefs.current[p.name] = el; }}
                         className="iinput"
                         placeholder="Ej: 2 kg"
                         value={local.qty}

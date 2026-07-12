@@ -78,7 +78,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const [replyText, setReplyText] = useState('');
   const [cobroRec, setCobroRec] = useState('');
   const [cobroPass, setCobroPass] = useState('');
-  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void; danger?: boolean } | null>(null);
+  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void; danger?: boolean; onSave?: () => void } | null>(null);
 
   useEffect(() => {
     if (!order) return;
@@ -103,6 +103,8 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       ? api.get<{ data: any }>(`/inbox/${order.ticket_id}/messages`).then((r) => r.data)
       : null,
     enabled: !!order?.ticket_id,
+    // Fallback only — real-time delivery is via socket, but a missed/late socket event
+    // shouldn't leave this open conversation stale for longer than this.
     refetchInterval: 30000,
   });
 
@@ -297,7 +299,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
   function handleClose() {
     if (isDirty || catalogDirty) {
-      setConfirmDlg({ msg: 'Hay cambios sin guardar. ¿Salir de todos modos?', onOk: onClose });
+      setConfirmDlg({
+        msg: 'Hay cambios sin guardar.',
+        onOk: onClose,
+        onSave: () => saveMut.mutate(undefined, { onSuccess: () => { setConfirmDlg(null); onClose(); } }),
+      });
       return;
     }
     onClose();
@@ -314,7 +320,16 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const recibido = parseFloat(cobroRec) || 0;
   const devolucion = recibido - total;
   const faltaOSobra = recibido > 0 ? (devolucion >= 0 ? `Vuelto: ${fmtCOP(devolucion)}` : `Falta: ${fmtCOP(-devolucion)}`) : null;
-  const cobroValido = recibido >= total && recibido > 0 && cobroPass.trim().length > 0;
+  // A pedido can't be closed with any of these missing — mirrors the same check enforced
+  // server-side in POST /orders/:id/cobro, so the UI blocks it before the request even goes out.
+  const cierreMissing: string[] = [];
+  if (!nombre.trim()) cierreMissing.push('nombre');
+  if (!telefono.trim()) cierreMissing.push('teléfono');
+  if (!direccion.trim() || direccion.trim().toLowerCase() === 'pendiente de confirmar') cierreMissing.push('dirección');
+  if (!pago || pago === 'sin_asignar') cierreMissing.push('método de pago');
+  if (!empleadoId) cierreMissing.push('domiciliario');
+  if (items.length === 0) cierreMissing.push('productos');
+  const cobroValido = cierreMissing.length === 0 && recibido >= total && recibido > 0 && cobroPass.trim().length > 0;
   const hasChatPanel = !!order.ticket_id;
 
   return (
@@ -592,6 +607,9 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
         <ConfirmModal
           message={confirmDlg.msg}
           danger={confirmDlg.danger}
+          cancelLabel={confirmDlg.onSave ? 'Salir' : 'Cancelar'}
+          onSave={confirmDlg.onSave}
+          savePending={saveMut.isPending}
           onConfirm={() => { confirmDlg.onOk(); setConfirmDlg(null); }}
           onCancel={() => setConfirmDlg(null)}
         />
@@ -611,6 +629,12 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             <div style={{ background: 'var(--ac)', borderRadius: 'var(--rad)', padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--a)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={14} /> Una vez confirmado, el pedido quedará bloqueado.
             </div>
+            {cierreMissing.length > 0 && (
+              <div style={{ background: 'var(--rc)', borderRadius: 'var(--rad)', padding: '10px 14px', marginBottom: 16, fontSize: 13, color: 'var(--r)', fontWeight: 700, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>Falta completar antes de cerrar: {cierreMissing.join(', ')}.</span>
+              </div>
+            )}
             <div className="fg2">
               <label className="fl2">¿Quién recibió el pago?</label>
               <div className="fi2" style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--gm)', cursor: 'default' }}>
@@ -621,6 +645,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <label className="fl2">¿Cuánto se recibió? <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span></label>
               <input className="fi2" type="number" placeholder={`Mínimo: $${total.toLocaleString('es-CO')}`}
                 value={cobroRec} onChange={(e) => setCobroRec(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && cobroValido && !cobroMut.isPending) { e.preventDefault(); cobroMut.mutate(); } }}
                 style={{ borderColor: cobroRec && !cobroValido ? 'var(--r)' : undefined }} />
               {faltaOSobra && (
                 <div style={{
@@ -640,6 +665,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               </label>
               <input className="fi2" type="password" placeholder="Contraseña de tu sesión"
                 value={cobroPass} onChange={(e) => setCobroPass(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && cobroValido && !cobroMut.isPending) { e.preventDefault(); cobroMut.mutate(); } }}
                 autoComplete="current-password" />
               <div style={{ fontSize: 12, color: 'var(--gt)', marginTop: 4 }}>
                 Requerida para evitar cobros no autorizados
