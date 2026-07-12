@@ -244,10 +244,16 @@ export default function ClientFormPage() {
               </button>
             </div>
           ))}
-          <button onClick={() => setShowSummary(false)}
-            style={{ marginTop: 8, fontSize: 13, color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-            Ocultar resumen
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <button onClick={() => setShowSummary(false)}
+              style={{ fontSize: 13, color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+              Ocultar resumen
+            </button>
+            <button onClick={clearOrder}
+              style={{ fontSize: 13, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Trash2 size={14} /> Borrar todo
+            </button>
+          </div>
         </div>
       )}
 

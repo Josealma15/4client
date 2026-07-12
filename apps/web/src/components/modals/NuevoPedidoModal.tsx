@@ -5,6 +5,8 @@ import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { api } from '../../lib/api';
+import { useAuthStore } from '../../store/auth';
+import { getSocket } from '../../lib/socket';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
@@ -33,6 +35,7 @@ interface Props {
 
 export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, prePhone, messages: initialMessages }: Props) {
   const qc = useQueryClient();
+  const accessToken = useAuthStore((s) => s.accessToken);
   const { data: products = [] } = useProducts();
   const { data: employees = [] } = useEmployees();
   const createOrder = useCreateOrder();
@@ -53,9 +56,21 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     queryKey: ['inbox-convo', ticketId],
     queryFn: () => api.get<{ data: any }>(`/inbox/${ticketId}/messages`).then((r) => r.data),
     enabled: !!ticketId,
-    refetchInterval: 15000,
+    refetchInterval: 60000, // fallback only — real-time delivery is via socket below
   });
 
+  // This modal never had a socket listener at all, only the interval above — meaning a
+  // message arriving while it's open could sit unseen for up to 15-60s. Same pattern as
+  // TicketModal/DetallePedidoModal.
+  useEffect(() => {
+    if (!accessToken || !ticketId) return;
+    const sock = getSocket(accessToken);
+    const onMsg = (data: { ticketId: string }) => {
+      if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['inbox-convo', ticketId] });
+    };
+    sock.on('ticket:message', onMsg);
+    return () => { sock.off('ticket:message', onMsg); };
+  }, [accessToken, ticketId, qc]);
 
   const liveMessages: any[] = convoData?.messages ?? initialMessages ?? [];
 

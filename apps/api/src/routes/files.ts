@@ -28,10 +28,22 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     const orgPrefix = req.user.orgId.replace(/-/g, '').slice(0, 12);
     const filename = `Factura_${orgPrefix}_${body.data.num}_${id}.pdf`;
 
+    const r = req as FastifyRequest;
+    const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
+    const proto = (r.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0] ?? r.protocol;
+    // Always hand back OUR OWN url (proxied through GET /files/:filename below), never
+    // the raw R2 object URL — R2 buckets aren't public by default, and even a "public
+    // dev URL" would mean the file is genuinely public to anyone on the internet who
+    // guesses/finds it, forever. Proxying through our server means: a) it works
+    // immediately without needing R2's bucket-level public access config touched at
+    // all, and b) any future access control (client-only tokens, expiry) lives in one
+    // place — this route — instead of in Cloudflare's dashboard.
+    const publicUrl = `${proto}://${host}/api/v1/files/${filename}`;
+
     if (storage.isConfigured()) {
       try {
-        const url = await storage.upload(`invoices/${filename}`, decoded);
-        return reply.status(201).send({ url });
+        await storage.upload(`invoices/${filename}`, decoded);
+        return reply.status(201).send({ url: publicUrl });
       } catch (err: any) {
         req.log.error({ err }, 'R2 upload failed for invoice');
         // Staff-only route — safe to surface the AWS/R2 error name (e.g. NoSuchBucket,
@@ -54,10 +66,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const reason = err?.code ?? err?.message ?? 'desconocido';
       return reply.status(502).send({ error: `No se pudo guardar la factura (${reason}). Intenta de nuevo.`, code: 'STORAGE_WRITE_FAILED' });
     }
-    const r = req as FastifyRequest;
-    const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
-    const proto = (r.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0] ?? r.protocol;
-    return reply.status(201).send({ url: `${proto}://${host}/api/v1/files/${filename}` });
+    return reply.status(201).send({ url: publicUrl });
   });
 
   // GET /api/v1/files/:filename — public (no auth: filename is unguessable org+UUID combo)
