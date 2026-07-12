@@ -30,7 +30,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data?.error ?? 'Error del servidor');
+  if (!res.ok) {
+    // Carry the full response body on the thrown error (not just the top-level
+    // message) so callers that need structured detail — e.g. cierre's list of
+    // orders still missing a decision — don't have to re-fetch or guess.
+    const err = new Error(data?.error ?? 'Error del servidor') as Error & { code?: string; data?: any };
+    err.code = data?.code;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 
