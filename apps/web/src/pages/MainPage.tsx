@@ -246,10 +246,7 @@ export default function MainPage() {
                 <div className="kmeta">Bandeja de entrada - todas las conversaciones</div>
               </div>
             </div>
-            <InboxPanel
-              onCreateFromTicket={handleCreateFromTicket}
-              onOpenOrder={(orderId) => setOpenOrderId(orderId)}
-            />
+            <InboxPanel />
           </>
         )}
 

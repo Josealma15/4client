@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Siren, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Eye, Plus, AlertTriangle } from 'lucide-react';
-import { STATUS_LABEL, STATUS_ORDER, fmtCOP } from '../../lib/format';
+import { STATUS_LABEL, STATUS_ORDER, fmtCOP, todayStr } from '../../lib/format';
 import { useMoveOrder } from '../../hooks/useOrders';
 import { toast } from '../ui/Toast';
 import DetallePedidoModal from '../modals/DetallePedidoModal';
@@ -45,11 +45,12 @@ function minsSinceDate(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
 }
 
-// How many minutes the customer has been "waiting" right now:
-// - No orders → since first message arrived
-// - Active order (not paid+cerrado) → since that order was created (or since last cycle ended)
-// - All orders done but new message → since last message
-// - All orders done, no new message → 0 (idle, nothing to alert)
+// Red-zone timer — exactly two scenarios, nothing else:
+// - No order yet → minutes since the ticket's first message.
+// - An order exists but isn't closed (paid + cerrado) yet → minutes since the earliest
+//   still-open order was created.
+// A ticket whose orders are all paid+cerrado is never urgent, no matter how long ago
+// that was or whether the customer wrote again after — that's not what this alerts on.
 function ticketElapsedMins(ticket: Ticket, ticketOrders: Order[]): number {
   if (ticketOrders.length === 0) {
     // Since the FIRST message, not the last — otherwise the client sending another
@@ -58,41 +59,13 @@ function ticketElapsedMins(ticket: Ticket, ticketOrders: Order[]): number {
     return minsSinceDate(ticket.created_at);
   }
 
-  const doneOrders = ticketOrders.filter(o => o.paid && o.status === 'cerrado');
-  const allDone = doneOrders.length === ticketOrders.length;
-
-  if (allDone) {
-    const lastPaidMs = doneOrders
-      .filter(o => o.paid_at)
-      .reduce((max, o) => Math.max(max, new Date(o.paid_at!).getTime()), 0);
-    // Customer re-engaged after last order was paid → count from re-engagement
-    if (lastPaidMs > 0 && new Date(ticket.last_message_at).getTime() > lastPaidMs) {
-      return minsSinceDate(ticket.last_message_at);
-    }
-    return 0;
-  }
-
-  // There are active (unpaid or not cerrado) orders
-  const lastPaidMs = doneOrders
-    .filter(o => o.paid_at)
-    .reduce((max, o) => Math.max(max, new Date(o.paid_at!).getTime()), 0);
-
-  if (lastPaidMs > 0) {
-    // New cycle: timer from when last order was paid
-    return Math.floor((Date.now() - lastPaidMs) / 60000);
-  }
-
-  // First cycle: timer from the earliest active order
-  const activeOrders = ticketOrders.filter(o => !o.paid || o.status !== 'cerrado');
+  const activeOrders = ticketOrders.filter(o => !(o.paid && o.status === 'cerrado'));
+  if (activeOrders.length === 0) return 0;
   const firstActiveMs = activeOrders.reduce(
     (min, o) => Math.min(min, new Date(o.created_at).getTime()),
     Infinity,
   );
-  if (firstActiveMs !== Infinity) {
-    return Math.floor((Date.now() - firstActiveMs) / 60000);
-  }
-
-  return minsSinceDate(ticket.last_message_at);
+  return Math.floor((Date.now() - firstActiveMs) / 60000);
 }
 
 function isOrderUrg(order: Order): boolean {
@@ -101,14 +74,7 @@ function isOrderUrg(order: Order): boolean {
 }
 
 function isTicketUrg(ticket: Ticket, ticketOrders: Order[]): boolean {
-  const elapsed = ticketElapsedMins(ticket, ticketOrders);
-  if (elapsed === 0) return false;
-  const hasActive = ticketOrders.some(o => !o.paid || o.status !== 'cerrado');
-  // No orders: urg after 20min (since first message) | active order: urg after 20min
-  // (since created) | re-engaged after a closed cycle: urg after 10min
-  if (ticketOrders.length === 0) return elapsed > 20;
-  if (hasActive) return elapsed > 20;
-  return elapsed > 10;
+  return ticketElapsedMins(ticket, ticketOrders) > 20;
 }
 
 export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket, onCreateFromTicket }: Props) {
@@ -119,6 +85,9 @@ export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket,
   const [, setTick] = useState(0);
   const moveOrder = useMoveOrder();
   const drag = useRef<{ orderId: string; ticketId: string | null } | null>(null);
+  // Red-zone only means something for what's happening right now — looking at a past
+  // day shouldn't paint everything on it as urgent forever.
+  const isToday = fecha === todayStr();
 
   function toggleExpand(orderId: string) {
     setExpandedCards((prev) => {
@@ -221,15 +190,15 @@ export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket,
   }, {} as Record<string, Order[]>);
 
 
-  const urgTickets = filteredTickets.filter((t) => {
+  const urgTickets = isToday ? filteredTickets.filter((t) => {
     const tOrds = filteredOrders.filter((o) => t.orders.some((to) => to.id === o.id));
     return isTicketUrg(t, tOrds);
-  });
+  }) : [];
 
   function renderCard(ord: Order, ticketId: string | null) {
     const showTimer = !ord.paid && ord.status !== 'cerrado';
     const mins = showTimer ? minsSinceDate(ord.created_at) : 0;
-    const urg = isOrderUrg(ord);
+    const urg = isToday && isOrderUrg(ord);
     const warn = showTimer && mins > 15;
     const total = ord.items.reduce((sum, i) => sum + Number(i.price), 0);
     const isExpanded = expandedCards.has(ord.id);
@@ -374,7 +343,7 @@ export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket,
 
           {filteredTickets.map((ticket) => {
             const ticketOrders = filteredOrders.filter((o) => ticket.orders.some((to) => to.id === o.id));
-            const urg = isTicketUrg(ticket, ticketOrders);
+            const urg = isToday && isTicketUrg(ticket, ticketOrders);
             const isCollapsed = collapsedTickets.has(ticket.id);
             const tNum = `T-${String(filteredTickets.indexOf(ticket) + 1).padStart(2, '0')}`;
 
