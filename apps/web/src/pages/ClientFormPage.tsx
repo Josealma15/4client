@@ -130,6 +130,7 @@ export default function ClientFormPage() {
   }
 
   async function handleSubmit() {
+    if (submitting) return; // already in flight — a fast double-click/tap shouldn't fire twice
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
     setSubmitError('');
     setSubmitting(true);
@@ -142,6 +143,10 @@ export default function ClientFormPage() {
           items: selected.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
         }),
       });
+      if (res.status === 429) {
+        setSubmitError('Enviaste varios pedidos muy seguido. Espera un minuto e intenta de nuevo.');
+        return;
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? 'Error');

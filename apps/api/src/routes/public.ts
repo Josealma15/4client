@@ -97,9 +97,13 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/v1/public/submit — cliente envía su pedido → crea Order directamente
-  // Rate limited to 5/min per IP — dedicated cap on top of the global limit, since a
-  // form link is valid for 7 days with no revocation.
-  fastify.post('/submit', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
+  // Rate limited per IP — dedicated cap on top of the global limit, since a form link
+  // is valid for 7 days with no revocation. MAX_FORM_ORDERS_PER_TICKET below is the
+  // real anti-abuse guard (caps actual orders created per link); this is just a
+  // backstop against a script hammering the endpoint, not meant to throttle a person
+  // clicking submit a few times while testing/fixing their order — 5/min genuinely
+  // wasn't enough headroom for that and was blocking real use.
+  fastify.post('/submit', { config: { rateLimit: { max: 15, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = z.object({
       token: z.string().min(1),
       items: z.array(z.object({

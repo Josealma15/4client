@@ -8,6 +8,7 @@ export interface ServerToClientEvents {
   'order:paid': (data: { orderId: string }) => void;
   'ticket:message': (data: { ticketId: string; message: TicketMessage }) => void;
   'ticket:unread': (data: { ticketId: string; count: number }) => void;
+  'cierre:done': (data: { fecha: string }) => void;
 }
 
 export interface ClientToServerEvents {
