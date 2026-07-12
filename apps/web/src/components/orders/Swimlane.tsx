@@ -157,8 +157,21 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
 
   function moveNext(order: Order) {
     const idx = STATUS_ORDER.indexOf(order.status);
-    if (idx < 0 || idx >= STATUS_ORDER.length - 2) return;
-    moveOrder.mutate({ id: order.id, status: STATUS_ORDER[idx + 1] }, {
+    if (idx < 0 || idx >= STATUS_ORDER.length - 1) return; // already 'cerrado'
+    const nextStatus = STATUS_ORDER[idx + 1];
+    if (nextStatus === 'cerrado') {
+      // 'cerrado' isn't a plain status move — the backend only allows reaching it
+      // through the guarded /cobro flow (amount received + password). Same path the
+      // drag-and-drop-onto-"cerrado" column already uses below.
+      const total = order.items.reduce((s, i) => s + Number(i.price), 0);
+      if (total <= 0) {
+        toast('No es posible cerrar el pedido porque no tiene un total calculado', true);
+        return;
+      }
+      setCobroDirectId(order.id);
+      return;
+    }
+    moveOrder.mutate({ id: order.id, status: nextStatus }, {
       onError: (e: any) => toast(e.message, true),
     });
   }
@@ -305,8 +318,8 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
           <button className="dc-det-btn" onClick={(e) => { e.stopPropagation(); setDetailId(ord.id); }}>
             <Eye size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />Ver
           </button>
-          <button className="dc-btn" title="Avanzar"
-            disabled={ord.locked || ord.status === 'cerrado' || ord.status === 'entregado'}
+          <button className="dc-btn" title={ord.status === 'entregado' ? 'Cerrar pedido' : 'Avanzar'}
+            disabled={ord.locked || ord.status === 'cerrado'}
             onClick={(e) => { e.stopPropagation(); moveNext(ord); }}>
             <ChevronRight size={14} />
           </button>

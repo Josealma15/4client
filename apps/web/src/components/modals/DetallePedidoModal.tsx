@@ -54,6 +54,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const isAdmin = user?.role === 'admin';
+  // encargado has the same order-management permissions as admin everywhere else in
+  // the app (can cobro, move status, etc. — see requireRole('admin', 'encargado') on
+  // the backend) except this modal, where a stricter admin-only isAdmin left them
+  // without the papelera button and other actions admin has on the exact same order.
+  const canManage = isAdmin || user?.role === 'encargado' || user?.role === 'dev';
   const qc = useQueryClient();
   const { data: products = [] } = useProducts();
   const { data: employees = [] } = useEmployees();
@@ -244,7 +249,10 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   function generatePDF(): void {
     const doc = buildPDFDoc();
     if (!doc || !order) return;
-    doc.save(`Factura_${order.num}.pdf`);
+    // doc.save() always forces a browser download with no way to opt out — open it in
+    // a new tab instead so the browser's own PDF viewer shows it; downloading from
+    // there, if wanted, stays a deliberate action the person takes themselves.
+    window.open(doc.output('bloburl'), '_blank');
   }
 
   async function sendInvoiceToChat() {
@@ -257,7 +265,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       const url = res.url;
       const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
       const orgName = user?.orgName ?? '4Client';
-      const msg = `Factura Pedido #${order.num} - ${orgName}\nCliente: ${order.customer_name}\nTotal: $${total.toLocaleString('es-CO')}\nDescarga tu factura: ${url}`;
+      const msg = `Factura Pedido #${order.num} - ${orgName}\nCliente: ${order.customer_name}\nTotal: $${total.toLocaleString('es-CO')}\nVisualiza tu factura: ${url}`;
       invoiceMut.mutate(msg);
     } catch {
       toast('Error al subir la factura', true);
@@ -466,7 +474,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   <div><span style={{ color: 'var(--gt)' }}>Hora cierre: </span><strong>{formatDateTime(order.paid_at)}</strong></div>
                   <div><span style={{ color: 'var(--gt)' }}>Total: </span><strong>{fmtCOP(total)}</strong></div>
                   <div><span style={{ color: 'var(--gt)' }}>Recibido: </span><strong>{fmtCOP(Number(order.amount_received ?? 0))}</strong></div>
-                  {isAdmin && (
+                  {canManage && (
                     <div><span style={{ color: 'var(--gt)' }}>Vuelto: </span><strong>{fmtCOP(Number(order.change_amount ?? 0))}</strong></div>
                   )}
                 </div>
@@ -540,8 +548,8 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               clearKey={catalogClearKey}
             />
 
-            {/* Admin-only history */}
-            {isAdmin && order.history && order.history.length > 0 && (
+            {/* History — visible to whoever can manage this order */}
+            {canManage && order.history && order.history.length > 0 && (
               <div>
                 <div className={`hist-toggle${showHist ? ' open' : ''}`} onClick={() => setShowHist(!showHist)}>
                   <ChevronDown size={16} style={{ transition: 'transform .2s', transform: showHist ? 'rotate(180deg)' : 'none' }} />
@@ -559,12 +567,12 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             )}
 
             <div className="mactions" style={{ flexWrap: 'wrap' }}>
-              {!locked && isAdmin && order.status !== 'papelera' && (
+              {!locked && canManage && order.status !== 'papelera' && (
                 <button className="bdel"
                   onClick={() => setConfirmDlg({ msg: '¿Mover este pedido a la papelera?', onOk: () => papeleraMut.mutate(), danger: true })}
                   disabled={papeleraMut.isPending}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Trash2 size={14} /> Papelera
+                  style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Trash2 size={13} /> Papelera
                 </button>
               )}
               {!locked && (
@@ -574,27 +582,27 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                     saveMut.mutate();
                   }}
                   disabled={saveMut.isPending || !(isDirty || catalogDirty)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: (isDirty || catalogDirty) ? 1 : 0.5 }}>
-                  <CheckCircle size={14} /> {saveMut.isPending ? 'Guardando...' : 'Guardar cambios'}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: (isDirty || catalogDirty) ? 1 : 0.5 }}>
+                  <CheckCircle size={13} /> {saveMut.isPending ? 'Guardando...' : 'Guardar'}
                 </button>
               )}
               {items.length > 0 && (
                 <button className="bsec" onClick={copyInvoice}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText size={14} /> Copiar
+                  style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <FileText size={13} /> Copiar
                 </button>
               )}
               {items.length > 0 && (
                 <button className="bsec" onClick={generatePDF}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText size={14} /> PDF
+                  style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <FileText size={13} /> PDF
                 </button>
               )}
               {items.length > 0 && order.ticket_id && (
                 <button className="bsec" onClick={sendInvoiceToChat}
                   disabled={invoiceMut.isPending}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: 'var(--v)', color: 'var(--v)' }}>
-                  <Send size={14} /> {invoiceMut.isPending ? 'Enviando...' : 'Enviar factura al chat'}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, borderColor: 'var(--v)', color: 'var(--v)' }}>
+                  <Send size={13} /> {invoiceMut.isPending ? 'Enviando...' : 'Enviar factura'}
                 </button>
               )}
             </div>

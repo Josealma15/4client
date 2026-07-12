@@ -30,7 +30,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     // underscores as italic-markdown delimiters, so a URL containing them gets
     // cut in the middle and only part of the link becomes tappable on the client's phone.
     const safeNum = body.data.num.replace(/_/g, '-');
-    const filename = `Factura-${orgPrefix}-${safeNum}-${id}.pdf`;
+    // Colombia local time (UTC-5) baked into the filename so invoices sitting in the R2
+    // bucket are self-describing for an audit — the bucket's own "uploaded at" metadata
+    // reflects when this request happened, not what day/hour the invoice is actually for.
+    const bogotaMs = Date.now() - 5 * 3600000;
+    const stamp = new Date(bogotaMs).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-');
+    const filename = `Factura-${stamp}-${orgPrefix}-${safeNum}-${id}.pdf`;
 
     const r = req as FastifyRequest;
     const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
@@ -76,9 +81,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   // GET /api/v1/files/:filename — public (no auth: filename is unguessable org+UUID combo)
   fastify.get('/:filename', async (req, reply) => {
     const { filename } = req.params as { filename: string };
-    // Accepts both the current hyphen-separated format and the older underscore-separated
-    // one, so invoice links already sent to clients before this change keep working.
-    if (!/^Factura[_-][a-f0-9]{12}[_-][a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
+    // Deliberately not tied to the exact current segment layout (timestamp/org/num/id)
+    // — only what actually matters for safety: starts with "Factura", ends in ".pdf",
+    // and the middle can't contain a path separator or traversal. This way every past
+    // filename shape we've generated (and any future one) keeps resolving without
+    // needing this regex to be revised in lockstep every time that layout changes.
+    if (!/^Factura[_-][a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
       return reply.status(400).send({ error: 'Archivo inválido' });
     }
 
