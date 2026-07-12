@@ -32,9 +32,16 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       try {
         const url = await storage.upload(`invoices/${filename}`, decoded);
         return reply.status(201).send({ url });
-      } catch (err) {
+      } catch (err: any) {
         req.log.error({ err }, 'R2 upload failed for invoice');
-        return reply.status(502).send({ error: 'No se pudo subir la factura al almacenamiento. Intenta de nuevo.', code: 'STORAGE_UPLOAD_FAILED' });
+        // Staff-only route — safe to surface the AWS/R2 error name (e.g. NoSuchBucket,
+        // AccessDenied, InvalidAccessKeyId) so whoever configured R2 can actually fix it
+        // instead of staring at a generic 502.
+        const reason = err?.name ?? err?.Code ?? err?.message ?? 'desconocido';
+        return reply.status(502).send({
+          error: `No se pudo subir la factura al almacenamiento (${reason}). Revisa la configuración de R2 en DevTools.`,
+          code: 'STORAGE_UPLOAD_FAILED',
+        });
       }
     }
 
@@ -42,9 +49,10 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     try {
       if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
       fs.writeFileSync(path.join(UPLOADS_DIR, filename), decoded);
-    } catch (err) {
+    } catch (err: any) {
       req.log.error({ err }, 'Local invoice write failed');
-      return reply.status(502).send({ error: 'No se pudo guardar la factura. Intenta de nuevo.', code: 'STORAGE_WRITE_FAILED' });
+      const reason = err?.code ?? err?.message ?? 'desconocido';
+      return reply.status(502).send({ error: `No se pudo guardar la factura (${reason}). Intenta de nuevo.`, code: 'STORAGE_WRITE_FAILED' });
     }
     const r = req as FastifyRequest;
     const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;

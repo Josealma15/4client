@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useState, KeyboardEvent } from 'react';
-import { Check, SendHorizontal, ArrowRight, Lock } from 'lucide-react';
+import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
@@ -75,6 +75,25 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
     onError: (e: any) => toast(e.message, true),
   });
 
+  const formLinkMut = useMutation({
+    mutationFn: (text: string) => api.post(`/inbox/${ticketId}/reply`, { text }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      toast('Formulario enviado');
+    },
+    onError: (e: any) => toast(e.message, true),
+  });
+
+  async function sendFormLink() {
+    try {
+      const res = await api.get<{ data: { url: string } }>(`/inbox/${ticketId}/form-link`);
+      formLinkMut.mutate(res.data.url);
+    } catch {
+      toast('No se pudo generar el link', true);
+    }
+  }
+
   const activeOrders = (ticket?.orders ?? []).filter((o: any) => o.status !== 'papelera');
   const hasOrders = activeOrders.length > 0;
 
@@ -94,14 +113,29 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
           flexDirection: 'column', flexShrink: 0, minHeight: 0,
         }}>
           {/* Chat header */}
-          <div style={{ background: 'var(--vd)', color: '#fff', padding: '14px 16px', flexShrink: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 14 }}>
-              {isLoading ? 'Cargando...' : ticket?.customer_name}
+          <div style={{ background: 'var(--vd)', color: '#fff', padding: '14px 16px', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                {isLoading ? 'Cargando...' : ticket?.customer_name}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>
+                {ticket?.phone}
+                {ticket?.messages?.length != null && ` · ${ticket.messages.length} mensajes`}
+              </div>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              {ticket?.phone}
-              {ticket?.messages?.length != null && ` · ${ticket.messages.length} mensajes`}
-            </div>
+            <button
+              title="Enviar formulario de pedido al cliente"
+              onClick={sendFormLink}
+              disabled={formLinkMut.isPending}
+              style={{
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: 8, color: '#fff', cursor: 'pointer', flexShrink: 0,
+                padding: '5px 9px', fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <ClipboardList size={13} /> Formulario
+            </button>
           </div>
 
           {/* Messages — scrollable */}

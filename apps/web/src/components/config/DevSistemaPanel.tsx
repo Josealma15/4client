@@ -20,8 +20,15 @@ export default function DevSistemaPanel() {
     enabled: false,
   });
 
+  const { data: storageTest, refetch: testStorage, isFetching: testingStorage } = useQuery({
+    queryKey: ['dev-storage-test'],
+    queryFn: () => api.get<{ data: any }>('/dev/storage-test').then(r => r.data),
+    enabled: false,
+  });
+
   const h = health as any;
   const env = envStatus as any;
+  const st = storageTest as any;
 
   const envRows = env ? [
     { k: 'NODE_ENV',                  v: env.NODE_ENV,                  sensitive: false },
@@ -121,6 +128,34 @@ export default function DevSistemaPanel() {
           </div>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--gt)' }}>Clic en Cargar para ver estado de vars de entorno.</div>
+        )}
+      </div>
+
+      {/* Storage test card — actually tries a real R2 upload, not just checking env vars are set */}
+      <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            Almacenamiento de facturas (R2)
+          </div>
+          <button className="bsec" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => testStorage()} disabled={testingStorage}>
+            {testingStorage ? 'Probando...' : 'Probar subida'}
+          </button>
+        </div>
+        {st ? (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12 }}>
+            {st.ok
+              ? <CheckCircle size={14} color="var(--v)" style={{ flexShrink: 0, marginTop: 1 }} />
+              : <XCircle size={14} color="var(--r)" style={{ flexShrink: 0, marginTop: 1 }} />}
+            <div>
+              <div style={{ color: st.ok ? 'var(--v)' : 'var(--r)', fontWeight: 700 }}>
+                {st.configured === false ? 'R2 no configurado (usando disco local)' : st.ok ? 'Subida de prueba exitosa' : 'Falló la subida de prueba'}
+              </div>
+              {st.error_name && <div style={{ color: 'var(--gt)', fontFamily: 'monospace', fontSize: 11, marginTop: 3 }}>{st.error_name}: {st.error_message}</div>}
+              {st.detail && <div style={{ color: 'var(--gt)', fontSize: 11, marginTop: 3 }}>{st.detail}</div>}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--gt)' }}>Clic en Probar subida para intentar guardar un archivo de prueba y ver el error real de R2, si lo hay.</div>
         )}
       </div>
     </div>

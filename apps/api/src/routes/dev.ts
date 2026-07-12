@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { config } from '../config.js';
+import { storage } from '../services/storage.js';
 import bcrypt from 'bcrypt';
 
 const ALLOWED_TABLES = [
@@ -162,6 +163,30 @@ export default async function devRoutes(fastify: FastifyInstance) {
         SENTRY_DSN:                !!config.SENTRY_DSN,
       },
     });
+  });
+
+  // GET /dev/storage-test — actually tries to upload a tiny test file to R2 (or the
+  // local fallback) and reports the real error, instead of just checking env vars are
+  // set. env-status only shows booleans — this catches wrong bucket name, bad
+  // credentials, etc. that env-status can't see.
+  fastify.get('/storage-test', async (_req, reply) => {
+    const configured = storage.isConfigured();
+    if (!configured) {
+      return reply.send({ data: { configured: false, ok: false, detail: 'R2 no configurado — usando almacenamiento local (uploads/)' } });
+    }
+    try {
+      const testKey = `_healthcheck/${Date.now()}.txt`;
+      const url = await storage.upload(testKey, Buffer.from('4client storage test'), 'text/plain');
+      return reply.send({ data: { configured: true, ok: true, url } });
+    } catch (err: any) {
+      return reply.send({
+        data: {
+          configured: true, ok: false,
+          error_name: err?.name ?? err?.Code ?? null,
+          error_message: err?.message ?? String(err),
+        },
+      });
+    }
   });
 
   // GET /dev/health — extended health with DB ping

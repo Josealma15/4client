@@ -124,6 +124,7 @@ export default function ClientFormPage() {
   function clearOrder() {
     if (!window.confirm('¿Borrar todo el pedido? Se perderán los productos agregados.')) return;
     setSelected([]);
+    setPendingQty({});
     setShowSummary(false);
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
   }
@@ -371,13 +372,14 @@ export default function ClientFormPage() {
               title="Borrar pedido"
               aria-label="Borrar pedido"
               style={{
-                flex: '0 0 auto', padding: '14px',
-                background: '#fff', color: '#999', border: '2px solid #eee',
+                flex: '0 0 auto', padding: '14px 14px',
+                background: '#fff', color: '#DC2626', border: '2px solid #F5C6C6',
                 borderRadius: 12, cursor: submitting ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontWeight: 700, fontSize: 13,
                 opacity: submitting ? 0.5 : 1,
               }}>
-              <Trash2 size={16} />
+              <Trash2 size={16} /> Borrar
             </button>
             <button
               onClick={handleSubmit}

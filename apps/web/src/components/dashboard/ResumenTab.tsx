@@ -106,47 +106,53 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
 
       {dashboard && (
         <>
-          {/* Chat stats */}
-          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
-            Chats de WhatsApp
-          </div>
-          <div className="agrid">
-            <div className="acard">
-              <div className="ai"><MessageSquare size={26} color="var(--gt)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.chats?.total ?? 0}</div>
-              <div className="al2">Chats totales</div>
+          <div className="arow">
+            {/* Chat stats */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
+                Chats de WhatsApp
+              </div>
+              <div className="agrid">
+                <div className="acard">
+                  <div className="ai"><MessageSquare size={26} color="var(--gt)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.chats?.total ?? 0}</div>
+                  <div className="al2">Chats totales</div>
+                </div>
+                <div className="acard r">
+                  <div className="ai"><MessageCircleWarning size={26} color="var(--r)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.chats?.activos ?? 0}</div>
+                  <div className="al2">Chat con pedido activo</div>
+                </div>
+                <div className="acard v">
+                  <div className="ai"><MessageCircleCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.chats?.completos ?? 0}</div>
+                  <div className="al2">Chat con pedidos completados</div>
+                </div>
+              </div>
             </div>
-            <div className="acard r">
-              <div className="ai"><MessageCircleWarning size={26} color="var(--r)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.chats?.activos ?? 0}</div>
-              <div className="al2">Chat con pedido activo</div>
-            </div>
-            <div className="acard v">
-              <div className="ai"><MessageCircleCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.chats?.completos ?? 0}</div>
-              <div className="al2">Chat con pedidos completados</div>
-            </div>
-          </div>
 
-          {/* Order stats */}
-          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8, marginTop: 10 }}>
-            Pedidos
-          </div>
-          <div className="agrid">
-            <div className="acard">
-              <div className="ai"><Package size={26} color="var(--gt)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.totales?.total ?? 0}</div>
-              <div className="al2">Pedidos totales</div>
-            </div>
-            <div className="acard r">
-              <div className="ai"><Clock size={26} color="var(--r)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.totales?.pendientes ?? 0}</div>
-              <div className="al2">Pendientes</div>
-            </div>
-            <div className="acard v">
-              <div className="ai"><PackageCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.totales?.entregados ?? 0}</div>
-              <div className="al2">Cerrados/Cobrados</div>
+            {/* Order stats */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
+                Pedidos
+              </div>
+              <div className="agrid">
+                <div className="acard">
+                  <div className="ai"><Package size={26} color="var(--gt)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.totales?.total ?? 0}</div>
+                  <div className="al2">Pedidos totales</div>
+                </div>
+                <div className="acard r">
+                  <div className="ai"><Clock size={26} color="var(--r)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.totales?.pendientes ?? 0}</div>
+                  <div className="al2">Pendientes</div>
+                </div>
+                <div className="acard v">
+                  <div className="ai"><PackageCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
+                  <div className="av">{dashboard.totales?.entregados ?? 0}</div>
+                  <div className="al2">Cerrados/Cobrados</div>
+                </div>
+              </div>
             </div>
           </div>
 
