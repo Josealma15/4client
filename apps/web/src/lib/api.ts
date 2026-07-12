@@ -17,7 +17,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
 
-  if (res.status === 401) {
+  // Only treat a 401 as "session expired, try to refresh" when this request actually
+  // carried a session token. Without this guard, a 401 from e.g. login with a wrong
+  // password (no token attached — nothing to refresh) triggered a doomed refresh
+  // attempt anyway, which always failed and overwrote the real "Credenciales
+  // incorrectas" server message with a generic "UNAUTHORIZED" error.
+  if (res.status === 401 && token) {
     const refreshed = await tryRefresh();
     if (refreshed) return request<T>(path, options);
     useAuthStore.getState().clearAuth();
