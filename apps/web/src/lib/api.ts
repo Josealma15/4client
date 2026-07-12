@@ -48,11 +48,22 @@ async function doRefresh(): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // HttpOnly cookie sent automatically
     });
-    if (!res.ok) { clearAuth(); return false; }
+    if (!res.ok) {
+      // Diagnostic only — this is the one path that keeps causing "session closes
+      // out of nowhere" reports with no way to tell WHY from the outside. Next time
+      // it happens, check the browser console for this line: it tells us whether the
+      // cookie made it to the server at all (401 body) vs the request never reached
+      // it (network/CORS failure, caught below) vs it's a real expiry/reuse case.
+      const body = await res.json().catch(() => null);
+      console.error('[auth] refresh failed', { status: res.status, code: body?.code, error: body?.error });
+      clearAuth();
+      return false;
+    }
     const { data } = await res.json();
     setAccessToken(data.accessToken);
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[auth] refresh request threw (network/CORS failure, not a server response)', err);
     clearAuth();
     return false;
   }

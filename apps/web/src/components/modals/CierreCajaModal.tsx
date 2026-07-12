@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Decision = 'manana' | 'forzar_cierre' | 'cancelar';
+type Decision = 'manana' | 'forzar_cierre' | 'cancelar' | 'dejar_activo';
 type TicketDecision = 'manana' | 'atendido';
 
 export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Props) {
@@ -70,6 +70,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
       manana: 'Pasar a mañana',
       forzar_cierre: 'Cerrar sin cobro',
       cancelar: 'Papelera',
+      dejar_activo: 'Dejado activo (sin cambios)',
       '': 'Sin decidir',
     };
     const header = ['#', 'Cliente', 'Teléfono', 'Dirección', 'Productos', 'Total', 'Pago', 'Estado', 'Acción cierre'].join(',');
@@ -201,6 +202,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                       style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--a)' }}
                     >
                       <option value="" disabled>— Elegir acción —</option>
+                      <option value="dejar_activo">Dejar activo (sin cambios)</option>
                       <option value="manana">Pasar a mañana</option>
                       <option value="forzar_cierre">Cerrar sin cobro</option>
                       <option value="cancelar">Enviar a papelera</option>

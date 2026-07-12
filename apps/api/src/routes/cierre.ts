@@ -7,7 +7,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
   fastify.post('/', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const body = z.object({
       fecha: z.string(),
-      decisions: z.record(z.enum(['manana', 'forzar_cierre', 'cancelar'])),
+      decisions: z.record(z.enum(['manana', 'forzar_cierre', 'cancelar', 'dejar_activo'])),
       ticket_decisions: z.record(z.enum(['manana', 'atendido'])).optional(),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
@@ -62,6 +62,12 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
           const marker = `pasado_manana:${fechaStr}`;
           const newNotes = existingOrder?.notes ? `${existingOrder.notes}\n${marker}` : marker;
           await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { fecha: tomorrow, notes: newNotes } });
+          // Move the whole conversation along with the order — otherwise the order
+          // shows up tomorrow but its ticket doesn't, and the swimlane (which groups
+          // orders under their ticket) never renders it at all.
+          if (existingOrder?.ticket_id) {
+            await tx.ticket.update({ where: { id: existingOrder.ticket_id }, data: { deferred_to: tomorrow } });
+          }
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
           });
@@ -74,6 +80,14 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
           await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'cerrado', paid: true, locked: true, paid_at: new Date(), paid_by: req.user.userId } });
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cierre forzado por admin en cierre de caja' },
+          });
+        } else if (decision === 'dejar_activo') {
+          // No changes at all — order stays exactly as it is (same fecha, same status).
+          // Just an explicit acknowledgment so cierre can proceed without forcing an
+          // in-progress order (e.g. still "camino") into a fake close or a date it
+          // hasn't actually rolled into yet.
+          await tx.orderHistory.create({
+            data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Dejado activo (sin cambios) en cierre de caja' },
           });
         }
       }
