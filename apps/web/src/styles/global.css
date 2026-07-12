@@ -344,3 +344,91 @@ input,select,textarea{font-family:var(--f);}
 .ord-hist-line:last-child{border-bottom:none;}
 .ord-hist-dot{width:7px;height:7px;border-radius:50%;background:var(--v);flex-shrink:0;margin-top:5px;}
 .chg-cnt{background:var(--a);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;}
+
+/* ============================================================
+   RESPONSIVE
+   Targets: tablet landscape + phone landscape for the swimlane
+   board (portrait/narrow-phone swimlane is explicitly out of
+   scope - too many columns to ever look good narrow; .slane-wrap
+   already has overflow-x:auto as the fallback safety net).
+   Modals stay usable down to phone portrait.
+   Ordered widest -> narrowest so later blocks override earlier
+   ones for the same selector at smaller widths.
+   ============================================================ */
+
+/* TABLET LANDSCAPE (~900px-1180px): tighten swimlane sizing, bump touch targets to ~32px */
+@media (max-width:1180px){
+  .slane{grid-template-columns:200px repeat(6,minmax(136px,1fr));min-width:1016px;}
+  .slane-hcell{padding:8px 9px;font-size:10px;}
+  .slane-tcell{padding:9px 9px;}
+  .slane-scell{padding:7px;min-height:100px;gap:6px;}
+  .tk-name{font-size:13px;}
+  .tk-preview{font-size:11px;}
+  .tk-ver-btn{padding:8px 10px;min-height:32px;}
+  .tk-crear-btn{min-height:32px;padding:7px 10px;}
+  .dc-card{padding:8px 9px;}
+  .dc-num{font-size:11px;}
+  .dc-tot{font-size:12px;}
+  .dc-btn{width:30px;height:32px;font-size:15px;}
+  .dc-det-btn{height:32px;font-size:10px;padding:0 3px;}
+  .ac{padding:16px;}
+  .tab{padding:0 13px;font-size:13px;}
+  .khead{gap:8px;}
+}
+
+/* PHONE LANDSCAPE (~560px-900px): narrowest realistic target; .slane-wrap horizontal scroll is the safety net when content doesn't perfectly fit */
+@media (max-width:900px){
+  .slane{grid-template-columns:148px repeat(6,minmax(108px,1fr));min-width:796px;}
+  .slane-hcell{padding:6px 6px;font-size:9px;letter-spacing:.3px;}
+  .slane-tcell{padding:7px 6px;}
+  .slane-scell{padding:5px;min-height:88px;gap:4px;}
+  .tk-name{font-size:12px;}
+  .tk-preview{font-size:10px;}
+  .tk-phone{font-size:9px;}
+  .tk-badge{font-size:9px;padding:2px 6px;}
+  .dc-card{padding:6px 7px;}
+  .dc-num{font-size:10px;}
+  .dc-prod{font-size:10px;}
+  .dc-tot{font-size:11px;}
+  .dc-nav{gap:3px;}
+  .dc-det-btn{padding:0 2px;}
+  .ah{padding:0 10px;}
+  .hlogo{padding:0 10px 0 0;}
+  .hlogo-t{font-size:16px;}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tab{padding:0 10px;font-size:12px;gap:5px;white-space:nowrap;}
+  .huser{padding:5px 10px;gap:6px;}
+  .un{font-size:12px;}
+  .ur2{font-size:10px;}
+  .ac{padding:12px;}
+  .khead{margin-bottom:12px;}
+  .ktit{font-size:17px;}
+}
+
+/* PHONE PORTRAIT (<560px): swimlane itself stays out of scope (relies on the rules above + overflow-x:auto),
+   but guard against page-level breakage and keep modals usable single-column */
+@media (max-width:560px){
+  .ac{overflow-x:hidden;padding:10px;}
+  .khead{gap:8px;}
+  .ktit{font-size:16px;}
+  .agrid{grid-template-columns:1fr;}
+  .acard{padding:14px;}
+  .moverlay{padding:10px;}
+  .mhead{padding:14px 16px 12px;}
+  .mtit{font-size:16px;}
+  .mbody{padding:14px 16px 18px;}
+  .mactions{flex-direction:column;align-items:stretch;}
+  .mactions .bpri{flex:none;width:100%;}
+  .mactions .bsec,.mactions .bdel,.mactions .bverde,.mactions .bnew{width:100%;justify-content:center;}
+  .warnbox,.cobrobox{padding:18px;}
+  .wbts{flex-direction:column;}
+  .irow{grid-template-columns:1fr 62px 62px 28px;gap:6px;padding:8px 10px;font-size:12px;}
+  .irow.locked-row{grid-template-columns:1fr 62px 62px;}
+  .iinput{padding:6px 8px;font-size:12px;}
+  .idel{width:26px;height:26px;}
+  .huser{padding:4px 8px;}
+  .ur2{display:none;}
+  .uav{width:26px;height:26px;font-size:11px;}
+  .hlogo-t{font-size:15px;}
+  .tab{padding:0 8px;font-size:11px;}
+}

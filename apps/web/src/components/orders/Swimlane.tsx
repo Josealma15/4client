@@ -184,6 +184,12 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
     if (!order || order.status === targetStatus) { drag.current = null; return; }
     if (order.locked) { toast('Pedido bloqueado', true); drag.current = null; return; }
     if (targetStatus === 'cerrado') {
+      const total = order.items.reduce((s, i) => s + Number(i.price), 0);
+      if (total <= 0) {
+        toast('No es posible cerrar el pedido porque no tiene un total calculado', true);
+        drag.current = null;
+        return;
+      }
       setCobroDirectId(drag.current.orderId);
       drag.current = null;
       return;

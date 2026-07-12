@@ -25,13 +25,13 @@ export default function DevWppPanel() {
   const save = useMutation({
     mutationFn: (data: any) => api.patch('/config/wpp', data),
     onSuccess: () => { toast('Config WPP guardada'); qc.invalidateQueries({ queryKey: ['config-org'] }); },
-    onError: () => toast('Error al guardar', true),
+    onError: (e: any) => toast(e.message, true),
   });
 
   function handleSave() {
     const data: any = { welcome_message: welcome || null };
-    if (phoneId.trim()) data.wpp_meta_phone_id = phoneId.trim();
-    if (token.trim()) data.wpp_meta_token = token.trim();
+    if (phoneId.trim()) data.wpp_meta_phone_id = phoneId.replace(/\s+/g, '');
+    if (token.trim()) data.wpp_meta_token = token.replace(/\s+/g, '');
     save.mutate(data);
   }
 

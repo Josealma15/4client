@@ -41,7 +41,7 @@ const createOrderSchema = z.object({
   customer_phone: z.string().max(20).optional(),
   address:        z.string().min(1).max(500),
   channel:        z.enum(['whatsapp', 'call']).default('whatsapp'),
-  payment_method: z.enum(['cash', 'transfer', 'cod']),
+  payment_method: z.enum(['sin_asignar', 'cash', 'transfer', 'cod']).default('sin_asignar'),
   employee_id:    z.string().uuid().optional(),
   notes:          z.string().max(1000).optional(),
   fecha:          z.string().optional(),
@@ -52,7 +52,7 @@ const updateOrderSchema = z.object({
   customer_name:  z.string().min(1).max(200).optional(),
   customer_phone: z.string().max(20).optional(),
   address:        z.string().min(1).max(500).optional(),
-  payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
+  payment_method: z.enum(['sin_asignar', 'cash', 'transfer', 'cod']).optional(),
   employee_id:    z.string().uuid().nullable().optional(),
   notes:          z.string().max(1000).optional(),
   items:          z.array(orderItemSchema).min(1).max(100).optional(),
@@ -176,7 +176,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const historyEntries: any[] = [];
 
     const PAYMENT_LABELS: Record<string, string> = {
-      cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia',
+      cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia', sin_asignar: 'Sin asignar',
     };
 
     // Registrar cambios en historial
@@ -326,6 +326,9 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (existing.locked) return reply.status(409).send({ error: 'Pedido ya cobrado', code: 'ORDER_LOCKED' });
 
     const total = existing.items.reduce((s, i) => s + Number(i.price), 0);
+    if (total <= 0) {
+      return reply.status(400).send({ error: 'No es posible cerrar el pedido porque no tiene un total calculado', code: 'NO_TOTAL' });
+    }
     const change = body.data.amount_received - total;
 
     const updated = await fastify.prisma.$transaction(async (tx) => {

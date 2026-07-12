@@ -159,7 +159,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           customer_phone: payload.clientPhone,
           address: 'Pendiente de confirmar',
           channel: 'whatsapp',
-          payment_method: 'transfer',
+          payment_method: 'sin_asignar',
           status: 'nuevo',
           source: 'form',
           registered_by: systemUser.id,

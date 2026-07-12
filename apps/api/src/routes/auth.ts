@@ -14,10 +14,15 @@ const loginSchema = z.object({
 // bcrypt.compare always runs regardless of whether user was found.
 const DUMMY_HASH = '$2b$12$LzVFpXDW.jkMhGlXb2WiIeq3rAhnWPvVRqSRLCLdTT0W5HjCMfBtm';
 
+// Frontend (Vercel) and backend (Railway) are different origins, so this cookie is
+// sent on cross-site fetches. SameSite=Strict (or Lax) is NEVER sent cross-site by
+// browsers — that silently broke refresh on every page reload, logging users out.
+// SameSite=None requires Secure, which is only true in production (fine — dev runs
+// same-origin through the Vite proxy, where Lax works and doesn't need Secure/HTTPS).
 const COOKIE_OPTS = {
   httpOnly: true,
   secure: config.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  sameSite: config.NODE_ENV === 'production' ? ('none' as const) : ('lax' as const),
   path: '/api/v1/auth',
   maxAge: 7 * 24 * 60 * 60, // 7 days
 };

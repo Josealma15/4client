@@ -22,11 +22,12 @@ const COD_COLORS: Record<string, string> = {
 
 function formatHour(raw: string | null | undefined): string {
   if (!raw) return '-';
-  if (raw.includes('T')) {
-    const d = new Date(raw);
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-  }
-  return raw.substring(0, 5);
+  // order_hour is a DB TIME column (no date/timezone) stored using the server's clock
+  // (UTC on Railway). Prisma serializes it as an epoch-day ISO string with a "Z" suffix,
+  // so it must be converted to Colombia local time explicitly — reading getUTCHours()
+  // directly (old behavior) showed the raw UTC hour, ~5h ahead of the real local time.
+  const d = raw.includes('T') ? new Date(raw) : new Date(`1970-01-01T${raw}Z`);
+  return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
 }
 
 function formatDateTime(raw: string | null | undefined): string {
@@ -496,6 +497,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 <label className="fl2">Método de pago</label>
                 <select className="fi2" disabled={locked} value={pago}
                   onChange={(e) => { setPago(e.target.value); markDirty(); }}>
+                  <option value="sin_asignar">Sin asignar</option>
                   <option value="transfer">Transferencia</option>
                   <option value="cash">Pagado en tienda</option>
                   <option value="cod">Cobro en casa</option>
@@ -550,15 +552,14 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   <Trash2 size={14} /> Papelera
                 </button>
               )}
-              <button className="bsec" onClick={handleClose}>Cerrar</button>
-              {isDirty && !locked && (
+              {!locked && (
                 <button className="bpri"
                   onClick={() => {
                     if (items.length === 0) { toast('El pedido debe tener al menos un producto', true); return; }
                     saveMut.mutate();
                   }}
-                  disabled={saveMut.isPending}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  disabled={saveMut.isPending || !(isDirty || catalogDirty)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: (isDirty || catalogDirty) ? 1 : 0.5 }}>
                   <CheckCircle size={14} /> {saveMut.isPending ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               )}
@@ -579,12 +580,6 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   disabled={invoiceMut.isPending}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: 'var(--v)', color: 'var(--v)' }}>
                   <Send size={14} /> {invoiceMut.isPending ? 'Enviando...' : 'Enviar factura al chat'}
-                </button>
-              )}
-              {!locked && (order.status === 'camino' || order.status === 'entregado') && !order.paid && (
-                <button className="bverde" onClick={() => setShowCobro(true)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <Banknote size={15} /> Confirmar cobro
                 </button>
               )}
             </div>
@@ -623,7 +618,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               </div>
             </div>
             <div className="fg2">
-              <label className="fl2">¿Cuánto entregó el domiciliario? <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span></label>
+              <label className="fl2">¿Cuánto se recibió? <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span></label>
               <input className="fi2" type="number" placeholder={`Mínimo: $${total.toLocaleString('es-CO')}`}
                 value={cobroRec} onChange={(e) => setCobroRec(e.target.value)}
                 style={{ borderColor: cobroRec && !cobroValido ? 'var(--r)' : undefined }} />
@@ -651,7 +646,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               </div>
             </div>
             <div style={{ display: 'flex', gap: 9, marginTop: 20 }}>
-              <button className="bsec" onClick={() => { setShowCobro(false); setCobroPass(''); }}>Cancelar</button>
+              <button className="bsec" onClick={onClose}>Cancelar</button>
               <button className="bpri" onClick={() => cobroMut.mutate()}
                 disabled={cobroMut.isPending || !cobroValido}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: cobroValido ? 1 : 0.5 }}>

@@ -26,6 +26,10 @@ export default fp(async (fastify) => {
 
     try {
       const payload = fastify.jwt.verify<{ userId: string; orgId: string; role: string }>(token);
+      // Reject form-link tokens (routes/public.ts) — same secret, different payload shape
+      // (no userId/role). Without this, a client's form link could open a socket and join
+      // their org's room, eavesdropping on every order/ticket event in real time.
+      if (!payload.userId || !payload.role) return next(new Error('Token inválido'));
       socket.data.user = payload;
       next();
     } catch {

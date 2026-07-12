@@ -29,13 +29,23 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     const filename = `Factura_${orgPrefix}_${body.data.num}_${id}.pdf`;
 
     if (storage.isConfigured()) {
-      const url = await storage.upload(`invoices/${filename}`, decoded);
-      return reply.status(201).send({ url });
+      try {
+        const url = await storage.upload(`invoices/${filename}`, decoded);
+        return reply.status(201).send({ url });
+      } catch (err) {
+        req.log.error({ err }, 'R2 upload failed for invoice');
+        return reply.status(502).send({ error: 'No se pudo subir la factura al almacenamiento. Intenta de nuevo.', code: 'STORAGE_UPLOAD_FAILED' });
+      }
     }
 
     // Local fallback (dev / pre-R2 prod)
-    if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    fs.writeFileSync(path.join(UPLOADS_DIR, filename), decoded);
+    try {
+      if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      fs.writeFileSync(path.join(UPLOADS_DIR, filename), decoded);
+    } catch (err) {
+      req.log.error({ err }, 'Local invoice write failed');
+      return reply.status(502).send({ error: 'No se pudo guardar la factura. Intenta de nuevo.', code: 'STORAGE_WRITE_FAILED' });
+    }
     const r = req as FastifyRequest;
     const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
     const proto = (r.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0] ?? r.protocol;

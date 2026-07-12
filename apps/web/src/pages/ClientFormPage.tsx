@@ -19,6 +19,8 @@ function groupByCategory(products: Product[]) {
 
 export default function ClientFormPage() {
   const token = new URLSearchParams(window.location.search).get('t') ?? '';
+  const draftKey = `4client_form_draft_${token}`;
+  const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
   const [state, setState] = useState<'loading' | 'invalid' | 'catalog' | 'done'>('loading');
   const [clientName, setClientName] = useState('');
@@ -34,11 +36,28 @@ export default function ClientFormPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  // becomes true once we've attempted to restore a persisted draft, so the
+  // persistence effect below doesn't clobber a saved draft with the initial empty state
+  const [hydrated, setHydrated] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!token) { setState('invalid'); setErrorMsg('Link inválido. Pide un nuevo link al negocio.'); return; }
+
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft && Array.isArray(draft.items) && typeof draft.savedAt === 'number' && Date.now() - draft.savedAt < DRAFT_MAX_AGE_MS) {
+          setSelected(draft.items);
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      }
+    } catch { /* localStorage unavailable (private mode, etc.) — ignore */ }
+    setHydrated(true);
+
     Promise.all([
       fetch(`${API}/api/v1/public/form-info?t=${encodeURIComponent(token)}`).then(r => r.json()),
       fetch(`${API}/api/v1/public/products?t=${encodeURIComponent(token)}`).then(r => r.json()),
@@ -53,6 +72,20 @@ export default function ClientFormPage() {
       })
       .catch(() => { setState('invalid'); setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.'); });
   }, [token]);
+
+  // Persist confirmed items as a draft so the client can resume within 1 day
+  // if they close the tab mid-order. Skip until the initial restore attempt
+  // above has run, so we don't overwrite a saved draft with the empty initial state.
+  useEffect(() => {
+    if (!hydrated || !token) return;
+    try {
+      if (selected.length === 0) {
+        localStorage.removeItem(draftKey);
+      } else {
+        localStorage.setItem(draftKey, JSON.stringify({ items: selected, savedAt: Date.now() }));
+      }
+    } catch { /* localStorage unavailable — ignore, form still works without persistence */ }
+  }, [selected, hydrated, token]);
 
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
@@ -88,6 +121,13 @@ export default function ClientFormPage() {
     setSelected(prev => prev.filter(i => i.productId !== productId));
   }
 
+  function clearOrder() {
+    if (!window.confirm('¿Borrar todo el pedido? Se perderán los productos agregados.')) return;
+    setSelected([]);
+    setShowSummary(false);
+    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+  }
+
   async function handleSubmit() {
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
     setSubmitError('');
@@ -106,6 +146,7 @@ export default function ClientFormPage() {
         throw new Error(err.error ?? 'Error');
       }
       setState('done');
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
     } catch (e: any) {
       setSubmitError(e.message === 'Link inválido o expirado' ? 'Este link ya expiró. Pide uno nuevo.' : 'Hubo un problema. Intenta de nuevo.');
     } finally {
@@ -323,6 +364,20 @@ export default function ClientFormPage() {
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
               <Check size={14} color={GREEN} /> {selectedCount}
+            </button>
+            <button
+              onClick={clearOrder}
+              disabled={submitting}
+              title="Borrar pedido"
+              aria-label="Borrar pedido"
+              style={{
+                flex: '0 0 auto', padding: '14px',
+                background: '#fff', color: '#999', border: '2px solid #eee',
+                borderRadius: 12, cursor: submitting ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                opacity: submitting ? 0.5 : 1,
+              }}>
+              <Trash2 size={16} />
             </button>
             <button
               onClick={handleSubmit}

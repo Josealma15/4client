@@ -7,6 +7,19 @@ import { getSocket } from '../../lib/socket';
 import { fmtCOP, STATUS_LABEL } from '../../lib/format';
 import { toast } from '../ui/Toast';
 
+const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
+function renderText(text: string) {
+  const parts = text.split(URL_RE);
+  URL_RE.lastIndex = 0;
+  return parts.map((p, i) => {
+    URL_RE.lastIndex = 0;
+    return URL_RE.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noreferrer noopener"
+          style={{ color: 'var(--v)', textDecoration: 'underline', wordBreak: 'break-all' }}>{p}</a>
+      : p;
+  });
+}
+
 interface Props {
   ticketId: string;
   onClose: () => void;
@@ -32,8 +45,19 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
     const onMsg = (data: { ticketId: string }) => {
       if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
     };
+    // Orders embedded in this ticket's card list must reflect status/paid changes
+    // immediately, not just when a new chat message happens to trigger a refetch.
+    const onOrderChange = () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
     sock.on('ticket:message', onMsg);
-    return () => { sock.off('ticket:message', onMsg); };
+    sock.on('order:moved', onOrderChange);
+    sock.on('order:updated', onOrderChange);
+    sock.on('order:paid', onOrderChange);
+    return () => {
+      sock.off('ticket:message', onMsg);
+      sock.off('order:moved', onOrderChange);
+      sock.off('order:updated', onOrderChange);
+      sock.off('order:paid', onOrderChange);
+    };
   }, [accessToken, ticketId, qc]);
 
   useEffect(() => {
@@ -98,7 +122,7 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
                     {isOut && msg.sender?.name && (
                       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--vd)', marginBottom: 2 }}>{msg.sender.name}</div>
                     )}
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(msg.text)}</div>
                     <div style={{ fontSize: 10, color: '#999', textAlign: 'right', marginTop: 2 }}>
                       {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
                     </div>

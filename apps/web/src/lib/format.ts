@@ -20,5 +20,5 @@ export const STATUS_LABEL: Record<string, string> = {
 export const STATUS_ORDER = ['nuevo', 'preparando', 'listo', 'camino', 'entregado', 'cerrado'];
 
 export const PAYMENT_LABEL: Record<string, string> = {
-  cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia',
+  cod: 'Cobro en casa', cash: 'Efectivo', transfer: 'Transferencia', sin_asignar: 'Sin asignar',
 };

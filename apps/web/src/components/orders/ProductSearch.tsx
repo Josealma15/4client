@@ -25,7 +25,7 @@ function groupByCategory(products: Product[]) {
 
 export default function ProductSearch({ products, items, locked, onChange, onLocalDirty, clearKey }: Props) {
   const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
   const [localInputs, setLocalInputs] = useState<Record<string, { qty: string; price: string }>>({});
 
@@ -167,7 +167,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
           style={{ transition: 'transform .2s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
-        Catálogo - escribe cantidad y precio, luego Enter ↵
+        Catálogo - escribe cantidad y precio
         {items.length > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, background: 'var(--v)', color: '#fff', borderRadius: 20, padding: '1px 8px' }}>
             {items.length} ítem{items.length !== 1 ? 's' : ''}

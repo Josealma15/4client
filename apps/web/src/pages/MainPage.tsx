@@ -189,6 +189,7 @@ export default function MainPage() {
                   onChange={(e) => setFecha(e.target.value)} />
                 <select className="fsel" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
                   <option value="">Todos los pagos</option>
+                  <option value="sin_asignar">Sin asignar</option>
                   <option value="cod">Cobro en casa</option>
                   <option value="transfer">Transferencia</option>
                   <option value="cash">En tienda</option>

@@ -28,7 +28,10 @@ export default async function configRoutes(fastify: FastifyInstance) {
       welcome_message:   z.string().max(1000).optional().nullable(),
     }).safeParse(req.body);
 
-    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+    if (!body.success) {
+      req.log.warn({ err: body.error.format() }, 'WPP config validation failed');
+      return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR', details: body.error.format() });
+    }
 
     const { wpp_meta_token, ...rest } = body.data;
 

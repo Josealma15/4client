@@ -9,6 +9,19 @@ import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
 
+const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
+function renderText(text: string) {
+  const parts = text.split(URL_RE);
+  URL_RE.lastIndex = 0;
+  return parts.map((p, i) => {
+    URL_RE.lastIndex = 0;
+    return URL_RE.test(p)
+      ? <a key={i} href={p} target="_blank" rel="noreferrer noopener"
+          style={{ color: 'var(--v)', textDecoration: 'underline', wordBreak: 'break-all' }}>{p}</a>
+      : p;
+  });
+}
+
 interface Props {
   fecha: string;
   onClose: () => void;
@@ -25,7 +38,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   const createOrder = useCreateOrder();
 
   const [canal, setCanal] = useState('whatsapp');
-  const [pago, setPago] = useState('transfer');
+  const [pago, setPago] = useState('sin_asignar');
   const [nombre, setNombre] = useState(preNombre ?? '');
   const [telefono, setTelefono] = useState(prePhone ?? '');
   const [direccion, setDireccion] = useState('');
@@ -154,7 +167,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {liveMessages.map((m: any, i: number) => (
                 <div key={i} className={`chat-msg ${m.direction === 'out' ? 'us' : 'them'}`}>
-                  <div className="chat-bubble" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
+                  <div className="chat-bubble" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(m.text)}</div>
                   {(m.sent_at || m.created_at) && (
                     <div className="chat-meta">
                       {new Date(m.sent_at ?? m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
@@ -210,22 +223,12 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                 <Smartphone size={14} /> Pedido vinculado al ticket de WhatsApp
               </div>
             )}
-            <div className="frow">
-              <div className="fg2">
-                <label className="fl2">Canal</label>
-                <select className="fi2" value={canal} onChange={(e) => setCanal(e.target.value)}>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="call">Llamada</option>
-                </select>
-              </div>
-              <div className="fg2">
-                <label className="fl2">Método de pago</label>
-                <select className="fi2" value={pago} onChange={(e) => setPago(e.target.value)}>
-                  <option value="transfer">Transferencia</option>
-                  <option value="cash">Pagado en tienda</option>
-                  <option value="cod">Cobro en casa</option>
-                </select>
-              </div>
+            <div className="fg2">
+              <label className="fl2">Canal</label>
+              <select className="fi2" value={canal} onChange={(e) => setCanal(e.target.value)}>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="call">Llamada</option>
+              </select>
             </div>
             <div className="frow">
               <div className="fg2">
@@ -244,14 +247,25 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               <input className="fi2" placeholder="Ej: Cra 45 #12-34, Casa azul" value={direccion}
                 onChange={(e) => setDireccion(e.target.value)} />
             </div>
-            <div className="fg2">
-              <label className="fl2">Domiciliario</label>
-              <select className="fi2" value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)}>
-                <option value="">Sin asignar</option>
-                {employees.map((emp: any) => (
-                  <option key={emp.id} value={emp.id}>{emp.name}</option>
-                ))}
-              </select>
+            <div className="frow">
+              <div className="fg2">
+                <label className="fl2">Método de pago</label>
+                <select className="fi2" value={pago} onChange={(e) => setPago(e.target.value)}>
+                  <option value="sin_asignar">Sin asignar</option>
+                  <option value="transfer">Transferencia</option>
+                  <option value="cash">Pagado en tienda</option>
+                  <option value="cod">Cobro en casa</option>
+                </select>
+              </div>
+              <div className="fg2">
+                <label className="fl2">Domiciliario</label>
+                <select className="fi2" value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)}>
+                  <option value="">Sin asignar</option>
+                  {employees.map((emp: any) => (
+                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="stit">Productos</div>
             <ProductSearch products={products} items={items} onChange={setItems} />

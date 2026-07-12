@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import {
-  Package, PackageCheck, Clock, Bike, Banknote, ArrowLeftRight, Wallet,
+  Package, PackageCheck, Clock, Banknote, ArrowLeftRight, Wallet,
   FileText, Trash2, History, ChevronDown, ChevronRight, Lock,
-  MessageSquare, MessageCircleOff, MessageCircleWarning, MessageCircleCheck,
+  MessageSquare, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
 import HistoryTable from '../ui/HistoryTable';
@@ -108,7 +108,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
         <>
           {/* Chat stats */}
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>
-            Conversaciones WhatsApp
+            Chats de WhatsApp
           </div>
           <div className="agrid">
             <div className="acard">
@@ -116,26 +116,21 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
               <div className="av">{dashboard.chats?.total ?? 0}</div>
               <div className="al2">Chats totales</div>
             </div>
-            <div className="acard" style={{ '--card-border': 'var(--brd)' } as any}>
-              <div className="ai"><MessageCircleOff size={26} color="var(--gt)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.chats?.sinPedido ?? 0}</div>
-              <div className="al2">Sin pedido</div>
-            </div>
             <div className="acard r">
               <div className="ai"><MessageCircleWarning size={26} color="var(--r)" strokeWidth={1.5} /></div>
               <div className="av">{dashboard.chats?.activos ?? 0}</div>
-              <div className="al2">Con pedidos activos</div>
+              <div className="al2">Chat con pedido activo</div>
             </div>
             <div className="acard v">
               <div className="ai"><MessageCircleCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
               <div className="av">{dashboard.chats?.completos ?? 0}</div>
-              <div className="al2">Completados</div>
+              <div className="al2">Chat con pedidos completados</div>
             </div>
           </div>
 
           {/* Order stats */}
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8, marginTop: 10 }}>
-            Pedidos de despacho
+            Pedidos
           </div>
           <div className="agrid">
             <div className="acard">
@@ -143,20 +138,15 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
               <div className="av">{dashboard.totales?.total ?? 0}</div>
               <div className="al2">Pedidos totales</div>
             </div>
-            <div className="acard v">
-              <div className="ai"><PackageCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.totales?.entregados ?? 0}</div>
-              <div className="al2">Cerrados/Cobrados</div>
-            </div>
             <div className="acard r">
               <div className="ai"><Clock size={26} color="var(--r)" strokeWidth={1.5} /></div>
               <div className="av">{dashboard.totales?.pendientes ?? 0}</div>
               <div className="al2">Pendientes</div>
             </div>
-            <div className="acard az">
-              <div className="ai"><Bike size={26} color="var(--az)" strokeWidth={1.5} /></div>
-              <div className="av">{dashboard.totales?.domActivos ?? 0}</div>
-              <div className="al2">Domicilios activos</div>
+            <div className="acard v">
+              <div className="ai"><PackageCheck size={26} color="var(--v)" strokeWidth={1.5} /></div>
+              <div className="av">{dashboard.totales?.entregados ?? 0}</div>
+              <div className="al2">Cerrados/Cobrados</div>
             </div>
           </div>
 

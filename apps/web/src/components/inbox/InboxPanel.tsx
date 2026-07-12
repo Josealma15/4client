@@ -53,8 +53,23 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
         qc.invalidateQueries({ queryKey: ['inbox-convo', data.ticketId] });
       }
     };
+    // Order status badges shown in the sidebar and the linked-orders bar must update
+    // immediately when an order moves/changes elsewhere (e.g. dragged in the swimlane),
+    // not just when a new chat message happens to trigger a refetch.
+    const onOrderChange = () => {
+      qc.invalidateQueries({ queryKey: ['inbox'] });
+      qc.invalidateQueries({ queryKey: ['inbox-convo'] });
+    };
     sock.on('ticket:message', onMsg);
-    return () => { sock.off('ticket:message', onMsg); };
+    sock.on('order:moved', onOrderChange);
+    sock.on('order:updated', onOrderChange);
+    sock.on('order:paid', onOrderChange);
+    return () => {
+      sock.off('ticket:message', onMsg);
+      sock.off('order:moved', onOrderChange);
+      sock.off('order:updated', onOrderChange);
+      sock.off('order:paid', onOrderChange);
+    };
   }, [accessToken, qc]);
 
   const { data: conversation, isLoading: loadingConvo } = useQuery({

@@ -32,7 +32,23 @@ export function useMoveOrder() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api.patch<{ data: any }>(`/orders/${id}/status`, { status }).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),
+    // Optimistic update: apply the new status to the cached list immediately so the
+    // card jumps columns on drop instead of waiting for a full round-trip + refetch
+    // (which is what made moving an order feel ~2s slow).
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['orders'] });
+      const previous = qc.getQueriesData({ queryKey: ['orders'] });
+      qc.setQueriesData({ queryKey: ['orders'] }, (old: any) =>
+        Array.isArray(old)
+          ? old.map((o: any) => (o.id === id ? { ...o, status } : o))
+          : old
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]: any) => qc.setQueryData(key, data));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['orders'] }),
   });
 }
 
