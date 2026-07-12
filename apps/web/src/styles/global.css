@@ -128,8 +128,9 @@ input,select,textarea{font-family:var(--f);}
 .mclose{background:var(--bg);border:none;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;color:var(--gt);display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;}
 .mclose:hover{background:var(--rc);color:var(--r);}
 .mbody{padding:20px 22px 24px;overflow-y:auto;flex:1;min-height:0;}
-.mactions{display:flex;gap:9px;margin-top:20px;flex-wrap:wrap;align-items:center;}
-.mactions .bpri{width:auto;flex:none;margin:0;padding:11px 18px;display:inline-flex;align-items:center;justify-content:center;}
+.mactions{display:flex;gap:7px;margin-top:20px;flex-wrap:wrap;align-items:center;}
+.mactions .bpri{width:auto;flex:none;margin:0;padding:9px 14px;font-size:13px;display:inline-flex;align-items:center;justify-content:center;}
+.mactions .bsec,.mactions .bdel{padding:9px 12px;font-size:13px;gap:5px;}
 
 /* FORM */
 .fg2{margin-bottom:16px;}

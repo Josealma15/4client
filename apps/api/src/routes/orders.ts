@@ -58,6 +58,30 @@ const updateOrderSchema = z.object({
   items:          z.array(orderItemSchema).min(1).max(100).optional(),
 });
 
+const ORDER_FIELD_LABELS: Record<string, string> = {
+  ticket_id: 'ticket', customer_name: 'nombre del cliente', customer_phone: 'teléfono',
+  address: 'dirección', channel: 'canal', payment_method: 'método de pago',
+  employee_id: 'domiciliario', notes: 'notas', fecha: 'fecha', items: 'productos',
+};
+
+// A blanket "Datos inválidos" doesn't tell anyone which field actually failed — turns
+// a 2-second fix into a guessing game. Zod already knows exactly which field and why
+// (body.error.flatten()); this just turns that into a Spanish sentence naming it,
+// e.g. "Falta dirección, nombre del cliente" instead of a dead end.
+function orderValidationMessage(error: z.ZodError): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const issue of error.issues) {
+    const key = String(issue.path[0] ?? '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const label = ORDER_FIELD_LABELS[key] ?? key;
+    parts.push(issue.code === 'too_small' || issue.code === 'invalid_type' ? `falta ${label}` : `${label} inválido`);
+  }
+  if (parts.length === 0) return 'Datos inválidos';
+  return 'Revisa: ' + parts.join(', ');
+}
+
 function buildOrderSelect(includeHistory = false) {
   return {
     id: true, org_id: true, ticket_id: true, num: true,
@@ -106,7 +130,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   fastify.post('/', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const body = createOrderSchema.safeParse(req.body);
     if (!body.success) {
-      return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR', details: body.error.flatten() });
+      return reply.status(400).send({ error: orderValidationMessage(body.error), code: 'VALIDATION_ERROR', details: body.error.flatten() });
     }
 
     const { items, fecha, ...rest } = body.data;
@@ -165,7 +189,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = updateOrderSchema.safeParse(req.body);
     if (!body.success) {
-      return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+      return reply.status(400).send({ error: orderValidationMessage(body.error), code: 'VALIDATION_ERROR', details: body.error.flatten() });
     }
 
     const existing = await fastify.prisma.order.findFirst({ where: { id, org_id: req.user.orgId } });

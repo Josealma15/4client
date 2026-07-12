@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
 import HistoryTable from '../ui/HistoryTable';
+import DatePickerES from '../ui/DatePickerES';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   nuevo: { bg: '#F8FAFC', fg: '#94A3B8' },
@@ -95,8 +96,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
           <div className="kmeta">Tiempo real - actualización automática</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" className="fsel" lang="es" value={fecha} style={{ cursor: 'pointer' }}
-            onChange={(e) => setFecha(e.target.value)} />
+          <DatePickerES value={fecha} onChange={setFecha} />
           <button onClick={onCierreCaja}
             style={{ background: 'var(--vd)', color: '#fff', border: 'none', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
             <Lock size={15} /> Cerrar caja

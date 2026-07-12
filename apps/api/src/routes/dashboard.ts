@@ -27,15 +27,37 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
         take: 300,
       }),
       fastify.prisma.ticket.findMany({
-        where: { org_id: req.user.orgId, fecha },
+        // Same resolution as GET /tickets (the swimlane board) — a ticket whose order
+        // was deferred to another day only gets `deferred_to` set, its own `fecha`
+        // stays put, so a plain `{ fecha }` match here silently dropped it from
+        // whichever day it actually landed on and left it double-counted on the day
+        // it left, undercounting/overcounting "chats completados" around any deferral.
+        where: {
+          org_id: req.user.orgId,
+          OR: [
+            { fecha },
+            { deferred_to: fecha },
+            { orders: { some: { fecha } } },
+          ],
+        },
         include: {
           orders: {
             where: { status: { not: 'papelera' } },
             select: { status: true, paid: true },
           },
         },
+        orderBy: { created_at: 'asc' },
       }),
     ]);
+
+    // Same phone dedup as GET /tickets — without it a stray duplicate ticket for the
+    // same phone+day (see cierre.ts deferOrMergeTicket) would count as two chats here.
+    const seenPhones = new Set<string>();
+    const tickets_ = tickets.filter(t => {
+      if (seenPhones.has(t.phone)) return false;
+      seenPhones.add(t.phone);
+      return true;
+    });
 
     // Order stats
     const total = orders.length;
@@ -54,12 +76,12 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     });
 
     // Chat stats
-    const totalChats = tickets.length;
-    const chatsSinPedido = tickets.filter(t => t.orders.length === 0).length;
-    const chatsCompletos = tickets.filter(t =>
+    const totalChats = tickets_.length;
+    const chatsSinPedido = tickets_.filter(t => t.orders.length === 0).length;
+    const chatsCompletos = tickets_.filter(t =>
       t.orders.length > 0 && t.orders.every(o => o.paid || o.status === 'cerrado')
     ).length;
-    const chatsActivos = tickets.filter(t =>
+    const chatsActivos = tickets_.filter(t =>
       t.orders.some(o => !o.paid && o.status !== 'cerrado')
     ).length;
 
