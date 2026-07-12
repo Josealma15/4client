@@ -26,7 +26,11 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
     const id = randomUUID().replace(/-/g, '').slice(0, 12);
     const orgPrefix = req.user.orgId.replace(/-/g, '').slice(0, 12);
-    const filename = `Factura_${orgPrefix}_${body.data.num}_${id}.pdf`;
+    // Hyphens, not underscores: WhatsApp's message renderer treats a pair of
+    // underscores as italic-markdown delimiters, so a URL containing them gets
+    // cut in the middle and only part of the link becomes tappable on the client's phone.
+    const safeNum = body.data.num.replace(/_/g, '-');
+    const filename = `Factura-${orgPrefix}-${safeNum}-${id}.pdf`;
 
     const r = req as FastifyRequest;
     const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
@@ -72,7 +76,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   // GET /api/v1/files/:filename — public (no auth: filename is unguessable org+UUID combo)
   fastify.get('/:filename', async (req, reply) => {
     const { filename } = req.params as { filename: string };
-    if (!/^Factura_[a-f0-9]{12}_[a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
+    // Accepts both the current hyphen-separated format and the older underscore-separated
+    // one, so invoice links already sent to clients before this change keep working.
+    if (!/^Factura[_-][a-f0-9]{12}[_-][a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
       return reply.status(400).send({ error: 'Archivo inválido' });
     }
 

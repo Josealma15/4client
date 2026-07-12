@@ -104,11 +104,15 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     || telefono.trim() !== (prePhone ?? '').trim()
     || direccion.trim() !== ''
     || items.length > 0;
-  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void } | null>(null);
+  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void; onSave?: () => void } | null>(null);
 
   function handleClose() {
     if (hasDirty) {
-      setConfirmDlg({ msg: '¿Salir? Los datos ingresados se perderán.', onOk: onClose });
+      setConfirmDlg({
+        msg: 'Hay datos sin guardar.',
+        onOk: onClose,
+        onSave: () => { handleSubmit(); setConfirmDlg(null); },
+      });
       return;
     }
     onClose();
@@ -299,6 +303,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
       {confirmDlg && (
         <ConfirmModal
           message={confirmDlg.msg}
+          cancelLabel={confirmDlg.onSave ? 'Salir' : 'Cancelar'}
+          onSave={confirmDlg.onSave}
+          savePending={createOrder.isPending}
           onConfirm={() => { confirmDlg.onOk(); setConfirmDlg(null); }}
           onCancel={() => setConfirmDlg(null)}
         />

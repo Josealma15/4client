@@ -39,7 +39,6 @@ export default function MainPage() {
 
   const [fecha, setFecha] = useState(todayStr());
   const [tab, setTab] = useState<'swimlane' | 'inbox' | 'resumen' | 'config'>('swimlane');
-  const [unreadWpp, setUnreadWpp] = useState(0);
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('');
   const [showCierre, setShowCierre] = useState(false);
@@ -55,11 +54,32 @@ export default function MainPage() {
     queryFn: () => api.get<{ data: any[] }>(`/tickets?fecha=${fecha}`).then((r) => r.data),
   });
 
+  // Same queryKey InboxPanel uses for its ticket list — sharing the cache means the
+  // floating badge always reflects real per-ticket unread_count (server resets it to 0
+  // the moment a conversation is actually opened, not just when this tab is clicked),
+  // and stays live since both onTicketMessage/onTicketUnread below already invalidate it.
+  const { data: inboxTickets = [] } = useQuery({
+    queryKey: ['inbox'],
+    queryFn: () => api.get<{ data: any[] }>('/inbox').then((r) => r.data),
+    enabled: isAdmin,
+  });
+  const unreadWpp = inboxTickets.reduce((s: number, t: any) => s + (t.unread_count || 0), 0);
+
   useEffect(() => {
     if (!accessToken) return;
     const socket = getSocket(accessToken);
-    socket.emit('join:org', user?.orgId ?? '');
-    socket.emit('join:date', fecha);
+    const joinRooms = () => {
+      socket.emit('join:org', user?.orgId ?? '');
+      socket.emit('join:date', fecha);
+    };
+    joinRooms();
+    // socket.io reconnects the transport on its own after a network blip, a backgrounded
+    // phone tab waking up, or a server redeploy — but it does NOT re-run app-level room
+    // joins on its own. Without this, the socket comes back "connected" yet silently stops
+    // receiving org/date-scoped events (ticket:message included) until something else
+    // (e.g. an accessToken change) happens to re-run this whole effect — which is exactly
+    // the "messages don't arrive until I refresh" symptom.
+    socket.on('connect', joinRooms);
 
     // Informe del día (dashboard) has its own totals/status counts computed
     // server-side — it must be invalidated on every event that can change them,
@@ -90,10 +110,6 @@ export default function MainPage() {
         qc.invalidateQueries({ queryKey: ['inbox-convo', data.ticketId] });
         qc.invalidateQueries({ queryKey: ['ticket', data.ticketId] });
       }
-      // Badge: increment only for incoming messages when not viewing inbox
-      if (data?.message?.direction === 'in') {
-        setUnreadWpp((n) => n + 1);
-      }
     };
     const onTicketUnread = () => {
       qc.invalidateQueries({ queryKey: ['tickets', fecha] });
@@ -105,6 +121,7 @@ export default function MainPage() {
     socket.on('ticket:unread', onTicketUnread);
 
     return () => {
+      socket.off('connect', joinRooms);
       socket.off('order:created');
       socket.off('order:updated');
       socket.off('order:moved');
@@ -148,7 +165,7 @@ export default function MainPage() {
               </button>
               {isAdmin && (
                 <button className={`tab${tab === 'inbox' ? ' on' : ''}`}
-                  onClick={() => { setTab('inbox'); setUnreadWpp(0); }}>
+                  onClick={() => setTab('inbox')}>
                   <MessageSquare size={15} /> Chats WPP
                   {unreadWpp > 0 && (
                     <span style={{

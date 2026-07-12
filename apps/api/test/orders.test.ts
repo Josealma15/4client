@@ -196,11 +196,17 @@ describe('orders routes', () => {
   });
 
   it('POST /orders/:id/cobro with correct password -> 200, paid+locked; second cobro -> 409 ORDER_LOCKED', async () => {
+    // A pedido now needs every field filled in (name, phone, address, payment method,
+    // domiciliario) before it's allowed to close — this fixture must reflect that, not
+    // just the bare minimum POST /orders accepts.
+    const empleado = await app.prisma.employee.create({
+      data: { org_id: orgAId, name: 'Domiciliario de Prueba' },
+    });
     const create = await app.inject({
       method: 'POST',
       url: '/api/v1/orders',
       headers: authHeader(encargadoToken),
-      payload: sampleOrderPayload({ fecha: '2026-01-15' }),
+      payload: sampleOrderPayload({ fecha: '2026-01-15', customer_phone: '3001234567', employee_id: empleado.id }),
     });
     const order = create.json().data;
 

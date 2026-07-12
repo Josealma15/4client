@@ -325,6 +325,20 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
     if (existing.locked) return reply.status(409).send({ error: 'Pedido ya cobrado', code: 'ORDER_LOCKED' });
 
+    // A pedido must be fully filled in before it can be closed — required so orders
+    // created from the client form (which starts with a placeholder address, no
+    // payment method, no domiciliario assigned) can't be cobrado half-empty.
+    const missing: string[] = [];
+    if (!existing.customer_name?.trim()) missing.push('nombre');
+    if (!existing.customer_phone?.trim()) missing.push('teléfono');
+    if (!existing.address?.trim() || existing.address.trim().toLowerCase() === 'pendiente de confirmar') missing.push('dirección');
+    if (!existing.payment_method || existing.payment_method === 'sin_asignar') missing.push('método de pago');
+    if (!existing.employee_id) missing.push('domiciliario');
+    if (existing.items.length === 0) missing.push('productos');
+    if (missing.length > 0) {
+      return reply.status(400).send({ error: `Faltan datos para cerrar el pedido: ${missing.join(', ')}`, code: 'MISSING_FIELDS' });
+    }
+
     const total = existing.items.reduce((s, i) => s + Number(i.price), 0);
     if (total <= 0) {
       return reply.status(400).send({ error: 'No es posible cerrar el pedido porque no tiene un total calculado', code: 'NO_TOTAL' });

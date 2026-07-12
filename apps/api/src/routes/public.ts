@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 
 interface FormTokenPayload {
   type: string;
@@ -112,6 +113,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // Fetch ticket to get org and validate it still exists
     const ticket = await fastify.prisma.ticket.findFirst({
       where: { id: payload.ticketId, org_id: payload.orgId },
+      include: { org: true },
     });
     if (!ticket) return reply.status(404).send({ error: 'Ticket no encontrado', code: 'NOT_FOUND' });
 
@@ -197,6 +199,20 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       where: { id: ticket.id },
       data: { last_message_at: new Date() },
     });
+
+    // Actually deliver the confirmation to the client's WhatsApp — previously this only
+    // wrote the message to the DB and broadcast it to staff views, so staff saw a
+    // "recibido" message in the chat but the client's phone never got anything.
+    const provider = MetaCloudProvider.fromOrg(ticket.org);
+    if (provider) {
+      try {
+        await provider.sendText(ticket.phone, msgText);
+      } catch (err: any) {
+        fastify.log.error({ err, ticketId: ticket.id }, 'WPP: error enviando confirmación de pedido desde formulario');
+      }
+    } else {
+      fastify.log.warn({ ticketId: ticket.id }, 'WPP: org sin credenciales Meta, confirmación de formulario solo guardada en BD');
+    }
 
     // Historial del pedido
     await fastify.prisma.orderHistory.create({

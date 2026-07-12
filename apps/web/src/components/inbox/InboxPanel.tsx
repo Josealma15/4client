@@ -79,6 +79,10 @@ export default function InboxPanel({ onCreateFromTicket, onOpenOrder }: Props) {
         ? api.get<{ data: any }>(`/inbox/${selectedId}/messages`).then((r) => r.data)
         : null,
     enabled: !!selectedId,
+    // Fallback only — real-time delivery is via socket, but a missed/late socket event
+    // (reconnect race, room not rejoined yet) shouldn't leave the open conversation stale
+    // for longer than this.
+    refetchInterval: 60000,
   });
 
   const replyMut = useMutation({
