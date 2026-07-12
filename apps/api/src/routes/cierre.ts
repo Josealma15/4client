@@ -1,40 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
 import { authenticate, requireRole } from '../middleware/auth.js';
-
-// Defers a ticket to `tomorrow` — unless the same customer already texted again on
-// that date before this cierre ran. In that case the webhook (which only ever checks
-// for an exact fecha match or an already-deferred ticket) had no way to know this
-// ticket was about to land on the same day, so it opened a second ticket for that
-// phone+day. Left alone, the order/ticket being deferred here would keep pointing at
-// the old (now dead-end) ticket forever while every new incoming message accumulates
-// on the other one — exactly the "messages only show in Chats WPP, not in Pedidos /
-// Ver conversación" split. Merge into the ticket that already exists instead of
-// creating that fork.
-async function deferOrMergeTicket(
-  tx: Prisma.TransactionClient,
-  orgId: string,
-  ticketId: string,
-  tomorrow: Date,
-) {
-  const ticket = await tx.ticket.findUnique({ where: { id: ticketId }, select: { phone: true, unread_count: true } });
-  if (!ticket) return; // already merged away by an earlier iteration in this same cierre run
-
-  const landed = await tx.ticket.findFirst({
-    where: { org_id: orgId, phone: ticket.phone, fecha: tomorrow, NOT: { id: ticketId } },
-  });
-
-  if (!landed) {
-    await tx.ticket.update({ where: { id: ticketId }, data: { deferred_to: tomorrow } });
-    return;
-  }
-
-  await tx.ticketMessage.updateMany({ where: { ticket_id: ticketId }, data: { ticket_id: landed.id } });
-  await tx.order.updateMany({ where: { ticket_id: ticketId }, data: { ticket_id: landed.id } });
-  await tx.ticket.update({ where: { id: landed.id }, data: { unread_count: { increment: ticket.unread_count } } });
-  await tx.ticket.delete({ where: { id: ticketId } });
-}
 
 export default async function cierreRoutes(fastify: FastifyInstance) {
   // POST /api/v1/cierre — admin y encargado
@@ -100,7 +66,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
           // shows up tomorrow but its ticket doesn't, and the swimlane (which groups
           // orders under their ticket) never renders it at all.
           if (existingOrder?.ticket_id) {
-            await deferOrMergeTicket(tx, req.user.orgId, existingOrder.ticket_id, tomorrow);
+            await tx.ticket.update({ where: { id: existingOrder.ticket_id }, data: { deferred_to: tomorrow } });
           }
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
@@ -137,7 +103,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
       for (const [ticketId, tdecision] of Object.entries(ticketDecisions)) {
         if (!validTicketIds.has(ticketId)) continue;
         if (tdecision === 'manana') {
-          await deferOrMergeTicket(tx, req.user.orgId, ticketId, tomorrow);
+          await tx.ticket.update({ where: { id: ticketId }, data: { deferred_to: tomorrow } });
         } else if (tdecision === 'atendido') {
           await tx.ticket.update({ where: { id: ticketId }, data: { unread_count: 0 } });
         }

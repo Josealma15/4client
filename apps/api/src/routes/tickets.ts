@@ -53,9 +53,11 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
     // Colombia UTC-5: derive local business date from UTC
     const today = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
 
+    // One ticket per phone forever — reopening an existing conversation rolls it
+    // forward to today instead of leaving it (and this route) unable to find it.
     const ticket = await fastify.prisma.ticket.upsert({
-      where: { org_id_phone_fecha: { org_id: req.user.orgId, phone: body.data.phone, fecha: today } },
-      update: { customer_name: body.data.customer_name ?? body.data.phone },
+      where: { org_id_phone: { org_id: req.user.orgId, phone: body.data.phone } },
+      update: { customer_name: body.data.customer_name ?? body.data.phone, fecha: today, deferred_to: null },
       create: {
         org_id: req.user.orgId,
         phone: body.data.phone,
