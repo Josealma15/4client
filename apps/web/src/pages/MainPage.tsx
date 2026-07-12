@@ -20,6 +20,7 @@ import InboxPanel from '../components/inbox/InboxPanel';
 import ResumenTab from '../components/dashboard/ResumenTab';
 import ConfigTab from '../components/config/ConfigTab';
 import Toast from '../components/ui/Toast';
+import DatePickerES from '../components/ui/DatePickerES';
 
 interface Ticket {
   id: string; phone: string; customer_name: string;
@@ -217,8 +218,7 @@ export default function MainPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input type="date" className="fsel" lang="es" value={fecha} style={{ cursor: 'pointer' }}
-                  onChange={(e) => setFecha(e.target.value)} />
+                <DatePickerES value={fecha} onChange={setFecha} />
                 <select className="fsel" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
                   <option value="">Todos los pagos</option>
                   <option value="sin_asignar">Sin asignar</option>
