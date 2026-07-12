@@ -41,7 +41,6 @@ export default function MainPage() {
   const [fecha, setFecha] = useState(todayStr());
   const [tab, setTab] = useState<'swimlane' | 'inbox' | 'resumen' | 'config'>('swimlane');
   const [search, setSearch] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('');
   const [showCierre, setShowCierre] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
@@ -219,13 +218,6 @@ export default function MainPage() {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <DatePickerES value={fecha} onChange={setFecha} />
-                <select className="fsel" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
-                  <option value="">Todos los pagos</option>
-                  <option value="sin_asignar">Sin asignar</option>
-                  <option value="cod">Cobro en casa</option>
-                  <option value="transfer">Transferencia</option>
-                  <option value="cash">En tienda</option>
-                </select>
                 <div className="sbx" style={{ minWidth: 160 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gt)' }}>
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -240,7 +232,6 @@ export default function MainPage() {
               tickets={tickets}
               orders={orders}
               search={search}
-              paymentFilter={paymentFilter}
               onOpenTicket={(id) => setTicketId(id)}
               onCreateFromTicket={handleCreateFromTicket}
             />

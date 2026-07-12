@@ -91,6 +91,31 @@ describe('orders routes', () => {
     expect(order2.num).toBe('002');
   });
 
+  it('creating an order on a fecha whose only existing order has a "high" num (e.g. carried over from a deferred order) does not collide -> 201, not 500', async () => {
+    // Reproduces a real production 500: a deferred order (cierre.ts, decision "manana")
+    // keeps its ORIGINAL num when it lands on a new fecha. COUNT(*)+1 has no idea that
+    // num already exists, guesses it again, collides, and since count doesn't change
+    // between retries with no concurrent insert, every retry recomputed the exact same
+    // doomed num — 5 identical collisions, then the raw Prisma error was thrown as a 500.
+    const fecha = '2026-01-16';
+    await app.prisma.order.create({
+      data: {
+        org_id: orgAId, num: '002', customer_name: 'Pedido diferido', address: 'Calle 1',
+        payment_method: 'cash', status: 'nuevo', registered_by: (await app.prisma.user.findFirstOrThrow({ where: { org_id: orgAId, role: 'encargado' } })).id,
+        fecha: new Date(fecha),
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.num).not.toBe('002');
+  });
+
   it('forbids creating an order as domiciliario -> 403', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -17,8 +17,13 @@ interface FormTokenPayload {
 const MAX_FORM_ORDERS_PER_TICKET = 3;
 
 // Computes the next sequential order number for org+fecha and creates the order,
-// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])) caused
-// by two concurrent submissions computing the same count before either commits.
+// retrying on a unique-constraint collision (@@unique([org_id, num, fecha])).
+//
+// Uses MAX(num)+1, not COUNT(*)+1 — a deferred order (cierre.ts, decision "manana")
+// keeps its ORIGINAL num when its fecha moves to the next day, so COUNT(*)+1 can guess
+// a num that's already occupied by one of those, and since count doesn't change
+// between retries with no concurrent insert, every retry recomputed the exact same
+// doomed num and collided identically until attempts ran out (see orders.ts, same fix).
 async function createOrderWithRetryNum<T>(
   prisma: PrismaClient,
   orgId: string,
@@ -27,8 +32,9 @@ async function createOrderWithRetryNum<T>(
 ): Promise<T> {
   const MAX_ATTEMPTS = 5;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const count = await prisma.order.count({ where: { org_id: orgId, fecha } });
-    const num = String(count + 1).padStart(3, '0');
+    const existing = await prisma.order.findMany({ where: { org_id: orgId, fecha }, select: { num: true } });
+    const maxNum = existing.reduce((max, o) => Math.max(max, parseInt(o.num, 10) || 0), 0);
+    const num = String(maxNum + attempt).padStart(3, '0');
     try {
       return await createFn(num);
     } catch (error) {

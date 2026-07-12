@@ -26,7 +26,6 @@ interface Props {
   tickets: Ticket[];
   orders: Order[];
   search: string;
-  paymentFilter: string;
   onOpenTicket: (ticketId: string) => void;
   onCreateFromTicket: (ticket: Ticket) => void;
 }
@@ -112,7 +111,7 @@ function isTicketUrg(ticket: Ticket, ticketOrders: Order[]): boolean {
   return elapsed > 10;
 }
 
-export default function Swimlane({ fecha, tickets, orders, search, paymentFilter, onOpenTicket, onCreateFromTicket }: Props) {
+export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket, onCreateFromTicket }: Props) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [cobroDirectId, setCobroDirectId] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -151,8 +150,7 @@ export default function Swimlane({ fecha, tickets, orders, search, paymentFilter
     (!search ||
       o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
       o.num.includes(search) ||
-      o.address?.toLowerCase().includes(search.toLowerCase())) &&
-    (!paymentFilter || o.payment_method === paymentFilter)
+      o.address?.toLowerCase().includes(search.toLowerCase()))
   );
 
   function moveNext(order: Order) {
