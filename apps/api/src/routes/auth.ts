@@ -1,8 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import crypto from 'crypto';
-import { config } from '../config.js';
 import { authenticate } from '../middleware/auth.js';
 
 const loginSchema = z.object({
@@ -15,17 +14,26 @@ const loginSchema = z.object({
 const DUMMY_HASH = '$2b$12$LzVFpXDW.jkMhGlXb2WiIeq3rAhnWPvVRqSRLCLdTT0W5HjCMfBtm';
 
 // Frontend (Vercel) and backend (Railway) are different origins, so this cookie is
-// sent on cross-site fetches. SameSite=Strict (or Lax) is NEVER sent cross-site by
+// sent on cross-site fetches. SameSite=Strict/Lax is NEVER sent cross-site by
 // browsers — that silently broke refresh on every page reload, logging users out.
-// SameSite=None requires Secure, which is only true in production (fine — dev runs
-// same-origin through the Vite proxy, where Lax works and doesn't need Secure/HTTPS).
-const COOKIE_OPTS = {
-  httpOnly: true,
-  secure: config.NODE_ENV === 'production',
-  sameSite: config.NODE_ENV === 'production' ? ('none' as const) : ('lax' as const),
-  path: '/api/v1/auth',
-  maxAge: 7 * 24 * 60 * 60, // 7 days
-};
+// SameSite=None requires Secure, which requires HTTPS.
+//
+// This is derived from the actual request protocol (via trustProxy + X-Forwarded-Proto,
+// set by Railway's edge) instead of NODE_ENV — if NODE_ENV isn't explicitly set to
+// "production" in the deploy platform's env vars (easy to miss, defaults to
+// "development" in config.ts), basing this on NODE_ENV would silently reintroduce
+// the exact same cross-site cookie bug in a "production" deploy that just forgot
+// to set one env var. Real HTTPS detection can't be misconfigured that way.
+function cookieOpts(req: FastifyRequest) {
+  const isHttps = req.protocol === 'https';
+  return {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',
+    path: '/api/v1/auth',
+    maxAge: 7 * 24 * 60 * 60, // 7 days
+  };
+}
 
 export default async function authRoutes(fastify: FastifyInstance) {
   // POST /api/v1/auth/login — rate limited to 10 attempts/min per IP
@@ -71,7 +79,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       where: { user_id: user.id, OR: [{ revoked: true }, { expires_at: { lt: new Date() } }] },
     }).catch((err) => fastify.log.warn({ err }, 'No se pudo limpiar refresh tokens vencidos'));
 
-    reply.setCookie('rf', rawRefresh, COOKIE_OPTS);
+    reply.setCookie('rf', rawRefresh, cookieOpts(req));
 
     return reply.send({
       data: {
@@ -149,7 +157,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const payload = { userId: stored.user.id, orgId: stored.user.org_id, role: stored.user.role as import('@4client/shared').UserRole };
     const accessToken = fastify.jwt.sign(payload, { expiresIn: '15m' });
 
-    reply.setCookie('rf', newRaw, COOKIE_OPTS);
+    reply.setCookie('rf', newRaw, cookieOpts(req));
     return reply.send({ data: { accessToken } });
   });
 
