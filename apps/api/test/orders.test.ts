@@ -254,4 +254,33 @@ describe('orders routes', () => {
     expect(secondCobro.statusCode).toBe(409);
     expect(secondCobro.json().code).toBe('ORDER_LOCKED');
   });
+
+  it('POST /orders/:id/cobro blocks closing when any single item has no price, even if the order total is > 0 from the other items', async () => {
+    const empleado = await app.prisma.employee.create({
+      data: { org_id: orgAId, name: 'Domiciliario de Prueba 2' },
+    });
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({
+        fecha: '2026-01-16', customer_phone: '3009876543', employee_id: empleado.id,
+        items: [
+          { product_name: 'Papa Criolla', quantity_label: '2 kg', price: 5000, sort_order: 0 },
+          { product_name: 'Cebolla Roja', quantity_label: '1 kg', price: 0, sort_order: 1 }, // no price set
+        ],
+      }),
+    });
+    const order = create.json().data;
+
+    const cobro = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orders/${order.id}/cobro`,
+      headers: authHeader(encargadoToken),
+      payload: { amount_received: 5000, password: ENCARGADO_PASS },
+    });
+    expect(cobro.statusCode).toBe(400);
+    expect(cobro.json().code).toBe('MISSING_FIELDS');
+    expect(cobro.json().error).toContain('Cebolla Roja');
+  });
 });

@@ -337,6 +337,8 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   if (!pago || pago === 'sin_asignar') cierreMissing.push('método de pago');
   if (!empleadoId) cierreMissing.push('domiciliario');
   if (items.length === 0) cierreMissing.push('productos');
+  const unpriced = items.filter((i: any) => !(parseFloat(i.price) > 0));
+  if (unpriced.length > 0) cierreMissing.push(`precio de ${unpriced.map((i: any) => i.product_name).join(', ')}`);
   const cobroValido = cierreMissing.length === 0 && recibido >= total && recibido > 0 && cobroPass.trim().length > 0;
   const hasChatPanel = !!order.ticket_id;
 

@@ -33,6 +33,8 @@ export default function ClientFormPage() {
   const [pendingQty, setPendingQty] = useState<Record<string, string>>({});
   // confirmed items list
   const [selected, setSelected] = useState<SelectedItem[]>([]);
+  const [address, setAddress] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -52,6 +54,8 @@ export default function ClientFormPage() {
         const draft = JSON.parse(raw);
         if (draft && Array.isArray(draft.items) && typeof draft.savedAt === 'number' && Date.now() - draft.savedAt < DRAFT_MAX_AGE_MS) {
           setSelected(draft.items);
+          if (typeof draft.address === 'string') setAddress(draft.address);
+          if (typeof draft.paymentMethod === 'string') setPaymentMethod(draft.paymentMethod);
         } else {
           localStorage.removeItem(draftKey);
         }
@@ -83,10 +87,10 @@ export default function ClientFormPage() {
       if (selected.length === 0) {
         localStorage.removeItem(draftKey);
       } else {
-        localStorage.setItem(draftKey, JSON.stringify({ items: selected, savedAt: Date.now() }));
+        localStorage.setItem(draftKey, JSON.stringify({ items: selected, address, paymentMethod, savedAt: Date.now() }));
       }
     } catch { /* localStorage unavailable — ignore, form still works without persistence */ }
-  }, [selected, hydrated, token]);
+  }, [selected, address, paymentMethod, hydrated, token]);
 
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
@@ -126,6 +130,8 @@ export default function ClientFormPage() {
     if (!window.confirm('¿Borrar todo el pedido? Se perderán los productos agregados.')) return;
     setSelected([]);
     setPendingQty({});
+    setAddress('');
+    setPaymentMethod('');
     setSummaryExpanded(false);
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
   }
@@ -133,6 +139,8 @@ export default function ClientFormPage() {
   async function handleSubmit() {
     if (submitting) return; // already in flight — a fast double-click/tap shouldn't fire twice
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
+    if (!address.trim()) { setSubmitError('Escribe la dirección de entrega'); return; }
+    if (!paymentMethod) { setSubmitError('Elige el método de pago'); return; }
     setSubmitError('');
     setSubmitting(true);
     try {
@@ -141,6 +149,8 @@ export default function ClientFormPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
+          address: address.trim(),
+          payment_method: paymentMethod,
           items: selected.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
         }),
       });
@@ -261,6 +271,46 @@ export default function ClientFormPage() {
               style={{ fontSize: 13, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
               <Trash2 size={14} /> Borrar todo
             </button>
+          </div>
+
+          {/* Delivery details — collected here so the order comes in ready to
+              dispatch instead of needing staff to fill these in before anything
+              can happen with it. Still editable by staff afterward if needed. */}
+          <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 10, paddingTop: 10 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
+              Dirección de entrega
+            </label>
+            <input
+              type="text"
+              placeholder="Calle, número, barrio..."
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              style={{ width: '100%', fontSize: 14, padding: '10px 12px', border: '2px solid #ddd', borderRadius: 10, outline: 'none', fontFamily: 'inherit', color: '#111', background: '#fff', marginBottom: 10 }}
+            />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
+              Método de pago
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { value: 'transfer', label: 'Transferencia' },
+                { value: 'cash', label: 'En tienda' },
+                { value: 'cod', label: 'Cobro en casa' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(opt.value)}
+                  style={{
+                    flex: 1, padding: '9px 6px', fontSize: 12, fontWeight: 700,
+                    borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${paymentMethod === opt.value ? GREEN : '#ddd'}`,
+                    background: paymentMethod === opt.value ? '#f0fdf4' : '#fff',
+                    color: paymentMethod === opt.value ? GREEN : '#444',
+                  }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
