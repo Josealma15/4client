@@ -119,6 +119,8 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   }, async (req, reply) => {
     const body = z.object({
       token: z.string().min(1),
+      address: z.string().max(500).optional(),
+      payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
       items: z.array(z.object({
         product_name:   z.string().min(1).max(200),
         quantity_label: z.string().max(100),
@@ -182,9 +184,13 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           num,
           customer_name: payload.clientName,
           customer_phone: payload.clientPhone,
-          address: 'Pendiente de confirmar',
+          // Falls back to the old placeholders only if the client somehow submits
+          // without them (e.g. a stale cached form page) — the current form always
+          // collects both so the order comes in ready to dispatch, not blocked on
+          // staff having to fill these in before it can even be prepared or closed.
+          address: body.data.address?.trim() || 'Pendiente de confirmar',
           channel: 'whatsapp',
-          payment_method: 'sin_asignar',
+          payment_method: body.data.payment_method ?? 'sin_asignar',
           status: 'nuevo',
           source: 'form',
           registered_by: systemUser.id,

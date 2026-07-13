@@ -369,6 +369,11 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing.payment_method || existing.payment_method === 'sin_asignar') missing.push('método de pago');
     if (!existing.employee_id) missing.push('domiciliario');
     if (existing.items.length === 0) missing.push('productos');
+    // Every item needs a real price — a single unpriced product (even just one, even
+    // if the rest of the order totals something > 0) must block closing, not just an
+    // all-zero order.
+    const unpriced = existing.items.filter(i => Number(i.price) <= 0);
+    if (unpriced.length > 0) missing.push(`precio de ${unpriced.map(i => i.product_name).join(', ')}`);
     if (missing.length > 0) {
       return reply.status(400).send({ error: `Faltan datos para cerrar el pedido: ${missing.join(', ')}`, code: 'MISSING_FIELDS' });
     }
