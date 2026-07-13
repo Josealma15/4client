@@ -59,7 +59,7 @@ export default function HistoryTable({ history, showOrder }: Props) {
             return (
               <tr key={i} style={{ background: rowBg }}>
                 <td style={{ ...td, whiteSpace: 'nowrap', color: 'var(--gt)' }}>
-                  {new Date(h.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(h.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                 </td>
                 {showOrder && (
                   <td style={{ ...td, fontWeight: 700 }}>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { todayStr } from '../../lib/format';
 
 interface Props {
   value: string; // YYYY-MM-DD
@@ -24,11 +25,6 @@ function toYMD(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-function todayYMD(): string {
-  const t = new Date();
-  return toYMD(t.getFullYear(), t.getMonth() + 1, t.getDate());
-}
-
 // Native <input type="date"> renders its popup calendar via internal browser UI (not
 // page DOM) — its "Today"/"Clear" button labels follow the browser's own interface
 // language, not the page's `lang` attribute or content, so there is no way to make
@@ -36,14 +32,14 @@ function todayYMD(): string {
 // control instead of another attribute that silently doesn't do anything in Chromium.
 export default function DatePickerES({ value, onChange, className }: Props) {
   const [open, setOpen] = useState(false);
-  const { y, m } = parseYMD(value || todayYMD());
+  const { y, m } = parseYMD(value || todayStr());
   const [viewY, setViewY] = useState(y);
   const [viewM, setViewM] = useState(m); // 1-12
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const { y: vy, m: vm } = parseYMD(value || todayYMD());
+    const { y: vy, m: vm } = parseYMD(value || todayStr());
     setViewY(vy);
     setViewM(vm);
   }, [open, value]);
@@ -87,7 +83,7 @@ export default function DatePickerES({ value, onChange, className }: Props) {
   const daysInMonth = new Date(viewY, viewM, 0).getDate();
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
 
-  const today = todayYMD();
+  const today = todayStr();
 
   return (
     <div ref={boxRef} style={{ position: 'relative', display: 'inline-block' }}>

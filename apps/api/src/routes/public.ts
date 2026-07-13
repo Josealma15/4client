@@ -10,6 +10,10 @@ interface FormTokenPayload {
   clientName: string;
   clientPhone: string;
   orgName: string;
+  // Optional — older already-issued tokens (before this field existed) won't have it,
+  // so every use of it below falls back to an arbitrary active staff member.
+  sentByUserId?: string;
+  sentByName?: string;
 }
 
 // Max orders a single form link (ticket) may generate — the link is valid for 7 days
@@ -167,12 +171,20 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     });
     if (!ticket) return reply.status(404).send({ error: 'Ticket no encontrado', code: 'NOT_FOUND' });
 
-    // Use first active admin/encargado as registered_by (system actor for form orders)
-    const systemUser = await fastify.prisma.user.findFirst({
-      where: { org_id: payload.orgId, active: true, role: { in: ['admin', 'encargado'] } },
-      orderBy: { created_at: 'asc' },
-    });
-    if (!systemUser) return reply.status(500).send({ error: 'Organización sin usuarios activos', code: 'NO_USER' });
+    // Attribute the order to whichever staff member actually sent this specific link
+    // (embedded in the token when it was generated — see inbox.ts's /form-link route),
+    // so history/registered_by shows a real name instead of an arbitrary admin. Falls
+    // back to the first active admin/encargado for tokens issued before this existed.
+    let actorUser = payload.sentByUserId
+      ? await fastify.prisma.user.findFirst({ where: { id: payload.sentByUserId, org_id: payload.orgId } })
+      : null;
+    if (!actorUser) {
+      actorUser = await fastify.prisma.user.findFirst({
+        where: { org_id: payload.orgId, active: true, role: { in: ['admin', 'encargado'] } },
+        orderBy: { created_at: 'asc' },
+      });
+    }
+    if (!actorUser) return reply.status(500).send({ error: 'Organización sin usuarios activos', code: 'NO_USER' });
 
     // Fetch product prices from catalog — needed either way (new order or merge)
     const productNames = body.data.items.map(i => i.product_name);
@@ -218,8 +230,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
 
         await fastify.prisma.orderHistory.create({
           data: {
-            org_id: payload.orgId, order_id: updated.id, actor_id: systemUser.id,
-            action_type: 'edit', notes: `${newItemsData.length} producto(s) agregado(s) desde el formulario`,
+            org_id: payload.orgId, order_id: updated.id, actor_id: actorUser.id,
+            action_type: 'edit',
+            notes: `${newItemsData.length} producto(s) agregado(s) desde el formulario (enviado por ${actorUser.name})`,
           },
         });
 
@@ -227,7 +240,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         const msgText = `*Se agregaron productos a tu pedido #${updated.num}*\n${lines.join('\n')}\n\n_El encargado revisará y confirmará el pedido._`;
 
         const message = await fastify.prisma.ticketMessage.create({
-          data: { ticket_id: ticket.id, direction: 'out', text: msgText, sent_at: new Date(), sent_by: systemUser.id },
+          data: { ticket_id: ticket.id, direction: 'out', text: msgText, sent_at: new Date(), sent_by: actorUser.id },
         });
         await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { last_message_at: new Date() } });
 
@@ -248,7 +261,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           message: {
             id: message.id, ticket_id: ticket.id, direction: 'out' as const, text: message.text,
             media_url: null, media_type: null, media_caption: null,
-            sent_by: systemUser.id, sent_by_name: systemUser.name, wpp_message_id: null,
+            sent_by: actorUser.id, sent_by_name: actorUser.name, wpp_message_id: null,
             sent_at: message.sent_at.toISOString(), delivered: false, read_by_client: false,
           },
         });
@@ -290,7 +303,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           payment_method: body.data.payment_method ?? 'sin_asignar',
           status: 'nuevo',
           source: 'form',
-          registered_by: systemUser.id,
+          registered_by: actorUser.id,
           fecha: todayLocal,
           items: { create: orderItems },
         },
@@ -317,7 +330,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         direction: 'out',
         text: msgText,
         sent_at: new Date(),
-        sent_by: systemUser.id,
+        sent_by: actorUser.id,
       },
     });
 
@@ -345,9 +358,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       data: {
         org_id: payload.orgId,
         order_id: order.id,
-        actor_id: systemUser.id,
+        actor_id: actorUser.id,
         action_type: 'create',
-        notes: 'Pedido creado desde formulario enviado al cliente',
+        notes: `Pedido creado desde formulario (enviado por ${actorUser.name})`,
       },
     });
 
@@ -361,7 +374,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         direction: 'out' as const,
         text: message.text,
         media_url: null, media_type: null, media_caption: null,
-        sent_by: systemUser.id, sent_by_name: systemUser.name, wpp_message_id: null,
+        sent_by: actorUser.id, sent_by_name: actorUser.name, wpp_message_id: null,
         sent_at: message.sent_at.toISOString(),
         delivered: false, read_by_client: false,
       },

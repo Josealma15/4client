@@ -119,6 +119,18 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     });
     if (!ticket) return reply.status(404).send({ error: 'Conversación no encontrada', code: 'NOT_FOUND' });
 
+    const sender = await fastify.prisma.user.findUnique({ where: { id: req.user.userId }, select: { name: true } });
+
+    // Expires at the end of the current Colombia calendar day (UTC-5), not a flat N
+    // days from now — a link generated at 11pm and one generated at 8am must both die
+    // at the same midnight, so "the link only works today" actually means today, and
+    // staff sending a fresh one tomorrow is what lets that new order find/merge with
+    // whatever's already open from today (see public.ts's open-orders lookup).
+    // Colombia has no DST, so "Colombia midnight" is always UTC 05:00 of that date.
+    const nowCol = new Date(Date.now() - 5 * 3600000);
+    const tomorrowColMidnightUtcMs = Date.UTC(nowCol.getUTCFullYear(), nowCol.getUTCMonth(), nowCol.getUTCDate() + 1, 5, 0, 0);
+    const expiresInSeconds = Math.max(60, Math.floor((tomorrowColMidnightUtcMs - Date.now()) / 1000));
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = (fastify.jwt.sign as any)(
       {
@@ -128,8 +140,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
         clientName: ticket.customer_name,
         clientPhone: ticket.phone,
         orgName: ticket.org.name,
+        sentByUserId: req.user.userId,
+        sentByName: sender?.name ?? null,
       },
-      { expiresIn: '7d' },
+      { expiresIn: expiresInSeconds },
     ) as string;
 
     const frontendUrl = config.FRONTEND_URL.split(',')[0].trim();

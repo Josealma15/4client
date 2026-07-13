@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
 import { toast } from '../ui/Toast';
+import { colombiaDateStr } from '../../lib/format';
 
 // Safe URL regex — no backtracking ambiguity, no ReDoS risk
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
@@ -121,16 +122,15 @@ export default function InboxPanel() {
   }
 
   function formatMsgTime(raw: string) {
-    return new Date(raw).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    return new Date(raw).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
   }
 
   function formatSidebarTime(raw: string) {
     const d = new Date(raw);
-    const now = new Date();
-    if (d.toDateString() === now.toDateString()) {
-      return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    if (colombiaDateStr(d) === colombiaDateStr()) {
+      return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
     }
-    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', timeZone: 'America/Bogota' });
   }
 
   const selectedTicket = tickets.find((t: any) => t.id === selectedId);
@@ -216,13 +216,13 @@ export default function InboxPanel() {
               const isOut = msg.direction === 'out';
               const prevMsg = conversation.messages[i - 1];
               const showDate = !prevMsg ||
-                new Date(msg.sent_at).toDateString() !== new Date(prevMsg.sent_at).toDateString();
+                colombiaDateStr(msg.sent_at) !== colombiaDateStr(prevMsg.sent_at);
 
               return (
                 <div key={msg.id} style={{ display: 'flex', flexDirection: 'column' }}>
                   {showDate && (
                     <div className="chat-sep">
-                      {new Date(msg.sent_at).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {new Date(msg.sent_at).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })}
                     </div>
                   )}
                   <div className={`chat-bub ${isOut ? 'out' : 'in'}`}>

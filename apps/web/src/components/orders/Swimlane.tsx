@@ -250,9 +250,13 @@ export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket,
                 {mins}min
               </div>
             )}
-            {ord.source === 'form' && (
+            {ord.source === 'form' ? (
               <div style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#EDE9FE', padding: '2px 6px', borderRadius: 20 }}>
                 Formulario
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#0369A1', background: '#E0F2FE', padding: '2px 6px', borderRadius: 20 }}>
+                Encargado
               </div>
             )}
             {ord.paid && (
@@ -396,7 +400,7 @@ export default function Swimlane({ fecha, tickets, orders, search, onOpenTicket,
                   <div className="tk-name">{ticket.customer_name}</div>
                   <div className="tk-foot">
                     <span className="tk-time">
-                      {new Date(ticket.last_message_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(ticket.last_message_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                     </span>
                     <span className={`tk-badge ${ticketOrders.length > 0 ? (ticketOrders.every((o) => o.paid) ? 'done' : 'activo') : 'sin'}`}>
                       {ticketOrders.length > 0 ? `${ticketOrders.length} pedido${ticketOrders.length > 1 ? 's' : ''}` : 'Sin pedido'}

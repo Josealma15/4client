@@ -33,7 +33,7 @@ function formatHour(raw: string | null | undefined): string {
 function formatDateTime(raw: string | null | undefined): string {
   if (!raw) return '-';
   return new Date(raw).toLocaleString('es-CO', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota',
   });
 }
 
@@ -87,6 +87,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
   useEffect(() => {
     if (!order) return;
+    // Don't stomp an in-progress edit — if the person has unsaved local changes when
+    // a live update lands (e.g. the client added items to this order from the form),
+    // the fresh data is still in the cache for whenever they save/close, but pulling
+    // it into the form fields right now would silently discard what they were typing.
+    if (isDirty || catalogDirty) return;
     setNombre(order.customer_name ?? '');
     setTelefono(order.customer_phone ?? '');
     setDireccion(order.address ?? '');
@@ -99,6 +104,29 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     })));
     setIsDirty(false);
   }, [order]);
+
+  // Live-update this open order when it changes elsewhere — most importantly, a
+  // client adding items to it via the form (merge flow) while a staff member already
+  // has it open. Without this, they'd only see the new items after closing and
+  // reopening the modal.
+  useEffect(() => {
+    if (!accessToken || !orderId) return;
+    const sock = getSocket(accessToken);
+    const onOrderChange = (data: { id?: string; orderId?: string }) => {
+      const changedId = data?.id ?? data?.orderId;
+      if (changedId !== orderId) return;
+      if (isDirty || catalogDirty) {
+        toast('Este pedido se actualizó (el cliente agregó productos) — guarda tus cambios para no perderlos');
+      }
+      qc.invalidateQueries({ queryKey: ['order', orderId] });
+    };
+    sock.on('order:updated', onOrderChange);
+    sock.on('order:paid', onOrderChange);
+    return () => {
+      sock.off('order:updated', onOrderChange);
+      sock.off('order:paid', onOrderChange);
+    };
+  }, [accessToken, orderId, qc, isDirty, catalogDirty]);
 
 
   // Chat always loaded if order has ticket_id
@@ -201,7 +229,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     doc.text(user?.orgName ?? '4Client', 40, y, { align: 'center' }); y += 7;
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.text(`Pedido #${order.num}`, 40, y, { align: 'center' }); y += 5;
-    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' }), 40, y, { align: 'center' }); y += 5;
+    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota' }), 40, y, { align: 'center' }); y += 5;
     doc.line(3, y, 77, y); y += 5;
 
     doc.setFontSize(9);
@@ -387,7 +415,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                       )}
                       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(msg.text)}</div>
                       <div style={{ fontSize: 10, color: '#999', textAlign: 'right', marginTop: 2 }}>
-                        {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                       </div>
                     </div>
                   </div>

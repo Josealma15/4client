@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ClipboardList, BarChart2, MessageSquare, Settings,
+  ClipboardList, BarChart2, MessageSquare, Settings, AlertTriangle,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth';
 import { useOrders } from '../hooks/useOrders';
@@ -216,6 +216,17 @@ export default function MainPage() {
           </div>
         </div>
       </header>
+
+      {isAdmin && (
+        <div style={{
+          background: '#FEE2E2', borderBottom: '2px solid #F87171', color: '#991B1B',
+          padding: '8px 16px', fontSize: 13, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center',
+        }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+          Recuerda pagar la suscripción de 4Client antes del día 1 de cada mes para que el sistema no se deshabilite.
+        </div>
+      )}
 
       <div className={`ac${tab === 'inbox' ? ' inbox-mode' : ''}`}>
         {tab === 'swimlane' && (

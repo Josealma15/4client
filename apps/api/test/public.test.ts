@@ -2,10 +2,20 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestServer, createTestOrg, createTestUser } from './helpers.js';
 
+const ADMIN_PASS = 'PublicFormAdmin1!';
+
+async function login(app: FastifyInstance, email: string, password: string): Promise<string> {
+  const res = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email, password } });
+  expect(res.statusCode).toBe(200);
+  return res.json().data.accessToken as string;
+}
+
 describe('public form routes', () => {
   let app: FastifyInstance;
   let orgId: string;
   let adminId: string;
+  let adminName: string;
+  let adminToken: string;
   let ticketId: string;
   let token: string;
   const phone = '573001112200';
@@ -14,8 +24,10 @@ describe('public form routes', () => {
     app = await buildTestServer();
     const org = await createTestOrg(app.prisma);
     orgId = org.id;
-    const admin = await createTestUser(app.prisma, orgId, 'admin', 'PublicFormAdmin1!');
+    const admin = await createTestUser(app.prisma, orgId, 'admin', ADMIN_PASS);
     adminId = admin.id;
+    adminName = admin.name;
+    adminToken = await login(app, admin.email, ADMIN_PASS);
 
     await app.prisma.product.create({
       data: { org_id: orgId, name: 'Mango', category: 'Frutas', price_per_unit: 3000 },
@@ -113,5 +125,50 @@ describe('public form routes', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().data.merged).toBeUndefined();
     expect(res.json().data.orderId).not.toBe(firstOrderId);
+  });
+
+  it('GET /inbox/:ticketId/form-link embeds who sent it and expires by end of the current Colombia day, not 7 days out', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/inbox/${ticketId}/form-link`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const url = res.json().data.url as string;
+    const sentToken = new URL(url).searchParams.get('t')!;
+
+    const decoded = app.jwt.decode(sentToken) as any;
+    expect(decoded.sentByUserId).toBe(adminId);
+    expect(decoded.sentByName).toBe(adminName);
+    // Bounded well under the old 7-day expiry, and never more than ~24h out.
+    const secondsUntilExpiry = decoded.exp - Math.floor(Date.now() / 1000);
+    expect(secondsUntilExpiry).toBeGreaterThan(0);
+    expect(secondsUntilExpiry).toBeLessThanOrEqual(24 * 3600);
+  });
+
+  it('an order created through a real /form-link token is attributed to (registered_by) the staff member who sent it, and the history note names them', async () => {
+    const linkRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/inbox/${ticketId}/form-link`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    const sentToken = new URL(linkRes.json().data.url).searchParams.get('t')!;
+
+    const submitRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/public/submit',
+      payload: { token: sentToken, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+    });
+    expect(submitRes.statusCode).toBe(201);
+    const newOrderId = submitRes.json().data.orderId;
+
+    const order = await app.prisma.order.findUniqueOrThrow({
+      where: { id: newOrderId },
+      include: { history: true },
+    });
+    expect(order.registered_by).toBe(adminId);
+    const createEntry = order.history.find(h => h.action_type === 'create');
+    expect(createEntry?.notes).toContain(adminName);
+    expect(createEntry?.actor_id).toBe(adminId);
   });
 });

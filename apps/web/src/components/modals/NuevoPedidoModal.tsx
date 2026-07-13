@@ -189,7 +189,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                   <div className="chat-bubble" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(m.text)}</div>
                   {(m.sent_at || m.created_at) && (
                     <div className="chat-meta">
-                      {new Date(m.sent_at ?? m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(m.sent_at ?? m.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                     </div>
                   )}
                 </div>

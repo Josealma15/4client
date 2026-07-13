@@ -158,7 +158,7 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
                     )}
                     <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(msg.text)}</div>
                     <div style={{ fontSize: 10, color: '#999', textAlign: 'right', marginTop: 2 }}>
-                      {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
                     </div>
                   </div>
                 </div>
