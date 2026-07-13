@@ -23,8 +23,12 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
       },
       include: {
         messages: { orderBy: { sent_at: 'asc' } },
+        // Scoped to `fecha` too — a ticket is one row per phone forever now (not per
+        // day), so without this a heavily-used chat's badge/count here would include
+        // every order across its whole history instead of just what's relevant to the
+        // day being viewed.
         orders: {
-          where: { status: { not: 'papelera' } },
+          where: { status: { not: 'papelera' }, fecha },
           select: { id: true, num: true, status: true, paid: true },
         },
       },

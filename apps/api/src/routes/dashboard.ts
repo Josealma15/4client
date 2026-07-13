@@ -41,8 +41,15 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
           ],
         },
         include: {
+          // Scoped to `fecha` too, not just non-papelera — a ticket is now one row
+          // per phone forever (not per day), so without this it pulls in EVERY order
+          // that ticket has ever had across its whole history. A chat whose 3 orders
+          // today are all paid+cerrado was still coming back "activo" here because
+          // some unrelated order from a different day, sitting on the same ticket,
+          // wasn't closed — this is what "chats completados"/"con pedido activo"
+          // meant to reflect right now, today, not the ticket's entire lifetime.
           orders: {
-            where: { status: { not: 'papelera' } },
+            where: { status: { not: 'papelera' }, fecha },
             select: { status: true, paid: true },
           },
         },
