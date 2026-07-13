@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, KeyboardEvent } from 'react';
-import { Check, Pencil } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 
 interface Product { id: string; name: string; category: string; }
 interface Item { product_name: string; quantity_label: string; price: string; }
@@ -27,9 +27,12 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
-  const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [localInputs, setLocalInputs] = useState<Record<string, { qty: string; price: string }>>({});
-  const [focusTarget, setFocusTarget] = useState<string | null>(null);
+  // Which committed item (by product_name) is being edited inline in the Factbox
+  // table below — editing never touches the catalog's collapsed state anymore, so
+  // it stays collapsed by default the way the person left it.
+  const [editingRow, setEditingRow] = useState<string | null>(null);
+  const editQtyRef = useRef<HTMLInputElement | null>(null);
 
   // Clear local inputs when parent signals a save (clearKey increments)
   useEffect(() => {
@@ -91,9 +94,9 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
       return copy;
     });
 
-    // Return focus to search bar so user can quickly find next product
+    // Return focus to search bar so user can quickly find next product (a no-op if
+    // the catalog is collapsed, e.g. when this commit came from an inline Factbox edit)
     setSearch('');
-    setCollapsed(false);
     requestAnimationFrame(() => searchRef.current?.focus());
   }
 
@@ -110,26 +113,29 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
 
   function editItem(item: Item) {
     setLocalInputs(prev => ({ ...prev, [item.product_name]: { qty: item.quantity_label, price: item.price } }));
-    setSearch(item.product_name);
-    setCollapsed(false);
     onLocalDirty?.(true);
-    // Land the cursor on this row's own quantity field, not the catalog filter bar —
-    // the filter narrows to this single product, so the qty box is what the user
-    // actually came here to edit.
-    setFocusTarget(item.product_name);
+    setEditingRow(item.product_name);
   }
 
-  // Runs once the filtered row for focusTarget has actually rendered (search state
-  // change + collapsed=false both need a render pass before the ref exists).
+  function cancelEdit(productName: string) {
+    setLocalInputs(prev => {
+      const copy = { ...prev };
+      delete copy[productName];
+      return copy;
+    });
+    setEditingRow(null);
+  }
+
+  function saveEdit(productName: string) {
+    commitProduct(productName);
+    setEditingRow(null);
+  }
+
   useEffect(() => {
-    if (!focusTarget) return;
-    const el = qtyRefs.current[focusTarget];
-    if (el) {
-      el.focus();
-      el.select();
-      setFocusTarget(null);
-    }
-  }, [focusTarget, visibleGroups]);
+    if (!editingRow) return;
+    editQtyRef.current?.focus();
+    editQtyRef.current?.select();
+  }, [editingRow]);
 
   const total = items.reduce((s, i) => s + (parseFloat(i.price) || 0), 0);
 
@@ -246,7 +252,6 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         {isCommitted && <Check size={11} color="var(--v)" style={{ marginLeft: 5, display: 'inline', verticalAlign: 'middle' }} />}
                       </div>
                       <input
-                        ref={el => { qtyRefs.current[p.name] = el; }}
                         className="iinput"
                         placeholder="Ej: 2 kg"
                         value={local.qty}
@@ -305,25 +310,74 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                 Filtra el catálogo, llena cantidad/precio y presiona Enter para agregar
               </td></tr>
             )}
-            {items.map((i, idx) => (
-              <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
-                <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
-                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
-                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
-                <td style={{ padding: '6px', borderBottom: '1px solid var(--brd)', textAlign: 'center' }}>
-                  <span style={{ display: 'inline-flex', gap: 4 }}>
-                    <button onClick={() => editItem(i)} title="Editar"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--az)', display: 'flex', alignItems: 'center', padding: 2 }}>
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => removeItem(i.product_name)} title="Quitar"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', padding: 2, fontSize: 15, fontWeight: 700, lineHeight: 1 }}>
-                      ×
-                    </button>
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {items.map((i, idx) => {
+              const isEditing = editingRow === i.product_name;
+              const local = getLocal(i.product_name);
+              return (
+                <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
+                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>
+                    {isEditing ? (
+                      <input
+                        ref={editQtyRef}
+                        className="iinput"
+                        placeholder="Ej: 2 kg"
+                        value={local.qty}
+                        onChange={e => setLocal(i.product_name, 'qty', e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); saveEdit(i.product_name); }
+                          if (e.key === 'Escape') { e.preventDefault(); cancelEdit(i.product_name); }
+                        }}
+                        style={{ fontSize: 13, width: '100%', textAlign: 'center' }}
+                      />
+                    ) : (i.quantity_label || '—')}
+                  </td>
+                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>
+                    {isEditing ? (
+                      <input
+                        className="iinput"
+                        placeholder="$0"
+                        type="number"
+                        value={local.price}
+                        onChange={e => setLocal(i.product_name, 'price', e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); saveEdit(i.product_name); }
+                          if (e.key === 'Escape') { e.preventDefault(); cancelEdit(i.product_name); }
+                        }}
+                        style={{ fontSize: 13, width: '100%', textAlign: 'right' }}
+                      />
+                    ) : (parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—')}
+                  </td>
+                  <td style={{ padding: '6px', borderBottom: '1px solid var(--brd)', textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', gap: 4 }}>
+                      {isEditing ? (
+                        <>
+                          <button onClick={() => saveEdit(i.product_name)} title="Guardar (o Enter)"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--v)', display: 'flex', alignItems: 'center', padding: 2 }}>
+                            <Check size={13} />
+                          </button>
+                          <button onClick={() => cancelEdit(i.product_name)} title="Cancelar (o Esc)"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gt)', display: 'flex', alignItems: 'center', padding: 2 }}>
+                            <X size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => editItem(i)} title="Editar"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--az)', display: 'flex', alignItems: 'center', padding: 2 }}>
+                            <Pencil size={12} />
+                          </button>
+                          <button onClick={() => removeItem(i.product_name)} title="Quitar"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', padding: 2, fontSize: 15, fontWeight: 700, lineHeight: 1 }}>
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
             {items.length > 0 && (
               <tr style={{ background: 'var(--vc)' }}>
                 <td colSpan={2} style={{ padding: '9px 12px', fontWeight: 800, color: 'var(--vd)', borderRight: '1px solid var(--brd)' }}>Total</td>
