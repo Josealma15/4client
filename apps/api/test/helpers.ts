@@ -19,6 +19,7 @@ import cierreRoutes from '../src/routes/cierre.js';
 import webhookRoutes from '../src/routes/webhook.js';
 import dashboardRoutes from '../src/routes/dashboard.js';
 import ticketRoutes from '../src/routes/tickets.js';
+import publicRoutes from '../src/routes/public.js';
 
 /**
  * Builds a fully-wired Fastify instance (same plugins as server.ts) with only the
@@ -60,6 +61,7 @@ export async function buildTestServer(): Promise<FastifyInstance> {
   await fastify.register(webhookRoutes, { prefix: '/api/v1/webhook' });
   await fastify.register(dashboardRoutes, { prefix: '/api/v1/dashboard' });
   await fastify.register(ticketRoutes, { prefix: '/api/v1/tickets' });
+  await fastify.register(publicRoutes, { prefix: '/api/v1/public' });
 
   fastify.setErrorHandler((error: FastifyError, _req, reply) => {
     const status = error.statusCode ?? 500;
