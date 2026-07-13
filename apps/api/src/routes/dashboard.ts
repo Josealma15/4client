@@ -8,7 +8,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     const query = z.object({ fecha: z.string().optional() }).parse(req.query);
     const fecha = query.fecha ? new Date(query.fecha) : new Date();
 
-    const [orders, papeleraOrders, history, tickets] = await Promise.all([
+    const [orders, papeleraOrders, history, tickets, dailyClose] = await Promise.all([
       fastify.prisma.order.findMany({
         where: { org_id: req.user.orgId, fecha, status: { not: 'papelera' } },
         include: { items: true, employee: { select: { id: true, name: true } } },
@@ -54,6 +54,10 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
           },
         },
         orderBy: { created_at: 'asc' },
+      }),
+      fastify.prisma.dailyClose.findUnique({
+        where: { org_id_fecha: { org_id: req.user.orgId, fecha } },
+        include: { closedBy: { select: { name: true } } },
       }),
     ]);
 
@@ -104,6 +108,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
         orders,
         papeleraOrders,
         history,
+        cierre: dailyClose ? { cerrado: true, closedAt: dailyClose.closed_at, closedByName: dailyClose.closedBy?.name ?? null } : { cerrado: false },
       },
     });
   });

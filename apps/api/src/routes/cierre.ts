@@ -15,6 +15,17 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
     const fecha = new Date(body.data.fecha);
     const { decisions } = body.data;
 
+    const yaExiste = await fastify.prisma.dailyClose.findUnique({
+      where: { org_id_fecha: { org_id: req.user.orgId, fecha } },
+    });
+    if (yaExiste) {
+      return reply.status(409).send({
+        error: 'La caja de este día ya fue cerrada',
+        code: 'ALREADY_CLOSED',
+        closed_at: yaExiste.closed_at,
+      });
+    }
+
     const pendientes = await fastify.prisma.order.findMany({
       where: { org_id: req.user.orgId, fecha, paid: false, status: { notIn: ['cerrado', 'papelera'] } },
       include: { items: true },

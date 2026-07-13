@@ -153,4 +153,36 @@ describe('cierre routes', () => {
     const pendingIds: string[] = cierre.json().pending.map((p: { id: string }) => p.id);
     expect(pendingIds).toContain(order.id);
   });
+
+  it('closing an already-closed day again -> 409 ALREADY_CLOSED, and the day stays closed', async () => {
+    // A date not touched by any other test in this file (avoids colliding with
+    // orders that other tests' "manana" decisions shift onto the following day).
+    const fecha = '2026-02-20';
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha }),
+    });
+    expect(create.statusCode).toBe(201);
+    const order = create.json().data;
+
+    const firstCierre = await app.inject({
+      method: 'POST',
+      url: '/api/v1/cierre',
+      headers: authHeader(encargadoToken),
+      payload: { fecha, decisions: { [order.id]: 'forzar_cierre' } },
+    });
+    expect(firstCierre.statusCode).toBe(200);
+
+    const secondCierre = await app.inject({
+      method: 'POST',
+      url: '/api/v1/cierre',
+      headers: authHeader(encargadoToken),
+      payload: { fecha, decisions: {} },
+    });
+    expect(secondCierre.statusCode).toBe(409);
+    expect(secondCierre.json().code).toBe('ALREADY_CLOSED');
+  });
 });

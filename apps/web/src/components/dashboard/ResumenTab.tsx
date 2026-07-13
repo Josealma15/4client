@@ -97,10 +97,17 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <DatePickerES value={fecha} onChange={setFecha} />
-          <button onClick={onCierreCaja}
-            style={{ background: 'var(--vd)', color: '#fff', border: 'none', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
-            <Lock size={15} /> Cerrar caja
-          </button>
+          {dashboard?.cierre?.cerrado ? (
+            <button disabled title={dashboard.cierre.closedByName ? `Cerrada por ${dashboard.cierre.closedByName}` : ''}
+              style={{ background: 'var(--bg)', color: 'var(--gt)', border: '1px solid var(--brd)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+              <Lock size={15} /> Caja ya cerrada
+            </button>
+          ) : (
+            <button onClick={onCierreCaja}
+              style={{ background: 'var(--vd)', color: '#fff', border: 'none', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+              <Lock size={15} /> Cerrar caja
+            </button>
+          )}
         </div>
       </div>
 

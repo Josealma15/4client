@@ -68,6 +68,12 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
         toast(`Faltan decisiones: ${nums}`, true);
         return;
       }
+      if (e.code === 'ALREADY_CLOSED') {
+        toast('Ya cerraste caja para este día', true);
+        qc.invalidateQueries({ queryKey: ['dashboard'] });
+        onClose();
+        return;
+      }
       toast(e.message ?? 'Error al cerrar caja', true);
     },
   });
