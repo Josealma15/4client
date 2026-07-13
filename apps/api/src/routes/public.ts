@@ -67,11 +67,31 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
+
+      // So the form can offer "add to my active order" instead of always forking a
+      // new one — capped at the most recent 20, which is already far more than any
+      // real customer would ever have open at once (an "open" order only stays that
+      // way until someone closes it, so this can't grow unbounded in practice).
+      const openOrders = await fastify.prisma.order.findMany({
+        where: { ticket_id: payload.ticketId, org_id: payload.orgId, status: { notIn: ['cerrado', 'papelera'] } },
+        select: { id: true, num: true, address: true, payment_method: true, created_at: true, items: { select: { id: true } } },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+      });
+
       return reply.send({
         data: {
           clientName: payload.clientName,
           orgName: payload.orgName,
           orgId: payload.orgId,
+          openOrders: openOrders.map(o => ({
+            id: o.id,
+            num: o.num,
+            address: o.address === 'Pendiente de confirmar' ? '' : o.address,
+            paymentMethod: o.payment_method === 'sin_asignar' ? '' : o.payment_method,
+            itemCount: o.items.length,
+            createdAt: o.created_at,
+          })),
         },
       });
     } catch {
@@ -121,6 +141,11 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       token: z.string().min(1),
       address: z.string().max(500).optional(),
       payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
+      // Set when the client chose "add to my active order" instead of a new one.
+      // Re-validated below (not trusted blindly) — if it's gone stale (e.g. staff
+      // closed it while the client was filling the form) this just falls through to
+      // creating a new order instead of blocking the submission.
+      merge_order_id: z.string().uuid().optional(),
       items: z.array(z.object({
         product_name:   z.string().min(1).max(200),
         quantity_label: z.string().max(100),
@@ -142,15 +167,6 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     });
     if (!ticket) return reply.status(404).send({ error: 'Ticket no encontrado', code: 'NOT_FOUND' });
 
-    // Cap orders generated per form link — the token stays valid for 7 days with no
-    // revocation, so without this a single leaked/shared link could spam-create orders.
-    const existingFormOrders = await fastify.prisma.order.count({
-      where: { ticket_id: ticket.id, source: 'form' },
-    });
-    if (existingFormOrders >= MAX_FORM_ORDERS_PER_TICKET) {
-      return reply.status(429).send({ error: 'Límite de pedidos alcanzado para este link', code: 'FORM_LIMIT_REACHED' });
-    }
-
     // Use first active admin/encargado as registered_by (system actor for form orders)
     const systemUser = await fastify.prisma.user.findFirst({
       where: { org_id: payload.orgId, active: true, role: { in: ['admin', 'encargado'] } },
@@ -158,23 +174,106 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     });
     if (!systemUser) return reply.status(500).send({ error: 'Organización sin usuarios activos', code: 'NO_USER' });
 
-    // Fetch product prices from catalog
+    // Fetch product prices from catalog — needed either way (new order or merge)
     const productNames = body.data.items.map(i => i.product_name);
     const catalogProducts = await fastify.prisma.product.findMany({
       where: { org_id: payload.orgId, name: { in: productNames }, active: true },
       select: { name: true, price_per_unit: true },
     });
     const priceMap = new Map(catalogProducts.map(p => [p.name, Number(p.price_per_unit ?? 0)]));
+    const newItemsData = body.data.items.map(item => ({
+      product_name: item.product_name,
+      quantity_label: item.quantity_label,
+      price: priceMap.get(item.product_name) ?? 0,
+    }));
+
+    // ── Merge path: append to an existing open order instead of creating a new one ──
+    if (body.data.merge_order_id) {
+      const target = await fastify.prisma.order.findFirst({
+        where: {
+          id: body.data.merge_order_id, ticket_id: ticket.id, org_id: payload.orgId,
+          status: { notIn: ['cerrado', 'papelera'] }, locked: false,
+        },
+        include: { items: { select: { sort_order: true } } },
+      });
+
+      if (target) {
+        const maxSort = target.items.reduce((m, i) => Math.max(m, i.sort_order), -1);
+        const updated = await fastify.prisma.order.update({
+          where: { id: target.id },
+          data: {
+            // Only overwrite if the client actually typed something new this time —
+            // an empty field means "leave what's already there," not "clear it."
+            ...(body.data.address?.trim() ? { address: body.data.address.trim() } : {}),
+            ...(body.data.payment_method ? { payment_method: body.data.payment_method } : {}),
+            items: { create: newItemsData.map((it, idx) => ({ ...it, sort_order: maxSort + 1 + idx })) },
+          },
+          include: {
+            items: { orderBy: { sort_order: 'asc' } },
+            employee: { select: { id: true, name: true } },
+            registeredBy: { select: { id: true, name: true } },
+            paidBy: { select: { id: true, name: true } },
+          },
+        });
+
+        await fastify.prisma.orderHistory.create({
+          data: {
+            org_id: payload.orgId, order_id: updated.id, actor_id: systemUser.id,
+            action_type: 'edit', notes: `${newItemsData.length} producto(s) agregado(s) desde el formulario`,
+          },
+        });
+
+        const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
+        const msgText = `*Se agregaron productos a tu pedido #${updated.num}*\n${lines.join('\n')}\n\n_El encargado revisará y confirmará el pedido._`;
+
+        const message = await fastify.prisma.ticketMessage.create({
+          data: { ticket_id: ticket.id, direction: 'out', text: msgText, sent_at: new Date(), sent_by: systemUser.id },
+        });
+        await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { last_message_at: new Date() } });
+
+        const provider = MetaCloudProvider.fromOrg(ticket.org);
+        if (provider) {
+          try {
+            await provider.sendText(ticket.phone, msgText);
+          } catch (err: any) {
+            fastify.log.error({ err, ticketId: ticket.id }, 'WPP: error enviando confirmación de items agregados');
+          }
+        } else {
+          fastify.log.warn({ ticketId: ticket.id }, 'WPP: org sin credenciales Meta, confirmación solo guardada en BD');
+        }
+
+        fastify.io.to(`org:${payload.orgId}`).emit('order:updated', updated as any);
+        fastify.io.to(`org:${payload.orgId}`).emit('ticket:message', {
+          ticketId: ticket.id,
+          message: {
+            id: message.id, ticket_id: ticket.id, direction: 'out' as const, text: message.text,
+            media_url: null, media_type: null, media_caption: null,
+            sent_by: systemUser.id, sent_by_name: systemUser.name, wpp_message_id: null,
+            sent_at: message.sent_at.toISOString(), delivered: false, read_by_client: false,
+          },
+        });
+
+        return reply.status(200).send({ data: { ok: true, orderId: updated.id, num: updated.num, merged: true } });
+      }
+      // target missing/closed/locked by the time we got here — fall through and
+      // create a fresh order below instead of leaving the client stuck.
+    }
+
+    // ── New order path ──
+    // Cap orders generated per form link — the token stays valid for 7 days with no
+    // revocation, so without this a single leaked/shared link could spam-create orders.
+    // Doesn't apply to the merge path above since that never creates a new order.
+    const existingFormOrders = await fastify.prisma.order.count({
+      where: { ticket_id: ticket.id, source: 'form' },
+    });
+    if (existingFormOrders >= MAX_FORM_ORDERS_PER_TICKET) {
+      return reply.status(429).send({ error: 'Límite de pedidos alcanzado para este link', code: 'FORM_LIMIT_REACHED' });
+    }
 
     // Colombia UTC-5 local date for fecha
     const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
 
-    const orderItems = body.data.items.map((item, idx) => ({
-      product_name: item.product_name,
-      quantity_label: item.quantity_label,
-      price: priceMap.get(item.product_name) ?? 0,
-      sort_order: idx,
-    }));
+    const orderItems = newItemsData.map((item, idx) => ({ ...item, sort_order: idx }));
 
     const order = await createOrderWithRetryNum(fastify.prisma, payload.orgId, todayLocal, (num) =>
       fastify.prisma.order.create({
@@ -184,10 +283,8 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           num,
           customer_name: payload.clientName,
           customer_phone: payload.clientPhone,
-          // Falls back to the old placeholders only if the client somehow submits
-          // without them (e.g. a stale cached form page) — the current form always
-          // collects both so the order comes in ready to dispatch, not blocked on
-          // staff having to fill these in before it can even be prepared or closed.
+          // Placeholders when the client left these blank — dirección/método de pago
+          // are optional on the form, only the products are required.
           address: body.data.address?.trim() || 'Pendiente de confirmar',
           channel: 'whatsapp',
           payment_method: body.data.payment_method ?? 'sin_asignar',

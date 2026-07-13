@@ -5,6 +5,7 @@ const API = import.meta.env.VITE_API_URL ?? '';
 
 interface Product { id: string; name: string; category: string; unit_type?: string | null; }
 interface SelectedItem { product_name: string; quantity_label: string; productId: string; }
+interface OpenOrder { id: string; num: string; address: string; paymentMethod: string; itemCount: number; createdAt: string; }
 
 function groupByCategory(products: Product[]) {
   const order: string[] = [];
@@ -22,10 +23,14 @@ export default function ClientFormPage() {
   const draftKey = `4client_form_draft_${token}`;
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-  const [state, setState] = useState<'loading' | 'invalid' | 'catalog' | 'done'>('loading');
+  const [state, setState] = useState<'loading' | 'invalid' | 'choose' | 'catalog' | 'done'>('loading');
   const [clientName, setClientName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [openOrders, setOpenOrders] = useState<OpenOrder[]>([]);
+  // null = not decided yet (only matters while openOrders.length > 0); 'new' = a
+  // separate order; any other value = the id of the open order to add items to.
+  const [mergeTarget, setMergeTarget] = useState<string | 'new' | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -72,8 +77,15 @@ export default function ClientFormPage() {
         setClientName(info.data.clientName);
         setOrgName(info.data.orgName ?? '');
         setProducts(prods.data ?? []);
-        setState('catalog');
-        setTimeout(() => searchRef.current?.focus(), 100);
+        const orders: OpenOrder[] = info.data.openOrders ?? [];
+        setOpenOrders(orders);
+        if (orders.length > 0) {
+          setState('choose');
+        } else {
+          setMergeTarget('new');
+          setState('catalog');
+          setTimeout(() => searchRef.current?.focus(), 100);
+        }
       })
       .catch(() => { setState('invalid'); setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.'); });
   }, [token]);
@@ -126,6 +138,21 @@ export default function ClientFormPage() {
     setSelected(prev => prev.filter(i => i.productId !== productId));
   }
 
+  function chooseTarget(target: string | 'new') {
+    setMergeTarget(target);
+    if (target !== 'new') {
+      // Pre-fill from the order they're adding to, so the fields show what's already
+      // on file — they only need to type something if they actually want to change it.
+      const order = openOrders.find(o => o.id === target);
+      if (order) {
+        if (order.address) setAddress(order.address);
+        if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
+      }
+    }
+    setState('catalog');
+    setTimeout(() => searchRef.current?.focus(), 100);
+  }
+
   function clearOrder() {
     if (!window.confirm('¿Borrar todo el pedido? Se perderán los productos agregados.')) return;
     setSelected([]);
@@ -139,8 +166,6 @@ export default function ClientFormPage() {
   async function handleSubmit() {
     if (submitting) return; // already in flight — a fast double-click/tap shouldn't fire twice
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
-    if (!address.trim()) { setSubmitError('Escribe la dirección de entrega'); return; }
-    if (!paymentMethod) { setSubmitError('Elige el método de pago'); return; }
     setSubmitError('');
     setSubmitting(true);
     try {
@@ -149,8 +174,9 @@ export default function ClientFormPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          address: address.trim(),
-          payment_method: paymentMethod,
+          address: address.trim() || undefined,
+          payment_method: paymentMethod || undefined,
+          merge_order_id: mergeTarget && mergeTarget !== 'new' ? mergeTarget : undefined,
           items: selected.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
         }),
       });
@@ -222,6 +248,54 @@ export default function ClientFormPage() {
     </div>
   );
 
+  if (state === 'choose') {
+    const PAYMENT_LABEL: Record<string, string> = { transfer: 'Transferencia', cash: 'En tienda', cod: 'Cobro en casa' };
+    return (
+      <div style={page}>
+        <div style={header}>
+          <ShoppingCart size={20} color="#fff" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{orgName}</div>
+            {clientName && <div style={{ fontSize: 12, opacity: 0.85 }}>Hola, {clientName}</div>}
+          </div>
+        </div>
+        <div style={{ padding: '20px 16px' }}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', boxShadow: '0 2px 12px rgba(0,0,0,.06)', marginBottom: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#111', marginBottom: 4 }}>
+              {openOrders.length === 1 ? 'Ya tienes un pedido activo' : 'Ya tienes pedidos activos'}
+            </div>
+            <div style={{ fontSize: 14, color: '#666' }}>
+              ¿Agregar lo que vas a pedir ahora a uno de esos, o prefieres uno nuevo?
+            </div>
+          </div>
+
+          {openOrders.map(o => (
+            <button key={o.id} onClick={() => chooseTarget(o.id)}
+              style={{
+                width: '100%', textAlign: 'left', background: '#fff', border: '2px solid #ddd',
+                borderRadius: 14, padding: '14px 16px', marginBottom: 10, cursor: 'pointer',
+              }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: GREEN, marginBottom: 3 }}>
+                Pedido #{o.num} · {o.itemCount} producto{o.itemCount !== 1 ? 's' : ''}
+              </div>
+              {o.address && <div style={{ fontSize: 13, color: '#555' }}>{o.address}</div>}
+              {o.paymentMethod && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod}</div>}
+            </button>
+          ))}
+
+          <button onClick={() => chooseTarget('new')}
+            style={{
+              width: '100%', textAlign: 'center', background: '#f0f4f8', border: '2px dashed #ccc',
+              borderRadius: 14, padding: '14px 16px', cursor: 'pointer', fontWeight: 700, color: '#444', fontSize: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+            <Plus size={15} /> Crear un pedido nuevo, aparte
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const selectedCount = selected.length;
 
   return (
@@ -278,7 +352,7 @@ export default function ClientFormPage() {
               can happen with it. Still editable by staff afterward if needed. */}
           <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 10, paddingTop: 10 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
-              Dirección de entrega
+              Dirección de entrega <span style={{ fontWeight: 400, color: '#999' }}>(opcional)</span>
             </label>
             <input
               type="text"
@@ -288,7 +362,7 @@ export default function ClientFormPage() {
               style={{ width: '100%', fontSize: 14, padding: '10px 12px', border: '2px solid #ddd', borderRadius: 10, outline: 'none', fontFamily: 'inherit', color: '#111', background: '#fff', marginBottom: 10 }}
             />
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
-              Método de pago
+              Método de pago <span style={{ fontWeight: 400, color: '#999' }}>(opcional)</span>
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               {[
