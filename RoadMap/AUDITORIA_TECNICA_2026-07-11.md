@@ -1,4 +1,4 @@
-# IMPROVE.md — Auditoría técnica completa de 4Client
+# Auditoría técnica completa de 4Client
 
 > Fecha: 2026-07-11 · Rama auditada: `main` (commit `4d318d2`)
 > Alcance: backend (Fastify + Prisma), frontend (React + Vite), esquema de base de datos, dependencias, seguridad, deployment.
