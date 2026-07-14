@@ -88,11 +88,12 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     onError: (e: any) => toast(e.message ?? 'Error al enviar', true),
   });
 
-  const revokeMut = useMutation({
+  const blockLinkMut = useMutation({
     mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
-    onSuccess: () => toast('Link revocado — el cliente ya no puede usarlo'),
-    onError: (e: any) => toast(e.message ?? 'No se pudo revocar el link', true),
+    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   function handleSend() {
     if (!replyText.trim() || replyMut.isPending) return;
@@ -190,9 +191,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               )}
               {ticketId && (
                 <button
-                  title="Revocar el link de formulario enviado a este cliente"
-                  onClick={() => revokeMut.mutate()}
-                  disabled={revokeMut.isPending}
+                  title="Bloquear el link de formulario enviado a este cliente"
+                  onClick={() => setShowBlockConfirm(true)}
+                  disabled={blockLinkMut.isPending}
                   style={{
                     background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
                     borderRadius: 8, color: '#fff', cursor: 'pointer',
@@ -200,7 +201,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                     display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
-                  <Ban size={13} /> Revocar
+                  <Ban size={13} /> Bloquear link
                 </button>
               )}
             </div>
@@ -329,6 +330,15 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
           savePending={createOrder.isPending}
           onConfirm={() => { confirmDlg.onOk(); setConfirmDlg(null); }}
           onCancel={() => setConfirmDlg(null)}
+        />
+      )}
+      {showBlockConfirm && (
+        <ConfirmModal
+          message="Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
+          confirmLabel="Bloquear"
+          danger
+          onConfirm={() => { blockLinkMut.mutate(); setShowBlockConfirm(false); }}
+          onCancel={() => setShowBlockConfirm(false)}
         />
       )}
     </div>

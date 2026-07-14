@@ -1,11 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, CheckCircle, XCircle, Check, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, CheckCircle, XCircle, Check, Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Lock } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL ?? '';
 
 interface Product { id: string; name: string; category: string; unit_type?: string | null; }
 interface SelectedItem { product_name: string; quantity_label: string; productId: string; }
-interface OpenOrder { id: string; num: string; address: string; paymentMethod: string; itemCount: number; createdAt: string; }
+interface DayOrderItem { id: string; product_name: string; quantity_label: string; }
+interface DayOrder {
+  id: string; num: string; address: string; paymentMethod: string;
+  status: string; editable: boolean; items: DayOrderItem[]; createdAt: string;
+}
+
+const STATUS_LABEL_CLIENT: Record<string, string> = {
+  nuevo: 'Nuevo', preparando: 'Preparando', listo: 'Listo para entrega',
+  camino: 'En camino', cerrado: 'Entregado',
+};
 
 function groupByCategory(products: Product[]) {
   const order: string[] = [];
@@ -18,8 +27,26 @@ function groupByCategory(products: Product[]) {
   return order.map(cat => ({ category: cat, products: groups[cat] }));
 }
 
+// Random value this browser generates once per link and keeps in localStorage —
+// there's no real "device identity" reachable from a web page, so this is the
+// closest available proxy. The backend (public.ts) claims the ticket's form-link
+// for whichever browser presents this value first; a different browser/device
+// opening the same link afterward gets rejected as if the link were invalid.
+function getOrCreateDeviceToken(token: string): string {
+  const key = `4client_device_${token}`;
+  const fresh = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  try {
+    let dt = localStorage.getItem(key);
+    if (!dt) { dt = fresh(); localStorage.setItem(key, dt); }
+    return dt;
+  } catch {
+    return fresh(); // localStorage unavailable (private mode) — works for this load, just won't persist
+  }
+}
+
 export default function ClientFormPage() {
   const token = new URLSearchParams(window.location.search).get('t') ?? '';
+  const deviceToken = useMemo(() => getOrCreateDeviceToken(token), [token]);
   const draftKey = `4client_form_draft_${token}`;
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -27,9 +54,10 @@ export default function ClientFormPage() {
   const [clientName, setClientName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [openOrders, setOpenOrders] = useState<OpenOrder[]>([]);
-  // null = not decided yet (only matters while openOrders.length > 0); 'new' = a
-  // separate order; any other value = the id of the open order to add items to.
+  const [dayOrders, setDayOrders] = useState<DayOrder[]>([]);
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  // null = not decided yet (only matters while dayOrders.length > 0); 'new' = a
+  // separate order; any other value = the id of the existing order being edited.
   const [mergeTarget, setMergeTarget] = useState<string | 'new' | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -68,17 +96,18 @@ export default function ClientFormPage() {
     } catch { /* localStorage unavailable (private mode, etc.) — ignore */ }
     setHydrated(true);
 
+    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
     Promise.all([
-      fetch(`${API}/api/v1/public/form-info?t=${encodeURIComponent(token)}`).then(r => r.json()),
-      fetch(`${API}/api/v1/public/products?t=${encodeURIComponent(token)}`).then(r => r.json()),
+      fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()),
+      fetch(`${API}/api/v1/public/products?${qs}`).then(r => r.json()),
     ])
       .then(([info, prods]) => {
         if (!info.data?.clientName) { setState('invalid'); setErrorMsg(info.error ?? 'Link inválido o expirado.'); return; }
         setClientName(info.data.clientName);
         setOrgName(info.data.orgName ?? '');
         setProducts(prods.data ?? []);
-        const orders: OpenOrder[] = info.data.openOrders ?? [];
-        setOpenOrders(orders);
+        const orders: DayOrder[] = info.data.orders ?? [];
+        setDayOrders(orders);
         if (orders.length > 0) {
           setState('choose');
         } else {
@@ -138,19 +167,49 @@ export default function ClientFormPage() {
     setSelected(prev => prev.filter(i => i.productId !== productId));
   }
 
+  function toggleExpandOrder(orderId: string) {
+    setExpandedOrders(prev => {
+      const next = new Set(prev);
+      next.has(orderId) ? next.delete(orderId) : next.add(orderId);
+      return next;
+    });
+  }
+
   function chooseTarget(target: string | 'new') {
     setMergeTarget(target);
     if (target !== 'new') {
       // Pre-fill from the order they're adding to, so the fields show what's already
       // on file — they only need to type something if they actually want to change it.
-      const order = openOrders.find(o => o.id === target);
+      const order = dayOrders.find(o => o.id === target);
       if (order) {
         if (order.address) setAddress(order.address);
         if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
+        // Hydrate with what's already on the order — otherwise the client has no way
+        // to see/edit/remove existing items, only ever add more on top blind.
+        setSelected(order.items.map(i => ({
+          product_name: i.product_name,
+          quantity_label: i.quantity_label,
+          productId: products.find(p => p.name === i.product_name)?.id ?? `existing-${i.id}`,
+        })));
       }
+    } else {
+      setSelected([]);
+      setAddress('');
+      setPaymentMethod('');
     }
     setState('catalog');
     setTimeout(() => searchRef.current?.focus(), 100);
+  }
+
+  function backToChoose() {
+    if (selected.length > 0 && !window.confirm('¿Volver? Se perderán los cambios que no hayas enviado.')) return;
+    setSelected([]);
+    setPendingQty({});
+    setAddress('');
+    setPaymentMethod('');
+    setSummaryExpanded(false);
+    setMergeTarget(null);
+    setState('choose');
   }
 
   function clearOrder() {
@@ -174,6 +233,7 @@ export default function ClientFormPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
+          device_token: deviceToken,
           address: address.trim() || undefined,
           payment_method: paymentMethod || undefined,
           merge_order_id: mergeTarget && mergeTarget !== 'new' ? mergeTarget : undefined,
@@ -262,26 +322,61 @@ export default function ClientFormPage() {
         <div style={{ padding: '20px 16px' }}>
           <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', boxShadow: '0 2px 12px rgba(0,0,0,.06)', marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#111', marginBottom: 4 }}>
-              {openOrders.length === 1 ? 'Ya tienes un pedido activo' : 'Ya tienes pedidos activos'}
+              Tus pedidos de hoy
             </div>
             <div style={{ fontSize: 14, color: '#666' }}>
-              ¿Agregar lo que vas a pedir ahora a uno de esos, o prefieres uno nuevo?
+              Elige uno para modificarlo, o crea uno nuevo aparte.
             </div>
           </div>
 
-          {openOrders.map(o => (
-            <button key={o.id} onClick={() => chooseTarget(o.id)}
-              style={{
-                width: '100%', textAlign: 'left', background: '#fff', border: '2px solid #ddd',
-                borderRadius: 14, padding: '14px 16px', marginBottom: 10, cursor: 'pointer',
-              }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: GREEN, marginBottom: 3 }}>
-                Pedido #{o.num} · {o.itemCount} producto{o.itemCount !== 1 ? 's' : ''}
-              </div>
-              {o.address && <div style={{ fontSize: 13, color: '#555' }}>{o.address}</div>}
-              {o.paymentMethod && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod}</div>}
-            </button>
-          ))}
+          {dayOrders.map(o => {
+            if (!o.editable) {
+              const isExpanded = expandedOrders.has(o.id);
+              return (
+                <div key={o.id} onClick={() => toggleExpandOrder(o.id)}
+                  style={{
+                    width: '100%', textAlign: 'left', background: '#f7f7f7', border: '2px solid #e5e5e5',
+                    borderRadius: 14, padding: '14px 16px', marginBottom: 10, cursor: 'pointer',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: '#555' }}>
+                      Pedido #{o.num} · {o.items.length} producto{o.items.length !== 1 ? 's' : ''}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#888', background: '#eee', padding: '4px 10px', borderRadius: 20 }}>
+                      <Lock size={11} /> {STATUS_LABEL_CLIENT[o.status] ?? o.status}
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #ddd' }}>
+                      {o.items.map(i => (
+                        <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#666', padding: '3px 0' }}>
+                          <span>{i.product_name}</span><span>{i.quantity_label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button key={o.id} onClick={() => chooseTarget(o.id)}
+                style={{
+                  width: '100%', textAlign: 'left', background: '#fff', border: '2px solid #ddd',
+                  borderRadius: 14, padding: '14px 16px', marginBottom: 10, cursor: 'pointer',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: GREEN }}>
+                    Pedido #{o.num} · {o.items.length} producto{o.items.length !== 1 ? 's' : ''}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: GREEN, background: '#f0fdf4', padding: '3px 9px', borderRadius: 20 }}>
+                    {STATUS_LABEL_CLIENT[o.status] ?? o.status}
+                  </div>
+                </div>
+                {o.address && <div style={{ fontSize: 13, color: '#555' }}>{o.address}</div>}
+                {o.paymentMethod && <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{PAYMENT_LABEL[o.paymentMethod] ?? o.paymentMethod}</div>}
+              </button>
+            );
+          })}
 
           <button onClick={() => chooseTarget('new')}
             style={{
@@ -297,11 +392,18 @@ export default function ClientFormPage() {
   }
 
   const selectedCount = selected.length;
+  const canGoBack = dayOrders.length > 0;
 
   return (
     <div style={page}>
       {/* Header */}
       <div style={header}>
+        {canGoBack && (
+          <button onClick={backToChoose} title="Volver al menú anterior" aria-label="Volver"
+            style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0 }}>
+            <ArrowLeft size={17} />
+          </button>
+        )}
         <ShoppingCart size={20} color="#fff" />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>{orgName}</div>
@@ -318,7 +420,7 @@ export default function ClientFormPage() {
       {selectedCount > 0 && (
         <div ref={summaryRef} style={{ background: '#fff', margin: '0 0 2px', padding: '12px 16px', borderBottom: '2px solid #e0e0e0' }}>
           <div style={{ fontWeight: 800, fontSize: 13, color: GREEN, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-            Productos agregados ({selectedCount})
+            Productos {mergeTarget !== 'new' ? 'del pedido' : 'agregados'} ({selectedCount})
           </div>
           {(summaryExpanded ? selected : selected.slice(0, 2)).map(s => (
             <div key={s.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f0f0f0' }}>

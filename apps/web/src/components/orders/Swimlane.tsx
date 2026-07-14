@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Siren, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Eye, Plus, AlertTriangle, Lock } from 'lucide-react';
+import { Siren, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Eye, Plus, AlertTriangle, Lock, Bell } from 'lucide-react';
 import { STATUS_LABEL, STATUS_ORDER, fmtCOP, todayStr } from '../../lib/format';
 import { useMoveOrder } from '../../hooks/useOrders';
 import { toast } from '../ui/Toast';
@@ -19,6 +19,7 @@ interface Order {
   items: { product_name?: string; quantity_label?: string; price: number }[];
   ticket_id?: string; order_hour?: string; source?: string;
   created_at: string; paid_at?: string | null;
+  client_modified?: boolean;
 }
 
 interface Props {
@@ -236,6 +237,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
       <div
         className="dc-card"
         style={{
+          position: 'relative',
           borderLeftColor: COL_COLORS[ord.status],
           cursor: (ord.locked || frozen) ? 'default' : 'grab',
           opacity: frozen ? 0.72 : 1,
@@ -245,6 +247,16 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
         onDragStart={(e) => !frozen && handleDragStart(e, ord, ticketId)}
         onClick={() => setDetailId(ord.id)}
       >
+        {ord.client_modified && (
+          <div title="El cliente modificó este pedido — sin revisar"
+            style={{
+              position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%',
+              background: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 4px rgba(0,0,0,.25)', zIndex: 1,
+            }}>
+            <Bell size={11} color="#fff" fill="#fff" />
+          </div>
+        )}
         {(isGhost || isDeferred) && (
           <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--az)', background: 'var(--azc)', padding: '2px 7px', borderRadius: 20, marginBottom: 5, display: 'inline-block' }}>
             Pospuesto

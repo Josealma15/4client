@@ -147,8 +147,12 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     ) as string;
 
     // A fresh link supersedes any earlier revocation on this ticket — otherwise once
-    // revoked, no future "Formulario" send would ever work again.
+    // revoked, no future "Formulario" send would ever work again. Also clears any
+    // device lock (public.ts's FormLinkSession) — sending a new link is a deliberate
+    // "start over" action, e.g. to fix a false-positive lockout from the wrong device
+    // claiming an earlier link.
     await fastify.prisma.revokedFormToken.deleteMany({ where: { ticket_id: ticket.id, org_id: req.user.orgId } });
+    await fastify.prisma.formLinkSession.deleteMany({ where: { ticket_id: ticket.id } });
 
     const frontendUrl = config.FRONTEND_URL.split(',')[0].trim();
     const url = `${frontendUrl}/form?t=${token}`;

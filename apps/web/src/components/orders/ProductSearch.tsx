@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, KeyboardEvent } from 'react';
 import { Check, Pencil, X } from 'lucide-react';
 
 interface Product { id: string; name: string; category: string; }
-interface Item { product_name: string; quantity_label: string; price: string; }
+interface Item { product_name: string; quantity_label: string; price: string; added_by_client?: boolean; }
 
 interface Props {
   products: Product[];
@@ -75,10 +75,15 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
     const local = localInputs[productName];
     if (!local?.qty.trim() && !local?.price.trim()) return;
 
+    // Preserve provenance — staff editing qty/price on a line the client added
+    // (typically filling in the price, which the client's form never sets) must not
+    // silently clear the flag that marks it as a client-originated change.
+    const priorItem = items.find(i => i.product_name === productName);
     const newItem: Item = {
       product_name: productName,
       quantity_label: local.qty.trim(),
       price: local.price.trim(),
+      added_by_client: priorItem?.added_by_client ?? false,
     };
 
     const exists = items.some(i => i.product_name === productName);
@@ -157,9 +162,12 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
             )}
             {items.map((i, idx) => (
               <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
-                <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
-                <td style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
-                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)' }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
+                <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: i.added_by_client ? '#DC2626' : undefined }}>
+                  {i.product_name}
+                  {i.added_by_client && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#DC2626' }}>· cliente</span>}
+                </td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: i.added_by_client ? '#DC2626' : 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', color: i.added_by_client ? '#DC2626' : undefined }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
               </tr>
             ))}
             {items.length > 0 && (
@@ -315,8 +323,11 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
               const local = getLocal(i.product_name);
               return (
                 <tr key={i.product_name} style={{ background: idx % 2 === 0 ? 'var(--b)' : 'var(--bg)' }}>
-                  <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.product_name}</td>
-                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'center', color: 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: i.added_by_client ? '#DC2626' : undefined }}>
+                    {i.product_name}
+                    {i.added_by_client && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#DC2626' }}>· cliente</span>}
+                  </td>
+                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'center', color: i.added_by_client ? '#DC2626' : 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>
                     {isEditing ? (
                       <input
                         ref={editQtyRef}
@@ -332,7 +343,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                       />
                     ) : (i.quantity_label || '—')}
                   </td>
-                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>
+                  <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: !isEditing && i.added_by_client ? '#DC2626' : undefined }}>
                     {isEditing ? (
                       <input
                         className="iinput"
