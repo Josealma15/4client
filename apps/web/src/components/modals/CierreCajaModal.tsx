@@ -31,8 +31,12 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
   // date against the day being closed (like Swimlane does) fixes that.
   const nonPapelera = orders.filter((o) => {
     if (o.status === 'papelera') return false;
-    const deferredMatch = o.notes?.match(/pasado_manana:(\d{4}-\d{2}-\d{2})/);
-    const isGhost = !!deferredMatch && deferredMatch[1] === fecha;
+    // notes can carry MULTIPLE pasado_manana:DATE markers (one per deferral, if an
+    // order got left open two cierres in a row) — matching only the first one (old
+    // behavior) missed a ghost whenever its marker wasn't first in the string. Same
+    // fix as Swimlane.tsx: check every marker, not just one.
+    const deferredDates = [...(o.notes?.matchAll(/pasado_manana:(\d{4}-\d{2}-\d{2})/g) ?? [])].map((m: RegExpMatchArray) => m[1]);
+    const isGhost = deferredDates.includes(fecha);
     return !isGhost;
   });
   const completados = nonPapelera.filter((o) => o.paid || o.status === 'cerrado');
