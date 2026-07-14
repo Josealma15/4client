@@ -210,18 +210,22 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
     const hasMore = ord.items.length > 2;
 
     // Deferred badge logic
-    // notes contains 'pasado_manana:SOURCE_DATE' — the date cierre de caja ran when this
-    // order got deferred (see cierre.ts), i.e. the day it was moved AWAY FROM, not the
-    // day it moved to. The order's own `fecha` field (ordFecha) is its real, current date.
-    const deferredMatch = (ord as any).notes?.match(/pasado_manana:(\d{4}-\d{2}-\d{2})/);
-    const sourceFecha: string | null = deferredMatch ? deferredMatch[1] : null;
+    // notes can contain MULTIPLE 'pasado_manana:SOURCE_DATE' markers, one per deferral —
+    // an order left open two cierres in a row picks up a second one on top of the first
+    // (see cierre.ts, notes are appended, never replaced). Matching only the FIRST marker
+    // (old behavior) meant an order deferred twice showed as a normal, fully-interactive
+    // card on the day it briefly sat on in between — its real fecha had already moved on
+    // again, so that day no longer owned it either, but nothing here said so. Collecting
+    // every marker and checking whether ANY of them names the day being viewed is what
+    // actually mirrors "this order passed through here at some point".
+    const deferredDates = [...((ord as any).notes?.matchAll(/pasado_manana:(\d{4}-\d{2}-\d{2})/g) ?? [])].map((m) => m[1]);
     const ordFecha: string | null = (ord as any).fecha ? new Date((ord as any).fecha).toISOString().split('T')[0] : null;
-    // Ghost: viewing the original day it was deferred FROM — this board no longer owns
-    // it (it lives on ordFecha now), show as a dimmed, non-interactive trace.
-    const isGhost = !!sourceFecha && sourceFecha === fecha;
+    // Ghost: viewing a day it was deferred AWAY FROM — this board no longer owns it (it
+    // lives on ordFecha now), show as a dimmed, non-interactive trace.
+    const isGhost = deferredDates.includes(fecha);
     // Arrived: viewing the day it's actually on now (its real, current fecha) — fully
     // active/interactive, just flagged with a badge noting it came from a deferral.
-    const isDeferred = !!sourceFecha && ordFecha !== null && ordFecha === fecha;
+    const isDeferred = deferredDates.length > 0 && ordFecha !== null && ordFecha === fecha;
     // Once cierre ran for this day, the whole board becomes a read-only snapshot —
     // every card on it freezes (not just the specific order that got deferred away),
     // so a "dejar_activo" order left open at close time doesn't stay silently
@@ -372,6 +376,20 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
             const isCollapsed = collapsedTickets.has(ticket.id);
             const tNum = `T-${String(filteredTickets.indexOf(ticket) + 1).padStart(2, '0')}`;
 
+            // Same ghost/arrived split as orders above, applied to the ticket itself —
+            // cierre.ts sets deferred_to on the ticket but never touches its own `fecha`
+            // (see schema comment on Ticket.fecha), so `fecha` is still the day it left
+            // FROM and `deferred_to` is the day it landed ON. Before this, the "Pospuesto"
+            // badge showed identically on both days (just `!!deferred_to`, no date check),
+            // so a chat looked exactly as "live" on the day it already left as on the day
+            // it arrived — the one place a viewer could actually tell the two apart was
+            // its order card underneath (dimmed vs not), which made the row visually
+            // contradict itself.
+            const ticketFechaStr = (ticket as any).fecha ? new Date((ticket as any).fecha).toISOString().split('T')[0] : null;
+            const ticketDeferredToStr = (ticket as any).deferred_to ? new Date((ticket as any).deferred_to).toISOString().split('T')[0] : null;
+            const isTicketGhost = !!ticketDeferredToStr && ticketFechaStr === fecha;
+            const isTicketArrived = !!ticketDeferredToStr && ticketDeferredToStr === fecha;
+
             if (isCollapsed) {
               return (
                 <div key={ticket.id} style={{ display: 'contents' }}>
@@ -397,7 +415,8 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
 
             return (
               <div key={ticket.id} style={{ display: 'contents' }}>
-                <div className={`slane-tcell${urg ? ' urg' : ''}`} onClick={() => onOpenTicket(ticket.id)}>
+                <div className={`slane-tcell${urg ? ' urg' : ''}`} onClick={() => onOpenTicket(ticket.id)}
+                  style={{ opacity: isTicketGhost ? 0.72 : 1 }}>
                   {ticket.unread_count > 0 && <div className="tk-new-dot">{ticket.unread_count}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span className="tk-num">{tNum}</span>
@@ -412,7 +431,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                       </button>
                     </div>
                   </div>
-                  {(ticket as any).deferred_to && (
+                  {(isTicketGhost || isTicketArrived) && (
                     <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--az)', background: 'var(--azc)', padding: '2px 7px', borderRadius: 20, marginBottom: 4, display: 'inline-block' }}>
                       Pospuesto
                     </div>
@@ -431,7 +450,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                     onClick={(e) => { e.stopPropagation(); onOpenTicket(ticket.id); }}>
                     Ver conversación <ChevronRight size={12} strokeWidth={2.5} />
                   </button>
-                  {!diaCerrado && (
+                  {!diaCerrado && !isTicketGhost && (
                     <button className="tk-crear-btn"
                       onClick={(e) => { e.stopPropagation(); onCreateFromTicket(ticket); }}>
                       <Plus size={11} strokeWidth={3} /> Crear pedido de despacho
