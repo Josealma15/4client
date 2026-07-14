@@ -315,7 +315,7 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 ├── railway.json
 ├── nixpacks.toml
 ├── vercel.json
-└── RoadMap/IMPLEMENTATION_PLAN.md
+└── RoadMap/PLAN_IMPLEMENTACION_ORIGINAL.md
 ```
 
 ---
