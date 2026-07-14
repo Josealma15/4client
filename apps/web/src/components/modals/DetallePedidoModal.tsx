@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Banknote, AlertTriangle, CheckCircle, ChevronDown, FileText, Send, Lock } from 'lucide-react';
+import { Trash2, Banknote, AlertTriangle, CheckCircle, ChevronDown, FileText, Send, Lock, Bell, ClipboardList, Ban } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
@@ -109,6 +109,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       product_name: i.product_name ?? '',
       quantity_label: i.quantity_label ?? '',
       price: String(i.price ?? ''),
+      added_by_client: !!i.added_by_client,
     })));
     setIsDirty(false);
   }, [order]);
@@ -178,6 +179,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
         quantity_label: i.quantity_label,
         price: parseFloat(i.price) || 0,
         sort_order: idx,
+        added_by_client: !!i.added_by_client,
       })),
     }),
     onSuccess: () => {
@@ -222,6 +224,31 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       setReplyText('');
     },
     onError: (e: any) => toast(e.message, true),
+  });
+
+  const formLinkMut = useMutation({
+    mutationFn: (text: string) => api.post(`/inbox/${order?.ticket_id}/reply`, { text }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inbox-convo', order?.ticket_id] });
+      toast('Formulario enviado');
+    },
+    onError: (e: any) => toast(e.message, true),
+  });
+
+  async function sendFormLink() {
+    if (!order?.ticket_id) return;
+    try {
+      const res = await api.get<{ data: { url: string } }>(`/inbox/${order.ticket_id}/form-link`);
+      formLinkMut.mutate(res.data.url);
+    } catch {
+      toast('No se pudo generar el link', true);
+    }
+  }
+
+  const blockLinkMut = useMutation({
+    mutationFn: () => api.post(`/inbox/${order?.ticket_id}/form-link/revoke`, {}),
+    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
 
   function markDirty() { setIsDirty(true); }
@@ -482,6 +509,12 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             <div>
               <div className="mtit" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 Pedido #{order.num}
+                {order.client_modified && (
+                  <span title="El cliente modificó este pedido desde el formulario — revisa los cambios (en rojo) y guarda para confirmar que ya los viste"
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#DC2626' }}>
+                    <Bell size={12} color="#fff" fill="#fff" />
+                  </span>
+                )}
                 {isDirty && !readOnly && (
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--a)' }}>● cambios sin guardar</span>
                 )}
@@ -653,6 +686,24 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   disabled={invoiceMut.isPending}
                   style={{ display: 'flex', alignItems: 'center', gap: 5, borderColor: 'var(--v)', color: 'var(--v)' }}>
                   <Send size={13} /> {invoiceMut.isPending ? 'Enviando...' : 'Enviar factura'}
+                </button>
+              )}
+              {order.ticket_id && (
+                <button className="bsec" onClick={sendFormLink} disabled={formLinkMut.isPending}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <ClipboardList size={13} /> Formulario
+                </button>
+              )}
+              {order.ticket_id && (
+                <button className="bsec"
+                  onClick={() => setConfirmDlg({
+                    msg: 'Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
+                    onOk: () => blockLinkMut.mutate(),
+                    danger: true,
+                  })}
+                  disabled={blockLinkMut.isPending}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, borderColor: '#DC2626', color: '#DC2626' }}>
+                  <Ban size={13} /> Bloquear link
                 </button>
               )}
             </div>

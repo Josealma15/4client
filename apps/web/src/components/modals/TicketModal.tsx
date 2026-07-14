@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
 import { fmtCOP, STATUS_LABEL } from '../../lib/format';
 import { toast } from '../ui/Toast';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
@@ -31,6 +32,7 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
   const qc = useQueryClient();
   const accessToken = useAuthStore((s) => s.accessToken);
   const [reply, setReply] = useState('');
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const { data: ticket, isLoading } = useQuery({
@@ -94,10 +96,10 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
     }
   }
 
-  const revokeMut = useMutation({
+  const blockLinkMut = useMutation({
     mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
-    onSuccess: () => toast('Link revocado — el cliente ya no puede usarlo'),
-    onError: (e: any) => toast(e.message ?? 'No se pudo revocar el link', true),
+    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
 
   const activeOrders = (ticket?.orders ?? []).filter((o: any) => o.status !== 'papelera');
@@ -143,9 +145,9 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
               <ClipboardList size={13} /> Formulario
             </button>
             <button
-              title="Revocar el link de formulario enviado a este cliente"
-              onClick={() => revokeMut.mutate()}
-              disabled={revokeMut.isPending}
+              title="Bloquear el link de formulario enviado a este cliente"
+              onClick={() => setShowBlockConfirm(true)}
+              disabled={blockLinkMut.isPending}
               style={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
                 borderRadius: 8, color: '#fff', cursor: 'pointer', flexShrink: 0,
@@ -153,7 +155,7 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
                 display: 'flex', alignItems: 'center', gap: 5,
               }}
             >
-              <Ban size={13} /> Revocar
+              <Ban size={13} /> Bloquear link
             </button>
           </div>
 
@@ -298,6 +300,16 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
         </div>
 
       </div>
+
+      {showBlockConfirm && (
+        <ConfirmModal
+          message="Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
+          confirmLabel="Bloquear"
+          danger
+          onConfirm={() => { blockLinkMut.mutate(); setShowBlockConfirm(false); }}
+          onCancel={() => setShowBlockConfirm(false)}
+        />
+      )}
     </div>
   );
 }

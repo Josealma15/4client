@@ -43,6 +43,10 @@ const orderItemSchema = z.object({
   quantity_label: z.string().max(50).optional(),
   price:          z.number().min(0).max(9_999_999),
   sort_order:     z.number().default(0),
+  // Round-tripped from GET /orders/:id, not staff-settable in practice (the UI never
+  // exposes a way to toggle it) — staff editing/saving an order must not silently
+  // clear this provenance flag on items the client themselves added/changed earlier.
+  added_by_client: z.boolean().optional().default(false),
 });
 
 const createOrderSchema = z.object({
@@ -109,6 +113,7 @@ function buildOrderSelect(includeHistory = false) {
     employee_id: true, registered_by: true, fecha: true, order_hour: true,
     paid: true, paid_at: true, paid_by: true, amount_received: true,
     change_amount: true, locked: true, caja_cerrada: true, notes: true,
+    client_modified: true,
     created_at: true, updated_at: true,
     employee: { select: { id: true, name: true } },
     registeredBy: { select: { id: true, name: true } },
@@ -305,7 +310,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
       const updated = await tx.order.update({
         where: { id },
-        data: { ...fields, updated_at: new Date() },
+        // Staff saving the order is treated as "reviewed whatever the client
+        // changed" — clears the bell unconditionally, every save, not just ones
+        // that touch items (per user confirmation: any save acknowledges it).
+        data: { ...fields, client_modified: false, updated_at: new Date() },
         select: buildOrderSelect(false),
       });
 

@@ -75,21 +75,61 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (revoked) throw new Error('revoked');
   }
 
-  // GET /api/v1/public/form-info?t=TOKEN — verifica token y devuelve info del cliente
+  // Claims this ticket's form-link for whichever browser opens it first. There's no
+  // real device identity reachable from a web page — deviceToken is a random value
+  // the client generates once and keeps in its own localStorage (ClientFormPage.tsx),
+  // sent on every request. First caller for a ticket with no session yet claims it;
+  // anyone presenting a different deviceToken afterward is rejected the same way an
+  // expired/revoked token is (never reveals *why*, just "link inválido"). The
+  // find-then-create dance (instead of a plain upsert) is so a second, genuinely
+  // legitimate request racing the very first one (form-info + products fire together
+  // on page load) reads back whatever the winner actually claimed instead of erroring.
+  async function assertDeviceOk(ticketId: string, deviceToken: string): Promise<void> {
+    if (!deviceToken) throw new Error('device token required');
+    let session = await fastify.prisma.formLinkSession.findUnique({ where: { ticket_id: ticketId } });
+    if (!session) {
+      try {
+        session = await fastify.prisma.formLinkSession.create({ data: { ticket_id: ticketId, device_token: deviceToken } });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          session = await fastify.prisma.formLinkSession.findUnique({ where: { ticket_id: ticketId } });
+        } else {
+          throw err;
+        }
+      }
+    }
+    if (!session || session.device_token !== deviceToken) throw new Error('device mismatch');
+  }
+
+  // Orders a client may see/act on via the form are scoped to TODAY (Colombia local) —
+  // matches the link's own <=24h lifetime, and "editable" mirrors what staff can still
+  // change too: once an order is 'camino' or 'cerrado', only staff can touch it from
+  // here on, the client's copy becomes view-only.
+  const EDITABLE_STATUSES = ['nuevo', 'preparando', 'listo'] as const;
+
+  // GET /api/v1/public/form-info?t=TOKEN&device_token=X — verifica token y devuelve
+  // info del cliente + TODOS sus pedidos de hoy (activos y ya cerrados/en camino)
   fastify.get('/form-info', async (req, reply) => {
-    const q = z.object({ t: z.string().min(1) }).safeParse(req.query);
+    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
       await assertNotRevoked(payload.ticketId);
+      await assertDeviceOk(payload.ticketId, q.data.device_token);
 
-      // So the form can offer "add to my active order" instead of always forking a
-      // new one — capped at the most recent 20, which is already far more than any
-      // real customer would ever have open at once (an "open" order only stays that
-      // way until someone closes it, so this can't grow unbounded in practice).
-      const openOrders = await fastify.prisma.order.findMany({
-        where: { ticket_id: payload.ticketId, org_id: payload.orgId, status: { notIn: ['cerrado', 'papelera'] } },
-        select: { id: true, num: true, address: true, payment_method: true, created_at: true, items: { select: { id: true } } },
+      // Colombia UTC-5 local date — same "today" the client's own submissions land on.
+      const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
+
+      // Every one of today's orders, not just open ones — the client can now see
+      // what's already been delivered/closed today too (read-only), not just what's
+      // still pending. Papelera (cancelled) orders are the one thing never shown —
+      // those were discarded, not part of the client's day.
+      const todaysOrders = await fastify.prisma.order.findMany({
+        where: { ticket_id: payload.ticketId, org_id: payload.orgId, fecha: todayLocal, status: { not: 'papelera' } },
+        select: {
+          id: true, num: true, address: true, payment_method: true, status: true, created_at: true,
+          items: { select: { id: true, product_name: true, quantity_label: true }, orderBy: { sort_order: 'asc' } },
+        },
         orderBy: { created_at: 'desc' },
         take: 20,
       });
@@ -99,12 +139,14 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           clientName: payload.clientName,
           orgName: payload.orgName,
           orgId: payload.orgId,
-          openOrders: openOrders.map(o => ({
+          orders: todaysOrders.map(o => ({
             id: o.id,
             num: o.num,
             address: o.address === 'Pendiente de confirmar' ? '' : o.address,
             paymentMethod: o.payment_method === 'sin_asignar' ? '' : o.payment_method,
-            itemCount: o.items.length,
+            status: o.status,
+            editable: (EDITABLE_STATUSES as readonly string[]).includes(o.status),
+            items: o.items.map(i => ({ id: i.id, product_name: i.product_name, quantity_label: i.quantity_label ?? '' })),
             createdAt: o.created_at,
           })),
         },
@@ -114,13 +156,14 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /api/v1/public/products?t=TOKEN — catálogo público (sin precios)
+  // GET /api/v1/public/products?t=TOKEN&device_token=X — catálogo público (sin precios)
   fastify.get('/products', async (req, reply) => {
-    const q = z.object({ t: z.string().min(1) }).safeParse(req.query);
+    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
       await assertNotRevoked(payload.ticketId);
+      await assertDeviceOk(payload.ticketId, q.data.device_token);
       const products = await fastify.prisma.product.findMany({
         where: { org_id: payload.orgId, active: true },
         select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
@@ -155,6 +198,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   }, async (req, reply) => {
     const body = z.object({
       token: z.string().min(1),
+      device_token: z.string().min(1),
       address: z.string().max(500).optional(),
       payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
       // Set when the client chose "add to my active order" instead of a new one.
@@ -173,6 +217,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     try {
       payload = verifyFormToken(body.data.token);
       await assertNotRevoked(payload.ticketId);
+      await assertDeviceOk(payload.ticketId, body.data.device_token);
     } catch {
       return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
     }
@@ -212,26 +257,56 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       price: priceMap.get(item.product_name) ?? 0,
     }));
 
-    // ── Merge path: append to an existing open order instead of creating a new one ──
+    // ── Merge path: replace this order's items with the client's current full list
+    // instead of just appending — the form now shows everything already on the order
+    // (not a blank slate), so "submit" means "this is the whole order now", items the
+    // client removed included. Only orders still in an editable status (nuevo/
+    // preparando/listo) qualify; once 'camino' or 'cerrado' only staff can touch it.
     if (body.data.merge_order_id) {
       const target = await fastify.prisma.order.findFirst({
         where: {
           id: body.data.merge_order_id, ticket_id: ticket.id, org_id: payload.orgId,
-          status: { notIn: ['cerrado', 'papelera'] }, locked: false,
+          status: { in: EDITABLE_STATUSES as unknown as string[] }, locked: false,
         },
-        include: { items: { select: { sort_order: true } } },
+        include: { items: true },
       });
 
       if (target) {
-        const maxSort = target.items.reduce((m, i) => Math.max(m, i.sort_order), -1);
+        const priorByName = new Map(target.items.map(i => [i.product_name, i]));
+        const submittedNames = new Set(body.data.items.map(i => i.product_name));
+        const mergedItemsData = body.data.items.map((item, idx) => {
+          const prior = priorByName.get(item.product_name);
+          const changed = !prior || prior.quantity_label !== item.quantity_label;
+          return {
+            product_name: item.product_name,
+            quantity_label: item.quantity_label,
+            price: priceMap.get(item.product_name) ?? Number(prior?.price ?? 0),
+            sort_order: idx,
+            // Sticky once true — an item the client already touched before stays
+            // flagged even if this particular submission left it untouched.
+            added_by_client: changed || (prior?.added_by_client ?? false),
+          };
+        });
+        const anyItemChange = mergedItemsData.length !== target.items.length
+          || mergedItemsData.some(it => { const prior = priorByName.get(it.product_name); return !prior || prior.quantity_label !== it.quantity_label; })
+          || target.items.some(i => !submittedNames.has(i.product_name));
+        const addressChanged = !!body.data.address?.trim() && body.data.address.trim() !== target.address;
+        const paymentChanged = !!body.data.payment_method && body.data.payment_method !== target.payment_method;
+
+        // Nothing actually changed (client opened the form and resubmitted as-is) —
+        // no-op rather than spamming a "tu pedido fue actualizado" WhatsApp message
+        // and flipping the staff-facing bell for a non-change.
+        if (!anyItemChange && !addressChanged && !paymentChanged) {
+          return reply.status(200).send({ data: { ok: true, orderId: target.id, num: target.num, merged: true, unchanged: true } });
+        }
+
         const updated = await fastify.prisma.order.update({
           where: { id: target.id },
           data: {
-            // Only overwrite if the client actually typed something new this time —
-            // an empty field means "leave what's already there," not "clear it."
-            ...(body.data.address?.trim() ? { address: body.data.address.trim() } : {}),
-            ...(body.data.payment_method ? { payment_method: body.data.payment_method } : {}),
-            items: { create: newItemsData.map((it, idx) => ({ ...it, sort_order: maxSort + 1 + idx })) },
+            ...(addressChanged ? { address: body.data.address!.trim() } : {}),
+            ...(paymentChanged ? { payment_method: body.data.payment_method } : {}),
+            client_modified: true,
+            items: { deleteMany: {}, create: mergedItemsData },
           },
           include: {
             items: { orderBy: { sort_order: 'asc' } },
@@ -245,12 +320,12 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           data: {
             org_id: payload.orgId, order_id: updated.id, actor_id: actorUser.id,
             action_type: 'edit',
-            notes: `${newItemsData.length} producto(s) agregado(s) desde el formulario (enviado por ${actorUser.name})`,
+            notes: `Pedido actualizado por el cliente desde el formulario (enviado por ${actorUser.name})`,
           },
         });
 
-        const lines = body.data.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label)}`);
-        const msgText = `*Se agregaron productos a tu pedido #${updated.num}*\n${lines.join('\n')}\n\n_El encargado revisará y confirmará el pedido._`;
+        const lines = updated.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label ?? '')}`);
+        const msgText = `*Tu pedido #${updated.num} fue actualizado*\n${lines.join('\n')}\n\n_El encargado revisará los cambios._`;
 
         const message = await fastify.prisma.ticketMessage.create({
           data: { ticket_id: ticket.id, direction: 'out', text: msgText, sent_at: new Date(), sent_by: actorUser.id },
@@ -281,7 +356,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send({ data: { ok: true, orderId: updated.id, num: updated.num, merged: true } });
       }
-      // target missing/closed/locked by the time we got here — fall through and
+      // target missing/no longer editable by the time we got here — fall through and
       // create a fresh order below instead of leaving the client stuck.
     }
 
