@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { encryptSecret } from '../lib/crypto.js';
+import { audit } from '../lib/audit.js';
 
 export default async function configRoutes(fastify: FastifyInstance) {
   // GET /api/v1/config/org — get org config visible to admin/dev
@@ -29,7 +30,8 @@ export default async function configRoutes(fastify: FastifyInstance) {
     }).safeParse(req.body);
 
     if (!body.success) {
-      req.log.warn({ err: body.error.format() }, 'WPP config validation failed');
+      const fields = Object.keys(body.error.flatten().fieldErrors);
+      req.log.warn(`WPP config validation failed for fields: ${fields.join(', ')}`);
       return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR', details: body.error.format() });
     }
 
@@ -44,6 +46,12 @@ export default async function configRoutes(fastify: FastifyInstance) {
       select: {
         wpp_meta_phone_id: true, wpp_phone: true, welcome_message: true,
       },
+    });
+
+    // Records which fields changed, never the token value itself.
+    await audit(fastify.prisma, {
+      orgId: req.user.orgId, actorId: req.user.userId, action: 'config.wpp_update',
+      metadata: { fields: Object.keys(body.data) },
     });
 
     return reply.send({ data: updated });

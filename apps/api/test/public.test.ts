@@ -171,4 +171,65 @@ describe('public form routes', () => {
     expect(createEntry?.notes).toContain(adminName);
     expect(createEntry?.actor_id).toBe(adminId);
   });
+
+  describe('form-link revocation', () => {
+    const revokedPhone = '573001112299';
+    let revokedTicketId: string;
+    let revokedToken: string;
+
+    beforeAll(async () => {
+      const ticket = await app.prisma.ticket.create({
+        data: { org_id: orgId, phone: revokedPhone, customer_name: 'Cliente Revocado' },
+      });
+      revokedTicketId = ticket.id;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      revokedToken = (app.jwt.sign as any)(
+        { type: 'form_link', ticketId: revokedTicketId, orgId, clientName: 'Cliente Revocado', clientPhone: revokedPhone, orgName: 'org' },
+        { expiresIn: '7d' },
+      );
+    });
+
+    it('POST /inbox/:ticketId/form-link/revoke requires auth', async () => {
+      const res = await app.inject({ method: 'POST', url: `/api/v1/inbox/${revokedTicketId}/form-link/revoke`, payload: {} });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('after revoking, the previously-issued token is rejected on every public endpoint (fails closed)', async () => {
+      const revoke = await app.inject({
+        method: 'POST',
+        url: `/api/v1/inbox/${revokedTicketId}/form-link/revoke`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { reason: 'Enviado al número equivocado' },
+      });
+      expect(revoke.statusCode).toBe(200);
+
+      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${revokedToken}` });
+      expect(formInfo.statusCode).toBe(401);
+      expect(formInfo.json().code).toBe('INVALID_TOKEN');
+
+      const products = await app.inject({ method: 'GET', url: `/api/v1/public/products?t=${revokedToken}` });
+      expect(products.statusCode).toBe(401);
+
+      const submit = await app.inject({
+        method: 'POST',
+        url: '/api/v1/public/submit',
+        payload: { token: revokedToken, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      });
+      expect(submit.statusCode).toBe(401);
+      expect(submit.json().code).toBe('INVALID_TOKEN');
+    });
+
+    it('generating a fresh form-link clears the earlier revocation, so the new link works', async () => {
+      const linkRes = await app.inject({
+        method: 'GET',
+        url: `/api/v1/inbox/${revokedTicketId}/form-link`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(linkRes.statusCode).toBe(200);
+      const freshToken = new URL(linkRes.json().data.url).searchParams.get('t')!;
+
+      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}` });
+      expect(formInfo.statusCode).toBe(200);
+    });
+  });
 });

@@ -2,11 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { passwordSchema } from '../lib/password.js';
+import { audit } from '../lib/audit.js';
 
 const createUserSchema = z.object({
   name:     z.string().min(2),
   email:    z.string().email(),
-  password: z.string().min(6),
+  password: passwordSchema,
   role:     z.enum(['admin', 'encargado', 'domiciliario']),
 });
 
@@ -18,7 +20,7 @@ const updateUserSchema = z.object({
 });
 
 const resetPassSchema = z.object({
-  password: z.string().min(6),
+  password: passwordSchema,
 });
 
 export default async function userRoutes(fastify: FastifyInstance) {
@@ -53,6 +55,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
       },
       select: { id: true, name: true, email: true, role: true, active: true, created_at: true },
     });
+    await audit(fastify.prisma, {
+      orgId: req.user.orgId, actorId: req.user.userId, action: 'user.create',
+      targetId: user.id, metadata: { email: user.email, role: user.role },
+    });
     return reply.status(201).send({ data: user });
   });
 
@@ -81,6 +87,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
       data: updateData,
     });
     if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
+    await audit(fastify.prisma, {
+      orgId: req.user.orgId, actorId: req.user.userId, action: 'user.update',
+      targetId: id, metadata: updateData,
+    });
     return reply.send({ data: { ok: true } });
   });
 
@@ -88,7 +98,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/reset-password', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = resetPassSchema.safeParse(req.body);
-    if (!body.success) return reply.status(400).send({ error: 'La contraseña debe tener al menos 6 caracteres', code: 'VALIDATION_ERROR' });
+    if (!body.success) return reply.status(400).send({ error: 'La contraseña debe tener mínimo 12 caracteres, con mayúscula, minúscula y número', code: 'VALIDATION_ERROR' });
 
     const password_hash = await bcrypt.hash(body.data.password, 12);
     const result = await fastify.prisma.user.updateMany({
@@ -96,6 +106,9 @@ export default async function userRoutes(fastify: FastifyInstance) {
       data: { password_hash },
     });
     if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
+    await audit(fastify.prisma, {
+      orgId: req.user.orgId, actorId: req.user.userId, action: 'user.reset_password', targetId: id,
+    });
     return reply.send({ data: { ok: true } });
   });
 }

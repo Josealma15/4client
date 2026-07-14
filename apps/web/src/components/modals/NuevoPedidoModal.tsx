@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Smartphone, Check, Send, ClipboardList } from 'lucide-react';
+import { Smartphone, Check, Send, ClipboardList, Ban } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
@@ -86,6 +86,12 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
       setReplyText('');
     },
     onError: (e: any) => toast(e.message ?? 'Error al enviar', true),
+  });
+
+  const revokeMut = useMutation({
+    mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
+    onSuccess: () => toast('Link revocado — el cliente ya no puede usarlo'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo revocar el link', true),
   });
 
   function handleSend() {
@@ -180,6 +186,21 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                   }}
                 >
                   <ClipboardList size={13} /> Formulario
+                </button>
+              )}
+              {ticketId && (
+                <button
+                  title="Revocar el link de formulario enviado a este cliente"
+                  onClick={() => revokeMut.mutate()}
+                  disabled={revokeMut.isPending}
+                  style={{
+                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 8, color: '#fff', cursor: 'pointer',
+                    padding: '5px 9px', fontSize: 12, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  <Ban size={13} /> Revocar
                 </button>
               )}
             </div>

@@ -7,7 +7,7 @@ import bcrypt from 'bcrypt';
 const ALLOWED_TABLES = [
   'users', 'organizations', 'products', 'employees',
   'orders', 'tickets', 'ticket_messages',
-  'order_history', 'daily_closes',
+  'order_history', 'daily_closes', 'audit_logs',
 ] as const;
 type AllowedTable = (typeof ALLOWED_TABLES)[number];
 
@@ -21,12 +21,27 @@ async function queryTable(
   switch (table) {
     case 'users':
       return {
-        rows: await prisma.user.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        // Excludes password_hash — even though this viewer is dev-role-only, there's
+        // no reason a bcrypt hash should ever cross the wire, viewable or not.
+        rows: await prisma.user.findMany({
+          where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' },
+          select: { id: true, org_id: true, email: true, name: true, role: true, active: true, last_login: true, created_at: true },
+        }),
         total: await prisma.user.count({ where: { org_id: orgId } }),
       };
     case 'organizations':
       return {
-        rows: await prisma.organization.findMany({ where: { id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        // Excludes wpp_meta_token/wpp_meta_app_secret — the token is encrypted at rest
+        // but the app secret currently isn't, so this masks both rather than leaking
+        // one plaintext and one ciphertext blob through a viewer meant for eyeballing
+        // data, not handling credentials.
+        rows: await prisma.organization.findMany({
+          where: { id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' },
+          select: {
+            id: true, name: true, slug: true, plan: true, wpp_provider: true, wpp_phone: true,
+            wpp_meta_phone_id: true, welcome_message: true, active: true, created_at: true,
+          },
+        }),
         total: await prisma.organization.count({ where: { id: orgId } }),
       };
     case 'products':
@@ -66,6 +81,11 @@ async function queryTable(
       return {
         rows: await prisma.dailyClose.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { fecha: 'desc' } }),
         total: await prisma.dailyClose.count({ where: { org_id: orgId } }),
+      };
+    case 'audit_logs':
+      return {
+        rows: await prisma.auditLog.findMany({ where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' } }),
+        total: await prisma.auditLog.count({ where: { org_id: orgId } }),
       };
   }
 }

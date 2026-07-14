@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useState, KeyboardEvent } from 'react';
-import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList } from 'lucide-react';
+import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList, Ban } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
@@ -94,6 +94,12 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
     }
   }
 
+  const revokeMut = useMutation({
+    mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
+    onSuccess: () => toast('Link revocado — el cliente ya no puede usarlo'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo revocar el link', true),
+  });
+
   const activeOrders = (ticket?.orders ?? []).filter((o: any) => o.status !== 'papelera');
   const hasOrders = activeOrders.length > 0;
 
@@ -135,6 +141,19 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
               }}
             >
               <ClipboardList size={13} /> Formulario
+            </button>
+            <button
+              title="Revocar el link de formulario enviado a este cliente"
+              onClick={() => revokeMut.mutate()}
+              disabled={revokeMut.isPending}
+              style={{
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: 8, color: '#fff', cursor: 'pointer', flexShrink: 0,
+                padding: '5px 9px', fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <Ban size={13} /> Revocar
             </button>
           </div>
 

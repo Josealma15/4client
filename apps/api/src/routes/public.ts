@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
+import { sanitizeForWhatsApp } from '../lib/sanitize.js';
 
 interface FormTokenPayload {
   type: string;
@@ -65,12 +66,22 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     return payload;
   }
 
+  // Checked separately from JWT verification (which only proves the token is
+  // well-formed and unexpired) — staff can revoke a link early (e.g. sent to the
+  // wrong number) via POST /inbox/:ticketId/form-link/revoke, well before its
+  // midnight expiry. A revoked link fails closed on every public endpoint below.
+  async function assertNotRevoked(ticketId: string): Promise<void> {
+    const revoked = await fastify.prisma.revokedFormToken.findUnique({ where: { ticket_id: ticketId } });
+    if (revoked) throw new Error('revoked');
+  }
+
   // GET /api/v1/public/form-info?t=TOKEN — verifica token y devuelve info del cliente
   fastify.get('/form-info', async (req, reply) => {
     const q = z.object({ t: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
+      await assertNotRevoked(payload.ticketId);
 
       // So the form can offer "add to my active order" instead of always forking a
       // new one — capped at the most recent 20, which is already far more than any
@@ -109,6 +120,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
+      await assertNotRevoked(payload.ticketId);
       const products = await fastify.prisma.product.findMany({
         where: { org_id: payload.orgId, active: true },
         select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
@@ -160,6 +172,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     let payload: FormTokenPayload;
     try {
       payload = verifyFormToken(body.data.token);
+      await assertNotRevoked(payload.ticketId);
     } catch {
       return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
     }
@@ -236,7 +249,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           },
         });
 
-        const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
+        const lines = body.data.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label)}`);
         const msgText = `*Se agregaron productos a tu pedido #${updated.num}*\n${lines.join('\n')}\n\n_El encargado revisará y confirmará el pedido._`;
 
         const message = await fastify.prisma.ticketMessage.create({
@@ -319,7 +332,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
 
     // Mensaje en el chat del ticket
     const total = orderItems.reduce((s, i) => s + i.price, 0);
-    const lines = body.data.items.map(i => `• ${i.product_name}: ${i.quantity_label}`);
+    const lines = body.data.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label)}`);
     // "quantity_label" is free text (e.g. "2 kg"), so this sum is per-unit catalog price,
     // not a real total — labeled as a rough reference, not a firm estimate.
     const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\n_Precio referencial (según catálogo, sin confirmar cantidades): $${total.toLocaleString('es-CO')}_` : ''}\n\n_El encargado revisará y confirmará el pedido._`;

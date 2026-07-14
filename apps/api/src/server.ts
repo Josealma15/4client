@@ -41,6 +41,23 @@ const fastify = Fastify({
   trustProxy: true,
 });
 
+// Behind Railway's proxy (trustProxy: true), req.protocol reflects the real
+// X-Forwarded-Proto — safe to gate on directly, unlike NODE_ENV which depends on
+// the deploy platform's env vars actually being set correctly.
+fastify.addHook('onRequest', async (req, reply) => {
+  // Excludes /health — Railway's own healthcheck hits the container directly over
+  // plain HTTP, bypassing the edge proxy that would set X-Forwarded-Proto: https.
+  // Enforcing this there would make the platform mark deploys unhealthy.
+  if (config.NODE_ENV === 'production' && req.protocol !== 'https' && req.url !== '/health') {
+    return reply.status(400).send({ error: 'HTTPS requerido', code: 'HTTPS_REQUIRED' });
+  }
+});
+
+fastify.addHook('onSend', async (_req, reply, payload) => {
+  reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  return payload;
+});
+
 fastify.setErrorHandler((error: FastifyError, _req, reply) => {
   if (config.SENTRY_DSN) Sentry.captureException(error);
   fastify.log.error(error);
@@ -72,8 +89,28 @@ async function start() {
   });
 
   await fastify.register(rateLimit, {
-    max: 100,
+    max: 60,
     timeWindow: '1 minute',
+    // Per-user instead of per-IP — an office/shared connection shouldn't have every
+    // user drawing from the same bucket. This global hook runs before the per-route
+    // `authenticate` preHandler, so req.user isn't populated yet; decode (not verify —
+    // this is just a bucketing key, not an auth decision) the bearer token directly.
+    // Falls back to IP for unauthenticated requests (public form, login — those have
+    // their own tighter per-route limits already). 60/min covers the busiest
+    // dashboard/inbox polling (30s intervals, several open modals) with headroom for
+    // socket-triggered refetches.
+    keyGenerator: (req) => {
+      const auth = req.headers.authorization;
+      if (auth?.startsWith('Bearer ')) {
+        try {
+          const decoded = fastify.jwt.decode(auth.slice(7)) as { userId?: string } | null;
+          if (decoded?.userId) return decoded.userId;
+        } catch {
+          /* fall through to IP */
+        }
+      }
+      return req.ip;
+    },
   });
 
   await fastify.register(prismaPlugin);

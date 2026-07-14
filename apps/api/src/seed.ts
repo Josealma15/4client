@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
-const SEED_ADMIN_PASS = process.env.SEED_ADMIN_PASS ?? 'admin123';
-const SEED_DEV_PASS   = process.env.SEED_DEV_PASS   ?? 'josejose';
+const SEED_ADMIN_PASS = process.env.SEED_ADMIN_PASS ?? 'FruverAdmin2026!';
+const SEED_DEV_PASS   = process.env.SEED_DEV_PASS   ?? 'FruverDevSeed2026!';
 
 const PRODUCTOS = [
   // Verduras

@@ -146,8 +146,31 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       { expiresIn: expiresInSeconds },
     ) as string;
 
+    // A fresh link supersedes any earlier revocation on this ticket — otherwise once
+    // revoked, no future "Formulario" send would ever work again.
+    await fastify.prisma.revokedFormToken.deleteMany({ where: { ticket_id: ticket.id, org_id: req.user.orgId } });
+
     const frontendUrl = config.FRONTEND_URL.split(',')[0].trim();
     const url = `${frontendUrl}/form?t=${token}`;
     return reply.send({ data: { url } });
+  });
+
+  // POST /api/v1/inbox/:ticketId/form-link/revoke — invalidates the currently
+  // outstanding form-link token for this ticket (e.g. sent to the wrong number).
+  fastify.post('/:ticketId/form-link/revoke', { preHandler: [authenticate] }, async (req, reply) => {
+    const { ticketId } = req.params as { ticketId: string };
+    const body = z.object({ reason: z.string().max(255).optional() }).safeParse(req.body ?? {});
+    if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
+
+    const ticket = await fastify.prisma.ticket.findFirst({ where: { id: ticketId, org_id: req.user.orgId } });
+    if (!ticket) return reply.status(404).send({ error: 'Conversación no encontrada', code: 'NOT_FOUND' });
+
+    await fastify.prisma.revokedFormToken.upsert({
+      where: { ticket_id: ticket.id },
+      update: { reason: body.data.reason, revoked_at: new Date(), revoked_by: req.user.userId },
+      create: { org_id: req.user.orgId, ticket_id: ticket.id, reason: body.data.reason, revoked_by: req.user.userId },
+    });
+
+    return reply.send({ data: { ok: true } });
   });
 }

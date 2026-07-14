@@ -21,13 +21,15 @@ model Organization {
   active              Boolean  @default(true)
   created_at          DateTime @default(now()) @db.Timestamptz
 
-  users         User[]
-  products      Product[]
-  employees     Employee[]
-  tickets       Ticket[]
-  orders        Order[]
-  order_history OrderHistory[]
-  daily_closes  DailyClose[]
+  users               User[]
+  products            Product[]
+  employees           Employee[]
+  tickets             Ticket[]
+  orders              Order[]
+  order_history       OrderHistory[]
+  daily_closes        DailyClose[]
+  revoked_form_tokens RevokedFormToken[]
+  audit_logs          AuditLog[]
 
   @@map("organizations")
 }
@@ -50,6 +52,8 @@ model User {
   history_entries   OrderHistory[]
   sent_messages     TicketMessage[]
   daily_closes      DailyClose[]
+  revoked_form_tokens RevokedFormToken[]
+  audit_logs          AuditLog[]
 
   @@unique([org_id, email])
   @@map("users")
@@ -116,6 +120,7 @@ model Ticket {
   org      Organization    @relation(fields: [org_id], references: [id])
   messages TicketMessage[]
   orders   Order[]
+  revoked_form_token RevokedFormToken?
 
   // One ticket per customer, forever — not per day. `fecha` still tracks the most
   // recent day this ticket was active (or is queued for, via `deferred_to`) so the
@@ -249,4 +254,44 @@ model DailyClose {
 
   @@unique([org_id, fecha])
   @@map("daily_closes")
+}
+
+// One row per ticket at most — revoking early-invalidates that ticket's currently
+// outstanding form-link token (public.ts checks this before form-info/products/submit).
+// Generating a fresh link afterwards works normally: it's a new JWT, this row just
+// blocks whichever token was already issued when revoke was clicked.
+model RevokedFormToken {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  ticket_id  String   @unique @db.Uuid
+  reason     String?  @db.VarChar(255)
+  revoked_at DateTime @default(now()) @db.Timestamptz
+  revoked_by String   @db.Uuid
+
+  org       Organization @relation(fields: [org_id], references: [id])
+  ticket    Ticket       @relation(fields: [ticket_id], references: [id])
+  revokedBy User         @relation(fields: [revoked_by], references: [id])
+
+  @@index([org_id])
+  @@map("revoked_form_tokens")
+}
+
+// Trail for security-sensitive account/config actions (user create, password reset,
+// role/active change, WPP credential update) — none of these were logged anywhere
+// before, unlike Order which already has OrderHistory. Write-only from the app's
+// perspective; read via the /dev DB viewer (dev role only).
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id     String   @db.Uuid
+  actor_id   String   @db.Uuid
+  action     String   @db.VarChar(50)
+  target_id  String?  @db.Uuid
+  metadata   Json?
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  org   Organization @relation(fields: [org_id], references: [id])
+  actor User         @relation(fields: [actor_id], references: [id])
+
+  @@index([org_id, created_at])
+  @@map("audit_logs")
 }

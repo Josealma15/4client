@@ -18,16 +18,34 @@ type TicketDecision = 'manana' | 'atendido';
 export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Props) {
   const qc = useQueryClient();
 
-  const nonPapelera = orders.filter((o) => o.status !== 'papelera' && !(o.notes?.includes('pasado_manana:')));
+  // GET /orders (orders.ts) includes an order here for two different reasons: (a) its
+  // real, current `fecha` is today, or (b) it's a "ghost" — already deferred AWAY from
+  // today by an earlier cierre, kept only so the board can show a dimmed trace of where
+  // it used to be (see Swimlane.tsx's identical isGhost logic). Only (b) should be
+  // excluded here. The previous check — any `pasado_manana:` substring, regardless of
+  // date — also matched orders deferred out of some OTHER, earlier day that are still
+  // genuinely pending today (fecha really is today), silently hiding them from this
+  // modal's decision list. cierre.ts's backend check only looks at the real `fecha`
+  // column, so it still demanded a decision for them — a 400 MISSING_DECISIONS the UI
+  // gave no way to fix, since the order was invisible here. Matching the marker's own
+  // date against the day being closed (like Swimlane does) fixes that.
+  const nonPapelera = orders.filter((o) => {
+    if (o.status === 'papelera') return false;
+    const deferredMatch = o.notes?.match(/pasado_manana:(\d{4}-\d{2}-\d{2})/);
+    const isGhost = !!deferredMatch && deferredMatch[1] === fecha;
+    return !isGhost;
+  });
   const completados = nonPapelera.filter((o) => o.paid || o.status === 'cerrado');
   const pendingOrders = nonPapelera.filter((o) => !o.paid && o.status !== 'cerrado');
 
-  // Tickets que requieren decisión: sin pedidos del día actual O con mensajes sin leer
+  // Tickets que requieren decisión: sin pedidos del día actual, con pedidos aún sin
+  // cerrar (mostrados indentados abajo para ubicarlos rápido), o con mensajes sin leer.
   const pendingTickets = tickets.filter((t: any) => {
     if (t.deferred_to) return false; // ya fue diferido antes, no mostrar de nuevo
     const hasNoOrders = !t.orders || t.orders.length === 0;
+    const hasPendingOrder = (t.orders ?? []).some((o: any) => !o.paid && o.status !== 'cerrado');
     const hasUnread = t.unread_count > 0;
-    return hasNoOrders || hasUnread;
+    return hasNoOrders || hasPendingOrder || hasUnread;
   });
 
   // No defaults — user must explicitly choose for each pending order
@@ -239,25 +257,41 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
               {pendingTickets.map((t: any) => {
                 const hasDecision = !!ticketDecisions[t.id];
                 const hasNoOrders = !t.orders || t.orders.length === 0;
+                const ticketPendingOrders = (t.orders ?? []).filter((o: any) => !o.paid && o.status !== 'cerrado');
                 return (
-                  <div key={t.id} className="warn-ord" style={{ borderLeft: hasDecision ? '3px solid var(--v)' : '3px solid var(--az)' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700 }}>{t.customer_name} - {t.phone}</div>
-                      <div style={{ fontSize: 12, color: 'var(--gt)' }}>
-                        {hasNoOrders ? 'Sin pedido' : `${t.orders.length} pedido(s)`}
-                        {t.unread_count > 0 && <span style={{ marginLeft: 8, color: 'var(--az)', fontWeight: 700 }}>{t.unread_count} sin leer</span>}
+                  <div key={t.id} className="warn-ord" style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: hasDecision ? '3px solid var(--v)' : '3px solid var(--az)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700 }}>{t.customer_name} - {t.phone}</div>
+                        <div style={{ fontSize: 12, color: 'var(--gt)' }}>
+                          {hasNoOrders
+                            ? 'Sin pedido'
+                            : ticketPendingOrders.length > 0
+                              ? `${ticketPendingOrders.length} pedido(s) pendiente(s)`
+                              : 'Pedidos completados'}
+                          {t.unread_count > 0 && <span style={{ marginLeft: 8, color: 'var(--az)', fontWeight: 700 }}>{t.unread_count} sin leer</span>}
+                        </div>
                       </div>
+                      <select
+                        className="warn-sel"
+                        value={ticketDecisions[t.id] ?? ''}
+                        onChange={(e) => setTicketDecisions({ ...ticketDecisions, [t.id]: e.target.value as TicketDecision | '' })}
+                        style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--az)' }}
+                      >
+                        <option value="" disabled>— Elegir acción —</option>
+                        <option value="manana">Pasar a mañana</option>
+                        <option value="atendido">Marcar como atendido</option>
+                      </select>
                     </div>
-                    <select
-                      className="warn-sel"
-                      value={ticketDecisions[t.id] ?? ''}
-                      onChange={(e) => setTicketDecisions({ ...ticketDecisions, [t.id]: e.target.value as TicketDecision | '' })}
-                      style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--az)' }}
-                    >
-                      <option value="" disabled>— Elegir acción —</option>
-                      <option value="manana">Pasar a mañana</option>
-                      <option value="atendido">Marcar como atendido</option>
-                    </select>
+                    {ticketPendingOrders.length > 0 && (
+                      <div style={{ marginTop: 8, paddingLeft: 14, borderLeft: '2px solid var(--brd)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {ticketPendingOrders.map((o: any) => (
+                          <div key={o.id} style={{ fontSize: 12, color: 'var(--gt)' }}>
+                            #{o.num} · {STATUS_LABEL[o.status] ?? o.status}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
