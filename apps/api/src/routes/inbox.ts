@@ -34,8 +34,14 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
   });
 
   // GET /api/v1/inbox/:ticketId/messages — historial completo del chat (todos los roles pueden ver)
+  // Orders attached to the ticket are scoped to `fecha` when given — a chat opened
+  // from a given day on the board must only show that day's pedido, not every order
+  // this customer ever placed (a ticket is one row per phone forever, see schema).
+  // No `fecha` (older/other callers) falls back to the previous unscoped behavior.
   fastify.get('/:ticketId/messages', { preHandler: [authenticate] }, async (req, reply) => {
     const { ticketId } = req.params as { ticketId: string };
+    const query = z.object({ fecha: z.string().optional() }).safeParse(req.query);
+    const fecha = query.success && query.data.fecha ? new Date(query.data.fecha) : undefined;
 
     const ticket = await fastify.prisma.ticket.findFirst({
       where: { id: ticketId, org_id: req.user.orgId },
@@ -46,7 +52,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
           include: { sender: { select: { id: true, name: true } } },
         },
         orders: {
-          where: { status: { not: 'papelera' } },
+          where: fecha ? { status: { not: 'papelera' }, fecha } : { status: { not: 'papelera' } },
           include: { items: true, employee: { select: { id: true, name: true } } },
         },
       },
@@ -131,10 +137,19 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     const tomorrowColMidnightUtcMs = Date.UTC(nowCol.getUTCFullYear(), nowCol.getUTCMonth(), nowCol.getUTCDate() + 1, 5, 0, 0);
     const expiresInSeconds = Math.max(60, Math.floor((tomorrowColMidnightUtcMs - Date.now()) / 1000));
 
+    // Explicit iat (instead of leaving jsonwebtoken to stamp its own "now") so it
+    // matches exactly what's written to form_token_min_iat below — the two must
+    // agree down to the millisecond-rounded-to-second for THIS token to still pass
+    // its own supersede check (public.ts's assertLinkStillValid: strictly-older
+    // tokens are rejected, this one must not count as older than itself).
+    const issuedAt = new Date();
+    const issuedAtSec = Math.floor(issuedAt.getTime() / 1000);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = (fastify.jwt.sign as any)(
       {
         type: 'form_link',
+        iat: issuedAtSec,
         ticketId: ticket.id,
         orgId: req.user.orgId,
         clientName: ticket.customer_name,
@@ -146,11 +161,14 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       { expiresIn: expiresInSeconds },
     ) as string;
 
-    // A fresh link supersedes any earlier revocation on this ticket — otherwise once
-    // revoked, no future "Formulario" send would ever work again. Also clears any
-    // device lock (public.ts's FormLinkSession) — sending a new link is a deliberate
-    // "start over" action, e.g. to fix a false-positive lockout from the wrong device
-    // claiming an earlier link.
+    // A fresh link supersedes any earlier revocation AND every previously-issued
+    // still-unexpired link on this ticket — bumping form_token_min_iat makes
+    // public.ts's assertLinkStillValid reject any older token automatically, so
+    // staff no longer has to separately "Bloquear link" the old one before sending
+    // a new one. Also clears any device lock (public.ts's FormLinkSession) —
+    // sending a new link is a deliberate "start over" action, e.g. to fix a
+    // false-positive lockout from the wrong device claiming an earlier link.
+    await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt } });
     await fastify.prisma.revokedFormToken.deleteMany({ where: { ticket_id: ticket.id, org_id: req.user.orgId } });
     await fastify.prisma.formLinkSession.deleteMany({ where: { ticket_id: ticket.id } });
 

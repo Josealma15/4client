@@ -305,6 +305,7 @@ export default function MainPage() {
       {ticketId && (
         <TicketModal
           ticketId={ticketId}
+          fecha={fecha}
           onClose={() => setTicketId(null)}
           onCreateFromTicket={handleCreateFromTicket}
           onOpenOrder={(orderId) => { setTicketId(null); setOpenOrderId(orderId); }}

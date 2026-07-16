@@ -91,6 +91,18 @@ describe('orders routes', () => {
     expect(order2.num).toBe('002');
   });
 
+  it('creates an order with no address -> 201 with a placeholder — address is only required to close (cobro), not to open a pedido', async () => {
+    const { address, ...rest } = sampleOrderPayload({ fecha: '2026-01-11' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: rest,
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.address).toBe('Pendiente de confirmar');
+  });
+
   it('creating an order on a fecha whose only existing order has a "high" num (e.g. carried over from a deferred order) does not collide -> 201, not 500', async () => {
     // Reproduces a real production 500: a deferred order (cierre.ts, decision "manana")
     // keeps its ORIGINAL num when it lands on a new fecha. COUNT(*)+1 has no idea that

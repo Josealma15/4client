@@ -116,6 +116,13 @@ model Ticket {
   fecha           DateTime  @default(now()) @db.Date
   deferred_to     DateTime? @db.Date
   created_at      DateTime  @default(now()) @db.Timestamptz
+  // Timestamp of the most recently issued form-link JWT for this ticket. Any token
+  // whose own `iat` predates this is rejected as superseded — so sending a fresh
+  // "Formulario" link automatically kills every earlier link for the same ticket,
+  // with no separate "Bloquear link" click needed. Null = no link issued yet (or
+  // issued before this field existed) — nothing to compare against, so old
+  // already-issued tokens keep working until their own expiry.
+  form_token_min_iat DateTime? @db.Timestamptz
 
   org      Organization    @relation(fields: [org_id], references: [id])
   messages TicketMessage[]

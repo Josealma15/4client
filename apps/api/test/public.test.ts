@@ -368,6 +368,40 @@ describe('public form routes', () => {
       const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=${DEVICE}` });
       expect(formInfo.statusCode).toBe(200);
     });
+
+    it('sending a fresh form-link automatically supersedes (kills) every earlier still-unexpired link for the same ticket, no manual "Bloquear link" needed', async () => {
+      const phone = '573001112255';
+      const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Reenvio' } });
+
+      const first = await app.inject({
+        method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` },
+      });
+      const firstToken = new URL(first.json().data.url).searchParams.get('t')!;
+
+      const firstWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device` });
+      expect(firstWorks.statusCode).toBe(200);
+
+      // The supersede check compares `iat` at whole-second resolution — wait past the
+      // second boundary so the second link genuinely gets a later `iat` than the
+      // first, otherwise two links minted in the same clock second would (correctly)
+      // both remain valid, which isn't the scenario this test is exercising.
+      await new Promise(r => setTimeout(r, 1100));
+
+      // Staff sends a second link for the same ticket (e.g. a reminder) — the first
+      // one must die automatically, with no separate revoke call.
+      const second = await app.inject({
+        method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` },
+      });
+      const secondToken = new URL(second.json().data.url).searchParams.get('t')!;
+      expect(secondToken).not.toBe(firstToken);
+
+      const firstNowBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device` });
+      expect(firstNowBlocked.statusCode).toBe(401);
+      expect(firstNowBlocked.json().code).toBe('INVALID_TOKEN');
+
+      const secondWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${secondToken}&device_token=resend-device-2` });
+      expect(secondWorks.statusCode).toBe(200);
+    });
   });
 
   // Covers the "bloquear link bloquea TODOS los links de ese chat" requirement —

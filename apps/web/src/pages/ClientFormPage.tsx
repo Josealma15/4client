@@ -71,12 +71,22 @@ export default function ClientFormPage() {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  // Live-update banner — set when a background poll (see the effect below) notices
+  // the order being edited changed state (e.g. staff moved it to "camino") while
+  // this tab sat open. Separate from submitError: this is a standing warning shown
+  // the moment we find out, not just something surfaced after a failed submit.
+  const [liveWarning, setLiveWarning] = useState('');
   // becomes true once we've attempted to restore a persisted draft, so the
   // persistence effect below doesn't clobber a saved draft with the initial empty state
   const [hydrated, setHydrated] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
+  // Synchronous guard against a double-click/tap firing two submits before React's
+  // next render commits the `submitting` state update — a plain state check at the
+  // top of handleSubmit can't catch that, since both click handlers can read the
+  // stale `false` value in the same tick. A ref updates immediately, no render lag.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (!token) { setState('invalid'); setErrorMsg('Link inválido. Pide un nuevo link al negocio.'); return; }
@@ -133,6 +143,33 @@ export default function ClientFormPage() {
     } catch { /* localStorage unavailable — ignore, form still works without persistence */ }
   }, [selected, address, paymentMethod, hydrated, token]);
 
+  // Live-update: while the client has an order open on the catalog screen, poll for
+  // status changes on it (e.g. staff marks it "camino") so they find out right away
+  // instead of only at submit time via a rejected request. Doesn't touch `selected`/
+  // `address`/`paymentMethod` — never stomps whatever the client is mid-typing.
+  useEffect(() => {
+    if (state !== 'catalog' || !token) return;
+    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
+    const poll = () => {
+      fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()).then(info => {
+        const orders: DayOrder[] = info?.data?.orders ?? [];
+        if (info?.data?.clientName) setDayOrders(orders);
+        if (mergeTarget && mergeTarget !== 'new') {
+          const target = orders.find(o => o.id === mergeTarget);
+          if (!target || !target.editable) {
+            setLiveWarning(
+              target
+                ? `Tu pedido #${target.num} ya no se puede modificar — su estado cambió a "${STATUS_LABEL_CLIENT[target.status] ?? target.status}". Contáctanos directamente si necesitas hacer un cambio.`
+                : 'Este pedido ya no está disponible. Contáctanos directamente si necesitas hacer un cambio.',
+            );
+          }
+        }
+      }).catch(() => { /* transient poll failure — just try again next tick */ });
+    };
+    const iv = setInterval(poll, 20000);
+    return () => clearInterval(iv);
+  }, [state, token, deviceToken, mergeTarget]);
+
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
   const visibleGroups = useMemo(() => {
@@ -176,6 +213,7 @@ export default function ClientFormPage() {
   }
 
   function chooseTarget(target: string | 'new') {
+    setLiveWarning('');
     setMergeTarget(target);
     if (target !== 'new') {
       // Pre-fill from the order they're adding to, so the fields show what's already
@@ -209,6 +247,7 @@ export default function ClientFormPage() {
     setPaymentMethod('');
     setSummaryExpanded(false);
     setMergeTarget(null);
+    setLiveWarning('');
     setState('choose');
   }
 
@@ -223,8 +262,14 @@ export default function ClientFormPage() {
   }
 
   async function handleSubmit() {
-    if (submitting) return; // already in flight — a fast double-click/tap shouldn't fire twice
+    // Synchronous ref check — the very first tap to reach here wins and flips this
+    // immediately, so a rapid double tap's second event is dropped right here, before
+    // it can ever fire a second fetch. Whatever happens next (success or a real
+    // error), it happens to the FIRST tap's request, never gets silently lost to a
+    // race with a second one.
+    if (submittingRef.current) return;
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
+    submittingRef.current = true;
     setSubmitError('');
     setSubmitting(true);
     try {
@@ -240,19 +285,38 @@ export default function ClientFormPage() {
           items: selected.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
         }),
       });
-      if (res.status === 429) {
-        setSubmitError('Enviaste varios pedidos muy seguido. Espera un minuto e intenta de nuevo.');
-        return;
-      }
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Error');
+        const err = await res.json().catch(() => ({} as { error?: string; code?: string }));
+        // Every branch below prefers the server's own explanatory `error` text when
+        // present — it's already specific (e.g. "Tu pedido #12 ya está en camino y
+        // no se puede modificar") — only falling back to a made-up message when the
+        // server didn't send one. Previously this always got overwritten with a
+        // generic "Hubo un problema", discarding a message that already answered
+        // "why" for the client.
+        if (res.status === 429) {
+          setSubmitError(
+            err.code === 'FORM_LIMIT_REACHED'
+              ? (err.error ?? 'Alcanzaste el límite de pedidos permitidos con este link. Contáctanos directamente para hacer otro.')
+              : 'Enviaste varios pedidos muy seguido. Espera un minuto e intenta de nuevo.',
+          );
+          return;
+        }
+        if (res.status === 401) {
+          setSubmitError('Este link ya no es válido — expiró, fue reemplazado por uno nuevo, o fue bloqueado. Pide un link actualizado.');
+          return;
+        }
+        // 404 (pedido/ticket ya no existe) and 409 (pedido ya no editable — cambió de
+        // estado justo cuando el cliente envió) both come with a specific, accurate
+        // reason already worded for the client — show it as-is.
+        setSubmitError(err.error ?? 'Hubo un problema. Intenta de nuevo.');
+        return;
       }
       setState('done');
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
-    } catch (e: any) {
-      setSubmitError(e.message === 'Link inválido o expirado' ? 'Este link ya expiró. Pide uno nuevo.' : 'Hubo un problema. Intenta de nuevo.');
+    } catch {
+      setSubmitError('Hubo un problema de conexión. Intenta de nuevo.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -415,6 +479,12 @@ export default function ClientFormPage() {
           </div>
         )}
       </div>
+
+      {liveWarning && (
+        <div style={{ background: '#FEF2F2', border: '2px solid #FCA5A5', color: '#DC2626', margin: '10px 16px 0', padding: '10px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700 }}>
+          {liveWarning}
+        </div>
+      )}
 
       {/* Summary panel — always visible once something's added, collapses past 2 items */}
       {selectedCount > 0 && (
@@ -637,8 +707,8 @@ export default function ClientFormPage() {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={submitting}
-              style={{ ...btnPrimary, flex: 1, opacity: submitting ? 0.7 : 1 }}>
+              disabled={submitting || !!liveWarning}
+              style={{ ...btnPrimary, flex: 1, opacity: (submitting || liveWarning) ? 0.6 : 1 }}>
               {submitting ? 'Enviando...' : 'Enviar pedido'}
             </button>
           </div>

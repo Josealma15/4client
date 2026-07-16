@@ -128,7 +128,6 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   async function handleSubmit() {
     if (!ticketId) { toast('El pedido debe crearse desde un ticket de WhatsApp', true); return; }
     if (!nombre.trim()) { toast('El nombre es obligatorio', true); return; }
-    if (!direccion.trim()) { toast('La dirección es obligatoria', true); return; }
     if (items.length === 0) { toast('Agrega al menos un producto', true); return; }
     try {
       await createOrder.mutateAsync({
@@ -138,7 +137,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
         payment_method: pago,
         customer_name: nombre.trim(),
         customer_phone: telefono.trim() || undefined,
-        address: direccion.trim(),
+        address: direccion.trim() || undefined,
         employee_id: empleadoId || undefined,
         items: items.map((i: any, idx: number) => ({
           product_name: i.product_name,
@@ -172,18 +171,13 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               <span style={{ flex: 1 }}>{preNombre || telefono}</span>
               {ticketId && (
                 <button
+                  className="hdr-ic-btn"
                   title="Enviar formulario de pedido al cliente"
                   onClick={async () => {
                     try {
                       const res = await api.get<{ data: { url: string } }>(`/inbox/${ticketId}/form-link`);
                       replyMut.mutate(res.data.url);
                     } catch { toast('No se pudo generar el link', true); }
-                  }}
-                  style={{
-                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
                   }}
                 >
                   <ClipboardList size={13} />
@@ -192,15 +186,10 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               )}
               {ticketId && (
                 <button
+                  className="hdr-ic-btn"
                   title="Bloquear el link de formulario enviado a este cliente"
                   onClick={() => setShowBlockConfirm(true)}
                   disabled={blockLinkMut.isPending}
-                  style={{
-                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                  }}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>
@@ -286,7 +275,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               </div>
             </div>
             <div className="fg2">
-              <label className="fl2">Dirección de entrega *</label>
+              <label className="fl2">Dirección de entrega <span style={{ fontWeight: 400, color: 'var(--gt)' }}>(opcional, requerida solo para cerrar el pedido)</span></label>
               <input className="fi2" placeholder="Ej: Cra 45 #12-34, Casa azul" value={direccion}
                 onChange={(e) => setDireccion(e.target.value)} />
             </div>

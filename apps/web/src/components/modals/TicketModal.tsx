@@ -23,21 +23,25 @@ function renderText(text: string) {
 
 interface Props {
   ticketId: string;
+  fecha: string;
   onClose: () => void;
   onCreateFromTicket?: (ticket: any) => void;
   onOpenOrder?: (orderId: string) => void;
 }
 
-export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onOpenOrder }: Props) {
+export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTicket, onOpenOrder }: Props) {
   const qc = useQueryClient();
   const accessToken = useAuthStore((s) => s.accessToken);
   const [reply, setReply] = useState('');
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
+  // Orders shown here must be scoped to the day currently being viewed on the board
+  // (fecha), not every order this ticket ever had — opening today's chat for a
+  // customer who also ordered yesterday must not show yesterday's pedido here.
   const { data: ticket, isLoading } = useQuery({
-    queryKey: ['ticket', ticketId],
-    queryFn: () => api.get<{ data: any }>(`/inbox/${ticketId}/messages`).then((r) => r.data),
+    queryKey: ['ticket', ticketId, fecha],
+    queryFn: () => api.get<{ data: any }>(`/inbox/${ticketId}/messages?fecha=${fecha}`).then((r) => r.data),
     refetchInterval: 30000,
   });
 
@@ -45,11 +49,11 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
     if (!accessToken) return;
     const sock = getSocket(accessToken);
     const onMsg = (data: { ticketId: string }) => {
-      if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
     };
     // Orders embedded in this ticket's card list must reflect status/paid changes
     // immediately, not just when a new chat message happens to trigger a refetch.
-    const onOrderChange = () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+    const onOrderChange = () => qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
     sock.on('ticket:message', onMsg);
     sock.on('order:moved', onOrderChange);
     sock.on('order:updated', onOrderChange);
@@ -133,29 +137,19 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
             </div>
             <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
               <button
+                className="hdr-ic-btn"
                 title="Enviar formulario de pedido al cliente"
                 onClick={sendFormLink}
                 disabled={formLinkMut.isPending}
-                style={{
-                  background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                  borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                  fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                }}
               >
                 <ClipboardList size={13} />
                 Formulario
               </button>
               <button
+                className="hdr-ic-btn"
                 title="Bloquear el link de formulario enviado a este cliente"
                 onClick={() => setShowBlockConfirm(true)}
                 disabled={blockLinkMut.isPending}
-                style={{
-                  background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                  borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                  fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                }}
               >
                 <Ban size={13} />
                 <span>Bloquear<br />Link</span>
@@ -243,7 +237,7 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
             <div>
               <div className="mtit">{isLoading ? 'Cargando...' : ticket?.customer_name}</div>
               <div className="msub">
-                {hasOrders ? `${activeOrders.length} pedido${activeOrders.length !== 1 ? 's' : ''} asociado${activeOrders.length !== 1 ? 's' : ''}` : 'Sin pedidos'}
+                {hasOrders ? `${activeOrders.length} pedido${activeOrders.length !== 1 ? 's' : ''} de esta fecha` : 'Sin pedidos en esta fecha'}
               </div>
             </div>
             <button className="mclose" onClick={onClose}>×</button>

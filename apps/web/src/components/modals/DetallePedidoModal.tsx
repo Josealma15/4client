@@ -447,20 +447,16 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               </div>
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                 <button
+                  className="hdr-ic-btn"
                   title="Enviar formulario de pedido al cliente"
                   onClick={sendFormLink}
                   disabled={formLinkMut.isPending}
-                  style={{
-                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                  }}
                 >
                   <ClipboardList size={13} />
                   Formulario
                 </button>
                 <button
+                  className="hdr-ic-btn"
                   title="Bloquear el link de formulario enviado a este cliente"
                   onClick={() => setConfirmDlg({
                     msg: 'Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
@@ -468,12 +464,6 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                     danger: true,
                   })}
                   disabled={blockLinkMut.isPending}
-                  style={{
-                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
-                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-                  }}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>

@@ -53,7 +53,10 @@ const createOrderSchema = z.object({
   ticket_id:      z.string().uuid().optional(),
   customer_name:  z.string().min(1).max(200),
   customer_phone: z.string().max(20).optional(),
-  address:        z.string().min(1).max(500),
+  // Not required at creation — only enforced at closing time (POST /:id/cobro
+  // already checks it), so an order can be opened/dispatched before an address is
+  // confirmed and only has to be filled in before it's actually closed.
+  address:        z.string().max(500).optional(),
   channel:        z.enum(['whatsapp', 'call']).default('whatsapp'),
   payment_method: z.enum(['sin_asignar', 'cash', 'transfer', 'cod']).default('sin_asignar'),
   employee_id:    z.string().uuid().optional(),
@@ -65,7 +68,7 @@ const createOrderSchema = z.object({
 const updateOrderSchema = z.object({
   customer_name:  z.string().min(1).max(200).optional(),
   customer_phone: z.string().max(20).optional(),
-  address:        z.string().min(1).max(500).optional(),
+  address:        z.string().max(500).optional(),
   payment_method: z.enum(['sin_asignar', 'cash', 'transfer', 'cod']).optional(),
   employee_id:    z.string().uuid().nullable().optional(),
   notes:          z.string().max(1000).optional(),
@@ -172,6 +175,9 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       fastify.prisma.order.create({
         data: {
           ...rest,
+          // Placeholder when left blank — matches the client-form path (public.ts),
+          // and is what POST /:id/cobro's "missing fields" check already looks for.
+          address: rest.address?.trim() || 'Pendiente de confirmar',
           org_id: req.user.orgId,
           num,
           registered_by: req.user.userId,

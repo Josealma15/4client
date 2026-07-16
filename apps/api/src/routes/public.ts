@@ -15,6 +15,10 @@ interface FormTokenPayload {
   // so every use of it below falls back to an arbitrary active staff member.
   sentByUserId?: string;
   sentByName?: string;
+  // Always present (jsonwebtoken sets it automatically, and inbox.ts's /form-link
+  // route now sets it explicitly too) — seconds since epoch this specific token was
+  // signed, used to detect a superseded link. See assertLinkStillValid below.
+  iat?: number;
 }
 
 // Max orders a single form link (ticket) may generate — the link is valid for 7 days
@@ -67,12 +71,28 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   }
 
   // Checked separately from JWT verification (which only proves the token is
-  // well-formed and unexpired) — staff can revoke a link early (e.g. sent to the
-  // wrong number) via POST /inbox/:ticketId/form-link/revoke, well before its
-  // midnight expiry. A revoked link fails closed on every public endpoint below.
-  async function assertNotRevoked(ticketId: string): Promise<void> {
-    const revoked = await fastify.prisma.revokedFormToken.findUnique({ where: { ticket_id: ticketId } });
-    if (revoked) throw new Error('revoked');
+  // well-formed and unexpired) — two ways a structurally-valid token can still be
+  // dead: (1) explicitly revoked via POST /inbox/:ticketId/form-link/revoke, or
+  // (2) superseded — staff sent a NEWER link for this same ticket since this one was
+  // issued (inbox.ts's GET /form-link stamps `form_token_min_iat` every time it
+  // mints a token), so this older one is silently retired without needing a
+  // separate manual revoke. Both fail the same generic way on every public
+  // endpoint below — never reveals which of the two it was.
+  async function assertLinkStillValid(ticketId: string, tokenIat: number | undefined): Promise<void> {
+    const ticket = await fastify.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { form_token_min_iat: true, revoked_form_token: { select: { id: true } } },
+    });
+    if (!ticket) throw new Error('ticket not found');
+    if (ticket.revoked_form_token) throw new Error('revoked');
+    if (ticket.form_token_min_iat) {
+      // Compare at whole-second resolution on both sides — `iat` is JWT-standard
+      // seconds-since-epoch, but form_token_min_iat is stored with millisecond
+      // precision, so comparing raw ms would make a token superseded by the very
+      // same issuance that minted it (its `iat` always floors to <= that instant).
+      const minIatSec = Math.floor(ticket.form_token_min_iat.getTime() / 1000);
+      if (!tokenIat || tokenIat < minIatSec) throw new Error('superseded');
+    }
   }
 
   // Claims this ticket's form-link for whichever browser opens it first. There's no
@@ -114,7 +134,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
-      await assertNotRevoked(payload.ticketId);
+      await assertLinkStillValid(payload.ticketId, payload.iat);
       await assertDeviceOk(payload.ticketId, q.data.device_token);
 
       // Colombia UTC-5 local date — same "today" the client's own submissions land on.
@@ -163,7 +183,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
-      await assertNotRevoked(payload.ticketId);
+      await assertLinkStillValid(payload.ticketId, payload.iat);
       await assertDeviceOk(payload.ticketId, q.data.device_token);
       const products = await fastify.prisma.product.findMany({
         where: { org_id: payload.orgId, active: true },
@@ -217,7 +237,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     let payload: FormTokenPayload;
     try {
       payload = verifyFormToken(body.data.token);
-      await assertNotRevoked(payload.ticketId);
+      await assertLinkStillValid(payload.ticketId, payload.iat);
       await assertDeviceOk(payload.ticketId, body.data.device_token);
     } catch {
       return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });

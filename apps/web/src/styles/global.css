@@ -168,6 +168,8 @@ input,select,textarea{font-family:var(--f);}
 .iinput:disabled{opacity:.55;cursor:not-allowed;background:var(--gm);}
 .no-spin::-webkit-inner-spin-button,.no-spin::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 .no-spin{-moz-appearance:textfield;}
+.hdr-ic-btn{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:8px;color:#fff;cursor:pointer;min-width:74px;flex-shrink:0;padding:5px 6px;font-size:10px;font-weight:700;line-height:1.15;text-align:center;white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.hdr-ic-btn:disabled{opacity:.6;cursor:not-allowed;}
 .idel{background:var(--rc);border:none;color:var(--r);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
 .idel:hover{background:var(--r);color:#fff;}
 

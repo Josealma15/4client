@@ -47,6 +47,15 @@ function minsSinceDate(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
 }
 
+// Past 60 minutes, "375min" is unreadable at a glance — switch to "Xh Ymin" instead
+// of a raw minute count that just keeps growing with no natural break.
+function formatElapsed(mins: number): string {
+  if (mins < 60) return `${mins}min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
 // Red-zone timer — exactly two scenarios, nothing else:
 // - No order yet → minutes since the ticket's first message.
 // - An order exists but isn't closed (paid + cerrado) yet → minutes since the earliest
@@ -272,7 +281,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                 color: urg ? '#DC2626' : warn ? '#D97706' : 'var(--gt)',
                 animation: urg ? 'pulse 1.5s infinite' : undefined,
               }}>
-                {mins}min
+                {formatElapsed(mins)}
               </div>
             )}
             {ord.source === 'form' ? (
@@ -433,7 +442,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span className="tk-num">{tNum}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {urg && <span className="tk-urg"><AlertTriangle size={10} />{ticketElapsedMins(ticket, ticketOrders)}min</span>}
+                      {urg && <span className="tk-urg"><AlertTriangle size={10} />{formatElapsed(ticketElapsedMins(ticket, ticketOrders))}</span>}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleCollapseTicket(ticket.id); }}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--gt)', display: 'flex', alignItems: 'center' }}
