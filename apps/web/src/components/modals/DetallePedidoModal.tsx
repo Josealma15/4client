@@ -189,6 +189,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       setCatalogDirty(false);
       setCatalogClearKey(k => k + 1);
       toast('Cambios guardados');
+      onClose();
     },
     onError: (e: any) => toast(e.message, true),
   });
@@ -284,17 +285,25 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     }
 
     doc.line(3, y, 77, y); y += 5;
-    doc.setFont('helvetica', 'bold'); doc.text('Productos:', 3, y); y += 5;
+    // Column table — Producto | Cantidad | Precio, each value aligned under its own
+    // header instead of one concatenated line, so a printed copy reads like a real
+    // invoice/receipt rather than a run-on list.
+    doc.setFont('helvetica', 'bold');
+    doc.text('Producto', 3, y);
+    doc.text('Cant.', 48, y, { align: 'center' });
+    doc.text('Precio', 77, y, { align: 'right' });
+    y += 4;
+    doc.line(3, y, 77, y); y += 4;
     doc.setFont('helvetica', 'normal');
 
     items.forEach((i) => {
       const price = parseFloat(i.price) || 0;
-      const label = `${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}`;
       const priceStr = `$${price.toLocaleString('es-CO')}`;
-      const lLines = doc.splitTextToSize(label, 48);
-      doc.text(lLines, 3, y);
+      const nameLines = doc.splitTextToSize(i.product_name, 34);
+      doc.text(nameLines, 3, y);
+      doc.text(i.quantity_label || '—', 48, y, { align: 'center' });
       doc.text(priceStr, 77, y, { align: 'right' });
-      y += lLines.length * 4 + 1;
+      y += nameLines.length * 4 + 1.5;
     });
 
     y += 2; doc.line(3, y, 77, y); y += 5;
@@ -339,7 +348,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     if (!order) return;
     const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
     const lines = [`Pedido #${order.num} - ${user?.orgName ?? '4Client'}`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
-    items.forEach(i => lines.push(`• ${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}: $${(parseFloat(i.price)||0).toLocaleString('es-CO')}`));
+    items.forEach(i => lines.push(`• ${i.product_name}${i.quantity_label ? ' - ' + i.quantity_label : ''}: $${(parseFloat(i.price)||0).toLocaleString('es-CO')}`));
     lines.push('', `Total: $${total.toLocaleString('es-CO')}`, `Pago: ${PAYMENT_LABEL[pago] ?? pago}`);
     navigator.clipboard.writeText(lines.join('\n'));
     toast('Copiado al portapapeles');
@@ -373,7 +382,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       setConfirmDlg({
         msg: 'Hay cambios sin guardar.',
         onOk: onClose,
-        onSave: () => saveMut.mutate(undefined, { onSuccess: () => { setConfirmDlg(null); onClose(); } }),
+        onSave: () => saveMut.mutate(undefined, { onSuccess: () => setConfirmDlg(null) }),
       });
       return;
     }
@@ -429,11 +438,47 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             flexDirection: 'column', flexShrink: 0, minHeight: 0,
           }}>
             {/* Chat header */}
-            <div style={{ background: 'var(--vd)', color: '#fff', padding: '12px 14px', flexShrink: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>
-                {order.customer_name}
+            <div style={{ background: 'var(--vd)', color: '#fff', padding: '12px 14px', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>
+                  {order.customer_name}
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{order.customer_phone}</div>
               </div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>{order.customer_phone}</div>
+              <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                <button
+                  title="Enviar formulario de pedido al cliente"
+                  onClick={sendFormLink}
+                  disabled={formLinkMut.isPending}
+                  style={{
+                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                  }}
+                >
+                  <ClipboardList size={13} />
+                  Formulario
+                </button>
+                <button
+                  title="Bloquear el link de formulario enviado a este cliente"
+                  onClick={() => setConfirmDlg({
+                    msg: 'Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
+                    onOk: () => blockLinkMut.mutate(),
+                    danger: true,
+                  })}
+                  disabled={blockLinkMut.isPending}
+                  style={{
+                    background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                  }}
+                >
+                  <Ban size={13} />
+                  <span>Bloquear<br />Link</span>
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -688,24 +733,6 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                   <Send size={13} /> {invoiceMut.isPending ? 'Enviando...' : 'Enviar factura'}
                 </button>
               )}
-              {order.ticket_id && (
-                <button className="bsec" onClick={sendFormLink} disabled={formLinkMut.isPending}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <ClipboardList size={13} /> Formulario
-                </button>
-              )}
-              {order.ticket_id && (
-                <button className="bsec"
-                  onClick={() => setConfirmDlg({
-                    msg: 'Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
-                    onOk: () => blockLinkMut.mutate(),
-                    danger: true,
-                  })}
-                  disabled={blockLinkMut.isPending}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, borderColor: '#DC2626', color: '#DC2626' }}>
-                  <Ban size={13} /> Bloquear link
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -752,7 +779,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
             </div>
             <div className="fg2">
               <label className="fl2">¿Cuánto se recibió? <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span></label>
-              <input className="fi2" type="number" placeholder={`Mínimo: $${total.toLocaleString('es-CO')}`}
+              <input className="fi2 no-spin" type="number" placeholder={`Mínimo: $${total.toLocaleString('es-CO')}`}
                 value={cobroRec} onChange={(e) => setCobroRec(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && cobroValido && !cobroMut.isPending) { e.preventDefault(); cobroMut.mutate(); } }}
                 style={{ borderColor: cobroRec && !cobroValido ? 'var(--r)' : undefined }} />

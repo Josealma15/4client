@@ -33,6 +33,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   // it stays collapsed by default the way the person left it.
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const editQtyRef = useRef<HTMLInputElement | null>(null);
+  const editPriceRef = useRef<HTMLInputElement | null>(null);
 
   // Clear local inputs when parent signals a save (clearKey increments)
   useEffect(() => {
@@ -117,9 +118,45 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   }
 
   function editItem(item: Item) {
-    setLocalInputs(prev => ({ ...prev, [item.product_name]: { qty: item.quantity_label, price: item.price } }));
+    // A price of "0" (unset) showed literally as "0" in the input, forcing whoever's
+    // typing to delete it first — show it empty instead, same as a genuinely unset one.
+    const priceVal = parseFloat(item.price) > 0 ? item.price : '';
+    setLocalInputs(prev => ({ ...prev, [item.product_name]: { qty: item.quantity_label, price: priceVal } }));
     onLocalDirty?.(true);
     setEditingRow(item.product_name);
+  }
+
+  // Commits the currently-typed qty/price for a row WITHOUT closing its edit mode —
+  // used when Enter just advances focus to the next field, not when the person is
+  // done with the whole row (that's saveEdit, which also calls this then closes).
+  function commitEditField(productName: string) {
+    const local = localInputs[productName];
+    if (local === undefined) return;
+    const priorItem = items.find(i => i.product_name === productName);
+    const newItem: Item = {
+      product_name: productName,
+      quantity_label: local.qty.trim(),
+      price: local.price.trim(),
+      added_by_client: priorItem?.added_by_client ?? false,
+    };
+    onChange(items.map(i => i.product_name === productName ? newItem : i));
+  }
+
+  // Enter in the qty field of a row being edited: save qty, jump to price — same row.
+  function advanceToPrice(productName: string) {
+    commitEditField(productName);
+    requestAnimationFrame(() => { editPriceRef.current?.focus(); editPriceRef.current?.select(); });
+  }
+
+  // Enter in the price field: save, then open the NEXT row's qty field straight into
+  // edit mode — the editingRow effect below already focuses editQtyRef whenever
+  // editingRow changes, so opening the next row is all this needs to do.
+  function advanceToNextRow(productName: string) {
+    commitEditField(productName);
+    const idx = items.findIndex(i => i.product_name === productName);
+    const next = idx >= 0 ? items[idx + 1] : undefined;
+    if (next) editItem(next);
+    else setEditingRow(null); // last row — nothing further to advance to
   }
 
   function cancelEdit(productName: string) {
@@ -268,7 +305,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         style={{ fontSize: 13 }}
                       />
                       <input
-                        className="iinput"
+                        className="iinput no-spin"
                         placeholder="$0"
                         type="number"
                         value={local.price}
@@ -336,7 +373,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         value={local.qty}
                         onChange={e => setLocal(i.product_name, 'qty', e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter') { e.preventDefault(); saveEdit(i.product_name); }
+                          if (e.key === 'Enter') { e.preventDefault(); advanceToPrice(i.product_name); }
                           if (e.key === 'Escape') { e.preventDefault(); cancelEdit(i.product_name); }
                         }}
                         style={{ fontSize: 13, width: '100%', textAlign: 'center' }}
@@ -346,13 +383,14 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                   <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: !isEditing && i.added_by_client ? '#DC2626' : undefined }}>
                     {isEditing ? (
                       <input
-                        className="iinput"
+                        ref={editPriceRef}
+                        className="iinput no-spin"
                         placeholder="$0"
                         type="number"
                         value={local.price}
                         onChange={e => setLocal(i.product_name, 'price', e.target.value)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter') { e.preventDefault(); saveEdit(i.product_name); }
+                          if (e.key === 'Enter') { e.preventDefault(); advanceToNextRow(i.product_name); }
                           if (e.key === 'Escape') { e.preventDefault(); cancelEdit(i.product_name); }
                         }}
                         style={{ fontSize: 13, width: '100%', textAlign: 'right' }}

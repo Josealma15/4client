@@ -185,7 +185,7 @@ describe('public form routes', () => {
     expect(after.client_modified).toBe(false);
   });
 
-  it('POST /submit with a merge_order_id whose order is "camino" (out for delivery) is rejected as editable and falls back to creating a new order — only nuevo/preparando/listo qualify', async () => {
+  it('POST /submit with a merge_order_id whose order became "camino" (out for delivery) while the client was editing is rejected with 409 — NOT silently duplicated as a new order', async () => {
     // Dedicated ticket — isolates this from the shared ticketId's per-link order cap
     // (MAX_FORM_ORDERS_PER_TICKET), which later tests below still rely on being unspent.
     const caminoPhone = '573001112288';
@@ -205,14 +205,22 @@ describe('public form routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token: caminoToken, device_token: 'device-camino', merge_order_id: caminoOrderId, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: {
+        token: caminoToken, device_token: 'device-camino', merge_order_id: caminoOrderId,
+        items: [{ product_name: 'Mango', quantity_label: '1 kg' }, { product_name: 'Piña', quantity_label: '1 unidad' }],
+      },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.merged).toBeUndefined();
-    expect(res.json().data.orderId).not.toBe(caminoOrderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
+    expect(res.json().error).toContain('en camino');
+
+    // No duplicate was created — this ticket still has exactly the one order.
+    const formOrders = await app.prisma.order.findMany({ where: { ticket_id: ticket.id } });
+    expect(formOrders).toHaveLength(1);
+    expect(formOrders[0].id).toBe(caminoOrderId);
   });
 
-  it('POST /submit with a merge_order_id that is no longer open (closed in the meantime) falls back to creating a new order instead of blocking the client', async () => {
+  it('POST /submit with a merge_order_id that is no longer open (closed in the meantime) is rejected with 409, not silently duplicated', async () => {
     await app.prisma.order.update({
       where: { id: firstOrderId },
       data: { status: 'cerrado', paid: true, locked: true, paid_by: adminId, paid_at: new Date() },
@@ -223,17 +231,37 @@ describe('public form routes', () => {
       url: '/api/v1/public/submit',
       payload: { token, device_token: DEVICE, merge_order_id: firstOrderId, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.merged).toBeUndefined();
-    expect(res.json().data.orderId).not.toBe(firstOrderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
   });
 
-  it('GET /form-info now shows the closed order as non-editable alongside the new one', async () => {
+  it('GET /form-info no longer lists the closed order at all — nothing left for the client to see or do with it', async () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
     const orders = res.json().data.orders as any[];
-    const closedOne = orders.find(o => o.id === firstOrderId);
-    expect(closedOne.editable).toBe(false);
-    expect(closedOne.status).toBe('cerrado');
+    expect(orders.find(o => o.id === firstOrderId)).toBeUndefined();
+  });
+
+  it('GET /form-info still lists a "camino" order, read-only', async () => {
+    const caminoPhone2 = '573001112266';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: caminoPhone2, customer_name: 'Cliente Camino 2' } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const caminoToken2 = (app.jwt.sign as any)(
+      { type: 'form_link', ticketId: ticket.id, orgId, clientName: 'Cliente Camino 2', clientPhone: caminoPhone2, orgName: 'org' },
+      { expiresIn: '7d' },
+    );
+    const create = await app.inject({
+      method: 'POST', url: '/api/v1/public/submit',
+      payload: { token: caminoToken2, device_token: 'device-camino-2', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+    });
+    const orderId = create.json().data.orderId;
+    await app.prisma.order.update({ where: { id: orderId }, data: { status: 'camino' } });
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${caminoToken2}&device_token=device-camino-2` });
+    const orders = res.json().data.orders as any[];
+    const found = orders.find(o => o.id === orderId);
+    expect(found).toBeDefined();
+    expect(found.editable).toBe(false);
+    expect(found.status).toBe('camino');
   });
 
   it('GET /inbox/:ticketId/form-link embeds who sent it and expires by end of the current Colombia day, not 7 days out', async () => {

@@ -181,12 +181,13 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                   }}
                   style={{
                     background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer',
-                    padding: '5px 9px', fontSize: 12, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
                   }}
                 >
-                  <ClipboardList size={13} /> Formulario
+                  <ClipboardList size={13} />
+                  Formulario
                 </button>
               )}
               {ticketId && (
@@ -196,12 +197,13 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
                   disabled={blockLinkMut.isPending}
                   style={{
                     background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                    borderRadius: 8, color: '#fff', cursor: 'pointer',
-                    padding: '5px 9px', fontSize: 12, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                    fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
                   }}
                 >
-                  <Ban size={13} /> Bloquear link
+                  <Ban size={13} />
+                  <span>Bloquear<br />Link</span>
                 </button>
               )}
             </div>

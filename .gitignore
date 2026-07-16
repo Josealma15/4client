@@ -6,6 +6,10 @@ dist
 .env.test
 *.local
 
+# Local-storage fallback for uploaded invoices (routes/files.ts) when R2 isn't
+# configured — runtime data, not source.
+apps/api/uploads/
+
 # Design source files at root
 4ClientLogo.png
 4ClientLogoSinTexto.png

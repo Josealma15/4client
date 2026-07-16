@@ -108,7 +108,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   const EDITABLE_STATUSES = ['nuevo', 'preparando', 'listo'] as const;
 
   // GET /api/v1/public/form-info?t=TOKEN&device_token=X — verifica token y devuelve
-  // info del cliente + TODOS sus pedidos de hoy (activos y ya cerrados/en camino)
+  // info del cliente + sus pedidos activos de hoy
   fastify.get('/form-info', async (req, reply) => {
     const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
@@ -120,12 +120,13 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       // Colombia UTC-5 local date — same "today" the client's own submissions land on.
       const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
 
-      // Every one of today's orders, not just open ones — the client can now see
-      // what's already been delivered/closed today too (read-only), not just what's
-      // still pending. Papelera (cancelled) orders are the one thing never shown —
-      // those were discarded, not part of the client's day.
+      // Only orders still in play today — cerrado (and papelera) are excluded outright,
+      // not just marked non-editable. An order deferred INTO today (e.g. left open
+      // overnight) still shows here if it's genuinely still active; once it's closed,
+      // whether that happened today or it arrived already closed from a prior day,
+      // there's nothing left for the client to see or do with it.
       const todaysOrders = await fastify.prisma.order.findMany({
-        where: { ticket_id: payload.ticketId, org_id: payload.orgId, fecha: todayLocal, status: { not: 'papelera' } },
+        where: { ticket_id: payload.ticketId, org_id: payload.orgId, fecha: todayLocal, status: { notIn: ['cerrado', 'papelera'] } },
         select: {
           id: true, num: true, address: true, payment_method: true, status: true, created_at: true,
           items: { select: { id: true, product_name: true, quantity_label: true }, orderBy: { sort_order: 'asc' } },
@@ -263,15 +264,33 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // client removed included. Only orders still in an editable status (nuevo/
     // preparando/listo) qualify; once 'camino' or 'cerrado' only staff can touch it.
     if (body.data.merge_order_id) {
+      // Looked up WITHOUT the status/locked filter first, on purpose — the client had
+      // the order open (and its full item list loaded into the form) as of form-info,
+      // but staff can move it to 'camino' or close it out any time before submit
+      // actually lands. The old behavior silently fell through to "create a new
+      // order" here, which — since the form now carries the target's ENTIRE existing
+      // item list, not just newly-typed ones — duplicated the whole pedido as a
+      // brand-new one instead of just failing loudly. Now it never falls through:
+      // not-found is a real 404, and no-longer-editable is a real 409 explaining why.
       const target = await fastify.prisma.order.findFirst({
-        where: {
-          id: body.data.merge_order_id, ticket_id: ticket.id, org_id: payload.orgId,
-          status: { in: EDITABLE_STATUSES as unknown as string[] }, locked: false,
-        },
+        where: { id: body.data.merge_order_id, ticket_id: ticket.id, org_id: payload.orgId },
         include: { items: true },
       });
 
-      if (target) {
+      if (!target) {
+        return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
+      }
+
+      const isEditable = (EDITABLE_STATUSES as readonly string[]).includes(target.status) && !target.locked;
+      if (!isEditable) {
+        const STATUS_LABEL_ES: Record<string, string> = { camino: 'en camino', entregado: 'entregado', cerrado: 'cerrado', papelera: 'cancelado' };
+        return reply.status(409).send({
+          error: `Tu pedido #${target.num} ya está ${STATUS_LABEL_ES[target.status] ?? target.status} y no se puede modificar. Si necesitas hacer un cambio, contáctanos directamente.`,
+          code: 'ORDER_NOT_EDITABLE',
+        });
+      }
+
+      {
         const priorByName = new Map(target.items.map(i => [i.product_name, i]));
         const submittedNames = new Set(body.data.items.map(i => i.product_name));
         const mergedItemsData = body.data.items.map((item, idx) => {
@@ -356,8 +375,6 @@ export default async function publicRoutes(fastify: FastifyInstance) {
 
         return reply.status(200).send({ data: { ok: true, orderId: updated.id, num: updated.num, merged: true } });
       }
-      // target missing/no longer editable by the time we got here — fall through and
-      // create a fresh order below instead of leaving the client stuck.
     }
 
     // ── New order path ──

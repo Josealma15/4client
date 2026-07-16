@@ -131,32 +131,36 @@ export default function TicketModal({ ticketId, onClose, onCreateFromTicket, onO
                 {ticket?.messages?.length != null && ` · ${ticket.messages.length} mensajes`}
               </div>
             </div>
-            <button
-              title="Enviar formulario de pedido al cliente"
-              onClick={sendFormLink}
-              disabled={formLinkMut.isPending}
-              style={{
-                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: 8, color: '#fff', cursor: 'pointer', flexShrink: 0,
-                padding: '5px 9px', fontSize: 12, fontWeight: 700,
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <ClipboardList size={13} /> Formulario
-            </button>
-            <button
-              title="Bloquear el link de formulario enviado a este cliente"
-              onClick={() => setShowBlockConfirm(true)}
-              disabled={blockLinkMut.isPending}
-              style={{
-                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: 8, color: '#fff', cursor: 'pointer', flexShrink: 0,
-                padding: '5px 9px', fontSize: 12, fontWeight: 700,
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              <Ban size={13} /> Bloquear link
-            </button>
+            <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+              <button
+                title="Enviar formulario de pedido al cliente"
+                onClick={sendFormLink}
+                disabled={formLinkMut.isPending}
+                style={{
+                  background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                  fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                }}
+              >
+                <ClipboardList size={13} />
+                Formulario
+              </button>
+              <button
+                title="Bloquear el link de formulario enviado a este cliente"
+                onClick={() => setShowBlockConfirm(true)}
+                disabled={blockLinkMut.isPending}
+                style={{
+                  background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: 8, color: '#fff', cursor: 'pointer', width: 52, padding: '5px 4px',
+                  fontSize: 11, fontWeight: 700, lineHeight: 1.15, textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                }}
+              >
+                <Ban size={13} />
+                <span>Bloquear<br />Link</span>
+              </button>
+            </div>
           </div>
 
           {/* Messages — scrollable */}

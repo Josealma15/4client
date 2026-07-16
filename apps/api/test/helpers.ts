@@ -21,6 +21,7 @@ import dashboardRoutes from '../src/routes/dashboard.js';
 import ticketRoutes from '../src/routes/tickets.js';
 import publicRoutes from '../src/routes/public.js';
 import inboxRoutes from '../src/routes/inbox.js';
+import fileRoutes from '../src/routes/files.js';
 
 /**
  * Builds a fully-wired Fastify instance (same plugins as server.ts) with only the
@@ -64,6 +65,7 @@ export async function buildTestServer(): Promise<FastifyInstance> {
   await fastify.register(ticketRoutes, { prefix: '/api/v1/tickets' });
   await fastify.register(publicRoutes, { prefix: '/api/v1/public' });
   await fastify.register(inboxRoutes, { prefix: '/api/v1/inbox' });
+  await fastify.register(fileRoutes, { prefix: '/api/v1/files' });
 
   fastify.setErrorHandler((error: FastifyError, _req, reply) => {
     const status = error.statusCode ?? 500;

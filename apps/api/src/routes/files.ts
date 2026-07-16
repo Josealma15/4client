@@ -78,7 +78,11 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: publicUrl });
   });
 
-  // GET /api/v1/files/:filename — public (no auth: filename is unguessable org+UUID combo)
+  // GET /api/v1/files/:filename — public (no auth: filename is unguessable org+UUID combo),
+  // but only for 24h — same lifetime as the client form-link, for the same reason: if
+  // someone needs the invoice again after that, staff just hits "Enviar factura" again
+  // from that order (it regenerates fresh from the order's current items every time,
+  // nothing is cached), rather than this URL staying valid forever once shared.
   fastify.get('/:filename', async (req, reply) => {
     const { filename } = req.params as { filename: string };
     // Deliberately not tied to the exact current segment layout (timestamp/org/num/id)
@@ -88,6 +92,25 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     // needing this regex to be revised in lockstep every time that layout changes.
     if (!/^Factura[_-][a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
       return reply.status(400).send({ error: 'Archivo inválido' });
+    }
+
+    // The filename embeds its own creation stamp (Factura-YYYYMMDD-HHMMSS-...), written
+    // in Bogota wall-clock time labeled as if it were UTC (see the upload route above) —
+    // reversing that same -5h shift recovers the real UTC instant it was created, no
+    // separate expiry table needed. Filenames that don't match this exact shape (should
+    // never happen — every invoice this app has ever generated uses it) fail open rather
+    // than breaking on an unexpected format.
+    const stampMatch = filename.match(/^Factura[_-](\d{8})-(\d{6})-/);
+    if (stampMatch) {
+      const [, datePart, timePart] = stampMatch;
+      const bogotaAsUtcMs = Date.UTC(
+        Number(datePart.slice(0, 4)), Number(datePart.slice(4, 6)) - 1, Number(datePart.slice(6, 8)),
+        Number(timePart.slice(0, 2)), Number(timePart.slice(2, 4)), Number(timePart.slice(4, 6)),
+      );
+      const createdAtMs = bogotaAsUtcMs + 5 * 3600000;
+      if (Date.now() - createdAtMs > 24 * 3600 * 1000) {
+        return reply.status(410).send({ error: 'Este link de factura ya expiró (válido 24 horas). Pide que te reenvíen la factura.', code: 'INVOICE_EXPIRED' });
+      }
     }
 
     if (storage.isConfigured()) {
