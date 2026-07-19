@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Download, MessageSquare } from 'lucide-react';
 import { api } from '../../lib/api';
-import { fmtCOP, STATUS_LABEL, PAYMENT_LABEL } from '../../lib/format';
+import { fmtCOP, STATUS_LABEL } from '../../lib/format';
+import { downloadCierreCSV } from '../../lib/csv';
 import { toast } from '../ui/Toast';
 
 interface Props {
@@ -121,38 +122,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
   });
 
   function downloadCSV() {
-    const decisionLabel: Record<string, string> = {
-      manana: 'Pasar a mañana',
-      forzar_cierre: 'Cerrar sin cobro',
-      '': 'Sin decidir',
-    };
-    const header = ['#', 'Cliente', 'Teléfono', 'Dirección', 'Productos', 'Total', 'Pago', 'Estado', 'Acción cierre'].join(',');
-    const rows = nonPapelera.map((o) => {
-      const total = o.items.reduce((s: number, i: any) => s + Number(i.price), 0);
-      const productos = o.items.map((i: any) => `${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name}`).join(' | ');
-      const accion = o.paid || o.status === 'cerrado'
-        ? 'Completado'
-        : decisionLabel[decisions[o.id] ?? ''];
-      return [
-        o.num,
-        `"${o.customer_name}"`,
-        o.customer_phone ?? '',
-        `"${o.address}"`,
-        `"${productos}"`,
-        total,
-        PAYMENT_LABEL[o.payment_method] ?? o.payment_method,
-        STATUS_LABEL[o.status] ?? o.status,
-        accion,
-      ].join(',');
-    });
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Cierre_${fecha}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCierreCSV(fecha, nonPapelera, decisions);
   }
 
   const pendingSinDecision = pendingOrders.filter((o) => !decisions[o.id]).length;

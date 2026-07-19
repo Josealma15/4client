@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import {
   Package, PackageCheck, Clock, Banknote, ArrowLeftRight, Wallet,
-  FileText, Trash2, History, ChevronDown, ChevronRight, Lock,
+  FileText, Trash2, History, ChevronDown, ChevronRight, Lock, Download,
   MessageSquare, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
+import { downloadCierreCSV } from '../../lib/csv';
 import HistoryTable from '../ui/HistoryTable';
 import DatePickerES from '../ui/DatePickerES';
 
@@ -98,10 +99,20 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <DatePickerES value={fecha} onChange={setFecha} />
           {dashboard?.cierre?.cerrado ? (
-            <button disabled title={dashboard.cierre.closedByName ? `Cerrada por ${dashboard.cierre.closedByName}` : ''}
-              style={{ background: 'var(--bg)', color: 'var(--gt)', border: '1px solid var(--brd)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
-              <Lock size={15} /> Caja ya cerrada
-            </button>
+            <>
+              <button disabled title={dashboard.cierre.closedByName ? `Cerrada por ${dashboard.cierre.closedByName}` : ''}
+                style={{ background: 'var(--bg)', color: 'var(--gt)', border: '1px solid var(--brd)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+                <Lock size={15} /> Caja ya cerrada
+              </button>
+              {/* Re-downloadable any time after the close, not just in the one live
+                  session that ran it - decisions come from the persisted DailyClose
+                  row (GET /dashboard), same report either way. */}
+              <button
+                onClick={() => downloadCierreCSV(fecha, dashboard.orders ?? [], dashboard.cierre.decisions ?? {})}
+                style={{ background: 'var(--vd)', color: '#fff', border: 'none', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+                <Download size={15} /> Descargar CSV
+              </button>
+            </>
           ) : fecha !== todayStr() ? (
             // Cierre only ever applies to the live, current day (see cierre.ts's
             // NOT_TODAY check) - a past day with pending orders is done, not

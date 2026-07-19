@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestServer, createTestOrg, createTestUser } from './helpers.js';
+import { isWithinFormHours } from '../src/routes/public.js';
 
 const ADMIN_PASS = 'PublicFormAdmin1!';
 const DEVICE = 'device-token-001';
@@ -10,6 +11,27 @@ async function login(app: FastifyInstance, email: string, password: string): Pro
   expect(res.statusCode).toBe(200);
   return res.json().data.accessToken as string;
 }
+
+// Pure function of an explicit `now`, not the real clock - the route wiring itself
+// (`if (shouldBlockForHours()) return sendFormClosed(reply)`, public.ts) is disabled
+// under NODE_ENV=test specifically so the rest of this file's app.inject calls don't
+// pass or fail depending on what hour it happens to be when the suite runs. This is
+// what actually verifies the 8pm Colombia boundary is correct.
+describe('isWithinFormHours - form links only work until 8pm Colombia time', () => {
+  it('7:59pm Colombia -> still within hours', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T19:59:00-05:00').getTime())).toBe(true);
+  });
+  it('exactly 8:00pm Colombia -> closed', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T20:00:00-05:00').getTime())).toBe(false);
+  });
+  it('11:59pm Colombia -> closed', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T23:59:00-05:00').getTime())).toBe(false);
+  });
+  it('midnight / early morning Colombia -> within hours', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T00:00:00-05:00').getTime())).toBe(true);
+    expect(isWithinFormHours(new Date('2026-01-15T07:00:00-05:00').getTime())).toBe(true);
+  });
+});
 
 describe('public form routes', () => {
   let app: FastifyInstance;

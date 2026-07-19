@@ -108,7 +108,12 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
         orders,
         papeleraOrders,
         history,
-        cierre: dailyClose ? { cerrado: true, closedAt: dailyClose.closed_at, closedByName: dailyClose.closedBy?.name ?? null } : { cerrado: false },
+        // `decisions` (per-order action taken at cierre time) travels along too - lets
+        // the frontend rebuild the exact same CSV report on demand, any time after the
+        // close, instead of only within the one live session that actually ran it.
+        cierre: dailyClose
+          ? { cerrado: true, closedAt: dailyClose.closed_at, closedByName: dailyClose.closedBy?.name ?? null, decisions: dailyClose.decisions ?? {} }
+          : { cerrado: false },
       },
     });
   });
