@@ -29,25 +29,62 @@ function sampleOrderPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// Colombia local date (UTC-5, no DST) - matches exactly what cierre.ts's own
+// "only today" check computes, so tests actually land on the day the server
+// considers "today" regardless of the machine/CI runner's own timezone.
+function todayColombiaStr(): string {
+  return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().split('T')[0];
+}
+
 describe('cierre routes', () => {
   let app: FastifyInstance;
-  let orgId: string;
-  let encargadoToken: string;
 
   beforeAll(async () => {
     app = await buildTestServer();
-    const org = await createTestOrg(app.prisma);
-    orgId = org.id;
-    const encargado = await createTestUser(app.prisma, orgId, 'encargado', ENCARGADO_PASS);
-    encargadoToken = await login(app, encargado.email, ENCARGADO_PASS);
   });
 
   afterAll(async () => {
     await app.close();
   });
 
+  // Cierre can now only ever target TODAY (see cierre.ts's NOT_TODAY check) - a
+  // DailyClose row is unique per (org, fecha), so every test below that closes
+  // "today" needs its OWN org, or it'd collide with another test's close of the
+  // same org+day and get a false 409 ALREADY_CLOSED instead of testing what it means to.
+  async function freshOrgAndEncargado() {
+    const org = await createTestOrg(app.prisma);
+    const encargado = await createTestUser(app.prisma, org.id, 'encargado', ENCARGADO_PASS);
+    const token = await login(app, encargado.email, ENCARGADO_PASS);
+    return { orgId: org.id, encargadoToken: token };
+  }
+
+  it('cierre on a date other than today -> 400 NOT_TODAY (neither future nor past can be closed)', async () => {
+    const { encargadoToken } = await freshOrgAndEncargado();
+    const yesterday = new Date(Date.now() - 5 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() - 5 * 60 * 60 * 1000 + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const pastAttempt = await app.inject({
+      method: 'POST',
+      url: '/api/v1/cierre',
+      headers: authHeader(encargadoToken),
+      payload: { fecha: yesterday, decisions: {} },
+    });
+    expect(pastAttempt.statusCode).toBe(400);
+    expect(pastAttempt.json().code).toBe('NOT_TODAY');
+
+    const futureAttempt = await app.inject({
+      method: 'POST',
+      url: '/api/v1/cierre',
+      headers: authHeader(encargadoToken),
+      payload: { fecha: tomorrow, decisions: {} },
+    });
+    expect(futureAttempt.statusCode).toBe(400);
+    expect(futureAttempt.json().code).toBe('NOT_TODAY');
+  });
+
   it('moving a pending order to "manana" moves its fecha to tomorrow and PRESERVES original notes with the pasado_manana marker appended (B3 fix)', async () => {
-    const fecha = '2026-02-10';
+    const { encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
     const originalNotes = 'Entregar por la puerta trasera, tocar el timbre dos veces';
 
     const create = await app.inject({
@@ -87,7 +124,8 @@ describe('cierre routes', () => {
   });
 
   it('a phone can only ever have one ticket per org (@@unique(org_id, phone)) - deferring to "manana" just re-flags the same row, never forks a second one', async () => {
-    const fecha = '2026-02-12';
+    const { orgId, encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
     const tomorrow = new Date(fecha);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const phone = '573001112233';
@@ -128,7 +166,8 @@ describe('cierre routes', () => {
   });
 
   it('cierre without a decision for a pending order -> 400 MISSING_DECISIONS', async () => {
-    const fecha = '2026-02-11';
+    const { encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
 
     const create = await app.inject({
       method: 'POST',
@@ -155,9 +194,8 @@ describe('cierre routes', () => {
   });
 
   it('closing an already-closed day again -> 409 ALREADY_CLOSED, and the day stays closed', async () => {
-    // A date not touched by any other test in this file (avoids colliding with
-    // orders that other tests' "manana" decisions shift onto the following day).
-    const fecha = '2026-02-20';
+    const { encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
 
     const create = await app.inject({
       method: 'POST',
@@ -186,8 +224,9 @@ describe('cierre routes', () => {
     expect(secondCierre.json().code).toBe('ALREADY_CLOSED');
   });
 
-  it('GET /cierre/status reflects whether the day has been closed', async () => {
-    const fecha = '2026-02-21';
+  it('GET /cierre/status reflects whether the day has been closed, and "forzar_cierre" (cerrar sin cobro) closes the order WITHOUT marking it paid', async () => {
+    const { encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
 
     const before = await app.inject({
       method: 'GET',
@@ -221,10 +260,17 @@ describe('cierre routes', () => {
     expect(after.statusCode).toBe(200);
     expect(after.json().data.cerrado).toBe(true);
     expect(after.json().data.closedAt).not.toBeNull();
+
+    // "Cerrar sin cobro" means exactly that - closed/dead, but never marked as paid.
+    const closedOrder = await app.prisma.order.findUnique({ where: { id: order.id } });
+    expect(closedOrder!.status).toBe('cerrado');
+    expect(closedOrder!.paid).toBe(false);
+    expect(closedOrder!.paid_at).toBeNull();
   });
 
-  it('once a day is closed, its orders are frozen - even one left "dejar_activo" (not locked) can no longer be created, edited, or moved', async () => {
-    const fecha = '2026-02-22';
+  it('once a day is closed, EVERY order on it is frozen - even one that was never individually locked, purely because the day itself closed', async () => {
+    const { orgId, encargadoToken } = await freshOrgAndEncargado();
+    const fecha = todayColombiaStr();
 
     const create = await app.inject({
       method: 'POST',
@@ -234,22 +280,35 @@ describe('cierre routes', () => {
     });
     const order = create.json().data;
 
+    // A second order on the same day that's already 'cerrado' but was never
+    // individually locked (e.g. seeded/imported another way) - not part of
+    // "pendientes" (paid:false + status not in cerrado/papelera), so it needs no
+    // cierre decision of its own. This is exactly the case a plain `existing.locked`
+    // check on PATCH /orders/:id would let through - only the DAY_CLOSED check
+    // (independent of any one order's own `locked` flag) catches it.
+    const admin = await app.prisma.user.findFirstOrThrow({ where: { org_id: orgId, role: 'encargado' } });
+    const unlockedClosedOrder = await app.prisma.order.create({
+      data: {
+        org_id: orgId, num: '999', customer_name: 'Pedido ya cerrado sin lock',
+        address: 'Calle 1', payment_method: 'cash', status: 'cerrado', locked: false,
+        registered_by: admin.id, fecha: new Date(fecha),
+      },
+    });
+
     const cierre = await app.inject({
       method: 'POST',
       url: '/api/v1/cierre',
       headers: authHeader(encargadoToken),
-      payload: { fecha, decisions: { [order.id]: 'dejar_activo' } },
+      payload: { fecha, decisions: { [order.id]: 'forzar_cierre' } },
     });
     expect(cierre.statusCode).toBe(200);
 
-    // Left deliberately open, not locked - this is exactly the case a plain
-    // `existing.locked` check would let through.
-    const stillOpen = await app.prisma.order.findUnique({ where: { id: order.id } });
-    expect(stillOpen!.locked).toBe(false);
+    const stillUnlocked = await app.prisma.order.findUnique({ where: { id: unlockedClosedOrder.id } });
+    expect(stillUnlocked!.locked).toBe(false);
 
     const editAttempt = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/orders/${order.id}`,
+      url: `/api/v1/orders/${unlockedClosedOrder.id}`,
       headers: authHeader(encargadoToken),
       payload: { address: 'Nueva dirección después de cerrado' },
     });
@@ -258,7 +317,7 @@ describe('cierre routes', () => {
 
     const statusAttempt = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/orders/${order.id}/status`,
+      url: `/api/v1/orders/${unlockedClosedOrder.id}/status`,
       headers: authHeader(encargadoToken),
       payload: { status: 'preparando' },
     });

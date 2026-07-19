@@ -23,13 +23,31 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
   fastify.post('/', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const body = z.object({
       fecha: z.string(),
-      decisions: z.record(z.enum(['manana', 'forzar_cierre', 'cancelar', 'dejar_activo'])),
+      // Only 2 real choices for a pending order at cierre time: push it to tomorrow,
+      // or close it dead/unmanaged (no payment happened, nobody will chase it further).
+      // "cancelar" (papelera) and "dejar_activo" (no-op) used to exist too, but gave
+      // staff ways to avoid actually deciding - removed so cierre always ends with
+      // every pending order in one of exactly two well-understood end states.
+      decisions: z.record(z.enum(['manana', 'forzar_cierre'])),
       ticket_decisions: z.record(z.enum(['manana', 'atendido'])).optional(),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
 
     const fecha = new Date(body.data.fecha);
     const { decisions } = body.data;
+
+    // Only TODAY can be closed - not the future (nothing to reconcile yet) and not
+    // the past either: a pending order from a past day gets deferred to "tomorrow"
+    // relative to THAT day, which is still a day that's already gone, not a real day
+    // anyone will ever look at again - it'd defer into a dead end. Closing only ever
+    // happens on the live, current day, same as the rest of the app treats "today".
+    const todayLocalStr = new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0];
+    if (body.data.fecha !== todayLocalStr) {
+      return reply.status(400).send({
+        error: 'Solo se puede cerrar la caja del día actual, no de días pasados ni futuros',
+        code: 'NOT_TODAY',
+      });
+    }
 
     const yaExiste = await fastify.prisma.dailyClose.findUnique({
       where: { org_id_fecha: { org_id: req.user.orgId, fecha } },
@@ -98,23 +116,14 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
           await tx.orderHistory.create({
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Movido a mañana en cierre de caja' },
           });
-        } else if (decision === 'cancelar') {
-          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'papelera' } });
-          await tx.orderHistory.create({
-            data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cancelado en cierre de caja' },
-          });
         } else if (decision === 'forzar_cierre') {
-          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'cerrado', paid: true, locked: true, paid_at: new Date(), paid_by: req.user.userId } });
+          // "Cerrar sin cobro" - dead/unmanaged, not a real sale. Must NOT set
+          // paid/paid_at/paid_by: those mean money actually changed hands, which
+          // didn't happen here. Only status+locked, so it freezes like any other
+          // closed order without lying about a payment that never occurred.
+          await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { status: 'cerrado', locked: true } });
           await tx.orderHistory.create({
-            data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cierre forzado por admin en cierre de caja' },
-          });
-        } else if (decision === 'dejar_activo') {
-          // No changes at all - order stays exactly as it is (same fecha, same status).
-          // Just an explicit acknowledgment so cierre can proceed without forcing an
-          // in-progress order (e.g. still "camino") into a fake close or a date it
-          // hasn't actually rolled into yet.
-          await tx.orderHistory.create({
-            data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Dejado activo (sin cambios) en cierre de caja' },
+            data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cerrado sin cobro en cierre de caja' },
           });
         }
       }
