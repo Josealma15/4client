@@ -11,6 +11,7 @@ import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
 import { todayStr } from '../../lib/format';
+import { useDiaCerrado } from '../../hooks/useCierre';
 
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
@@ -157,8 +158,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   const hasChat = !!ticketId;
   // Same reasoning as TicketModal/DetallePedidoModal - the link itself already
   // expires by end of the Colombia day it was sent, so a past day's ticket has
-  // nothing live to send/block.
-  const isPastDay = fecha < todayStr();
+  // nothing live to send/block. Also true the moment TODAY's caja gets closed early.
+  const { data: cierreStatus } = useDiaCerrado(fecha);
+  const isPastDay = fecha < todayStr() || (cierreStatus?.cerrado ?? false);
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && handleClose()}>

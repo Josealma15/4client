@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
 import { fmtCOP, STATUS_LABEL, todayStr } from '../../lib/format';
+import { useDiaCerrado } from '../../hooks/useCierre';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 
@@ -122,7 +123,10 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
   // whatever link was ever sent for it is already dead, so sending/blocking one from
   // this stale view can only confuse ("bloqueado" a link that already expired, or a
   // fresh link that's really meant for TODAY's conversation, not the day being read).
-  const isPastDay = fecha < todayStr();
+  // Also true the moment TODAY's caja gets closed early (cierre.ts only allows
+  // closing today), same as a past day for this purpose.
+  const { data: cierreStatus } = useDiaCerrado(fecha);
+  const isPastDay = fecha < todayStr() || (cierreStatus?.cerrado ?? false);
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && onClose()}>
