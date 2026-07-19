@@ -437,8 +437,10 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const readOnly = locked || diaCerrado;
   // Same reasoning as TicketModal - the link itself already expires by end of the
   // Colombia day it was sent, so sending/blocking one from a past-day order's chat
-  // is always acting on an already-dead link.
-  const isPastDay = !!orderFecha && orderFecha < todayStr();
+  // is always acting on an already-dead link. Also true the moment TODAY's caja
+  // gets closed early (cierre.ts only allows closing today, so a closed diaCerrado
+  // here always means "today, already closed" - not some future/past mismatch).
+  const isPastDay = (!!orderFecha && orderFecha < todayStr()) || diaCerrado;
   const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
   const recibido = parseFloat(cobroRec) || 0;
   const devolucion = recibido - total;
@@ -485,7 +487,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este pedido es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
+                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
                   onClick={sendFormLink}
                   disabled={formLinkMut.isPending || isPastDay}
                 >
@@ -494,7 +496,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 </button>
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este pedido es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
+                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
                   onClick={() => setConfirmDlg({
                     msg: 'Vas a bloquear el link del formulario - el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
                     onOk: () => blockLinkMut.mutate(),
