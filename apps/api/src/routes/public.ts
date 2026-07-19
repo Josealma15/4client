@@ -1,8 +1,9 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 import { sanitizeForWhatsApp } from '../lib/sanitize.js';
+import { config } from '../config.js';
 
 interface FormTokenPayload {
   type: string;
@@ -24,6 +25,18 @@ interface FormTokenPayload {
 // Max orders a single form link (ticket) may generate - the link is valid for 7 days
 // with no revocation, so this caps spam from a leaked/shared link.
 const MAX_FORM_ORDERS_PER_TICKET = 3;
+
+// Form links only work until 8pm Colombia time (UTC-5, no DST), every day - outside
+// that window an order needs a staff member handling it directly (chat), not
+// self-service via the link. A plain function of `now` (defaults to the real clock)
+// instead of a closure reading Date.now() directly, so a test can assert the exact
+// boundary (7:59pm vs 8:00pm) deterministically instead of depending on whatever
+// real wall-clock time the suite happens to run at.
+const FORM_CLOSED_HOUR = 20;
+export function isWithinFormHours(now: number = Date.now()): boolean {
+  const nowCol = new Date(now - 5 * 3600000);
+  return nowCol.getUTCHours() < FORM_CLOSED_HOUR;
+}
 
 // Computes the next sequential order number for org+fecha and creates the order,
 // retrying on a unique-constraint collision (@@unique([org_id, num, fecha])).
@@ -68,6 +81,28 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     const payload = fastify.jwt.verify(token) as FormTokenPayload;
     if (payload.type !== 'form_link') throw new Error('invalid type');
     return payload;
+  }
+
+  // Checked BEFORE token verification (no DB/JWT work needed) and given its own
+  // clear message+code, unlike the generic "link inválido" used for revoked/
+  // superseded/expired/device-mismatch - this isn't a security-sensitive reason to
+  // hide, and a legitimate customer deserves to know why instead of thinking their
+  // link is broken.
+  function sendFormClosed(reply: FastifyReply) {
+    return reply.status(403).send({
+      error: 'El formulario está disponible hasta las 8:00pm. Para hacer tu pedido ahora, escríbenos directamente por WhatsApp.',
+      code: 'FORM_CLOSED',
+    });
+  }
+
+  // NOT enforced under NODE_ENV=test - the route always checks the REAL current
+  // time (isWithinFormHours defaults to Date.now()), which would otherwise make
+  // every test in this file pass or fail depending on what hour it happens to be
+  // when the suite runs, completely unrelated to whatever each test actually
+  // exercises. isWithinFormHours' own boundary math is unit-tested directly instead
+  // (public.test.ts), with an explicit `now` - no dependency on the real clock.
+  function shouldBlockForHours(): boolean {
+    return config.NODE_ENV !== 'test' && !isWithinFormHours();
   }
 
   // Checked separately from JWT verification (which only proves the token is
@@ -130,6 +165,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   // GET /api/v1/public/form-info?t=TOKEN&device_token=X - verifica token y devuelve
   // info del cliente + sus pedidos activos de hoy
   fastify.get('/form-info', async (req, reply) => {
+    if (shouldBlockForHours()) return sendFormClosed(reply);
     const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
@@ -179,6 +215,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
 
   // GET /api/v1/public/products?t=TOKEN&device_token=X - catálogo público (sin precios)
   fastify.get('/products', async (req, reply) => {
+    if (shouldBlockForHours()) return sendFormClosed(reply);
     const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
@@ -217,6 +254,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       },
     },
   }, async (req, reply) => {
+    if (shouldBlockForHours()) return sendFormClosed(reply);
     const body = z.object({
       token: z.string().min(1),
       device_token: z.string().min(1),
