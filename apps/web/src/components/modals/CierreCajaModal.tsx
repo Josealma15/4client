@@ -12,11 +12,16 @@ interface Props {
   onClose: () => void;
 }
 
-type Decision = 'manana' | 'forzar_cierre' | 'cancelar' | 'dejar_activo';
+type Decision = 'manana' | 'forzar_cierre';
 type TicketDecision = 'manana' | 'atendido';
 
 export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Props) {
   const qc = useQueryClient();
+  // Once the close actually lands server-side, the only thing left to do is
+  // download the CSV report of what was just closed - no more editing decisions,
+  // no re-closing. Replaces the old behavior of instantly dismissing the modal,
+  // which meant the CSV (only otherwise available mid-flow) was easy to miss.
+  const [closedNow, setClosedNow] = useState(false);
 
   // GET /orders (orders.ts) includes an order here for two different reasons: (a) its
   // real, current `fecha` is today, or (b) it's a "ghost" - already deferred AWAY from
@@ -97,7 +102,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       qc.invalidateQueries({ queryKey: ['cierre-status'] });
       toast('Caja cerrada correctamente');
-      onClose();
+      setClosedNow(true);
     },
     onError: (e: any) => {
       if (e.code === 'MISSING_DECISIONS' && Array.isArray(e.data?.pending) && e.data.pending.length > 0) {
@@ -119,8 +124,6 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
     const decisionLabel: Record<string, string> = {
       manana: 'Pasar a mañana',
       forzar_cierre: 'Cerrar sin cobro',
-      cancelar: 'Papelera',
-      dejar_activo: 'Dejado activo (sin cambios)',
       '': 'Sin decidir',
     };
     const header = ['#', 'Cliente', 'Teléfono', 'Dirección', 'Productos', 'Total', 'Pago', 'Estado', 'Acción cierre'].join(',');
@@ -153,6 +156,36 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
   }
 
   const pendingSinDecision = pendingOrders.filter((o) => !decisions[o.id]).length;
+
+  if (closedNow) {
+    return (
+      <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="cierre-win">
+          <div className="mhead">
+            <div>
+              <div className="mtit" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <Lock size={18} color="var(--vd)" /> Cierre de caja
+              </div>
+              <div className="msub">{fecha}</div>
+            </div>
+            <button className="mclose" onClick={onClose}>×</button>
+          </div>
+          <div className="mbody">
+            <div style={{ background: 'var(--vc)', borderRadius: 'var(--rad)', padding: '16px 18px', marginBottom: 16, fontSize: 14, fontWeight: 700, color: 'var(--vd)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <CheckCircle size={18} /> Caja cerrada correctamente. Ya no se puede modificar.
+            </div>
+            <div className="mactions">
+              <button className="bsec" onClick={onClose}>Cerrar</button>
+              <button className="bpri" onClick={downloadCSV}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Download size={14} /> Descargar CSV del cierre
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -267,10 +300,8 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                             style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--a)' }}
                           >
                             <option value="" disabled>- Elegir acción -</option>
-                            <option value="dejar_activo">Dejar activo (sin cambios)</option>
                             <option value="manana">Pasar a mañana</option>
                             <option value="forzar_cierre">Cerrar sin cobro</option>
-                            <option value="cancelar">Enviar a papelera</option>
                           </select>
                         </div>
                       );
@@ -326,10 +357,8 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                       style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--a)' }}
                     >
                       <option value="" disabled>- Elegir acción -</option>
-                      <option value="dejar_activo">Dejar activo (sin cambios)</option>
                       <option value="manana">Pasar a mañana</option>
                       <option value="forzar_cierre">Cerrar sin cobro</option>
-                      <option value="cancelar">Enviar a papelera</option>
                     </select>
                   </div>
                 );

@@ -4,7 +4,7 @@ import {
   FileText, Trash2, History, ChevronDown, ChevronRight, Lock,
   MessageSquare, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
-import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
+import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
 import HistoryTable from '../ui/HistoryTable';
 import DatePickerES from '../ui/DatePickerES';
 
@@ -101,6 +101,14 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
             <button disabled title={dashboard.cierre.closedByName ? `Cerrada por ${dashboard.cierre.closedByName}` : ''}
               style={{ background: 'var(--bg)', color: 'var(--gt)', border: '1px solid var(--brd)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
               <Lock size={15} /> Caja ya cerrada
+            </button>
+          ) : fecha !== todayStr() ? (
+            // Cierre only ever applies to the live, current day (see cierre.ts's
+            // NOT_TODAY check) - a past day with pending orders is done, not
+            // reconcilable anymore, and a future day has nothing to close yet.
+            <button disabled title="Solo se puede cerrar la caja del día actual"
+              style={{ background: 'var(--bg)', color: 'var(--gt)', border: '1px solid var(--brd)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+              <Lock size={15} /> Cerrar caja
             </button>
           ) : (
             <button onClick={onCierreCaja}
