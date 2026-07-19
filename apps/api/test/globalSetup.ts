@@ -1,4 +1,4 @@
-// Vitest globalSetup — runs once before the whole suite.
+// Vitest globalSetup - runs once before the whole suite.
 // Points Prisma at the dedicated test database and applies all migrations,
 // so every test file starts against an up-to-date schema.
 import { execSync } from 'node:child_process';
@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const apiRoot = path.resolve(__dirname, '..');
 
-// Load .env.test directly (don't rely on process.env already being populated —
+// Load .env.test directly (don't rely on process.env already being populated -
 // globalSetup runs in its own context before test.env is guaranteed to apply).
 dotenv.config({ path: path.resolve(apiRoot, '.env.test'), override: true });
 

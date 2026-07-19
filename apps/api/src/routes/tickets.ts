@@ -16,14 +16,14 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
           { deferred_to: fecha },
           // A ticket must show up wherever any of its own orders actually live, even if
           // `deferred_to` was never set on it (e.g. orders deferred before this field was
-          // wired up, or any other path that moves an order's fecha directly) — the
+          // wired up, or any other path that moves an order's fecha directly) - the
           // order's own fecha is the source of truth, not a separate field that can drift.
           { orders: { some: { fecha } } },
         ],
       },
       include: {
         messages: { orderBy: { sent_at: 'asc' } },
-        // Scoped to `fecha` too — a ticket is one row per phone forever now (not per
+        // Scoped to `fecha` too - a ticket is one row per phone forever now (not per
         // day), so without this a heavily-used chat's badge/count here would include
         // every order across its whole history instead of just what's relevant to the
         // day being viewed.
@@ -46,7 +46,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
     return reply.send({ data: tickets });
   });
 
-  // POST /api/v1/tickets — crear ticket manual
+  // POST /api/v1/tickets - crear ticket manual
   fastify.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const body = z.object({
       phone:         z.string().min(7),
@@ -57,7 +57,7 @@ export default async function ticketRoutes(fastify: FastifyInstance) {
     // Colombia UTC-5: derive local business date from UTC
     const today = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
 
-    // One ticket per phone forever — reopening an existing conversation rolls it
+    // One ticket per phone forever - reopening an existing conversation rolls it
     // forward to today instead of leaving it (and this route) unable to find it.
     const ticket = await fastify.prisma.ticket.upsert({
       where: { org_id_phone: { org_id: req.user.orgId, phone: body.data.phone } },

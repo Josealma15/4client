@@ -11,15 +11,15 @@ El proyecto está en **buen estado general**: TypeScript compila sin errores en 
 
 Los problemas reales se concentran en tres frentes:
 
-1. **Dependencias con vulnerabilidades conocidas** — `pnpm audit` reporta **3 críticas y 11 altas**, casi todas resueltas al migrar a Fastify 5 + `@fastify/jwt` 10.
-2. **Bugs funcionales confirmados** — 6 bugs de severidad media/baja identificados en código propio (detallados abajo).
-3. **Cero tests y cero CI** — no existe ninguna prueba automatizada ni pipeline de verificación antes de merge/deploy.
+1. **Dependencias con vulnerabilidades conocidas** - `pnpm audit` reporta **3 críticas y 11 altas**, casi todas resueltas al migrar a Fastify 5 + `@fastify/jwt` 10.
+2. **Bugs funcionales confirmados** - 6 bugs de severidad media/baja identificados en código propio (detallados abajo).
+3. **Cero tests y cero CI** - no existe ninguna prueba automatizada ni pipeline de verificación antes de merge/deploy.
 
 **Puntuación general: 7.5/10.** Sólido para el tamaño actual, pero necesita el roadmap de abajo antes de escalar a más organizaciones.
 
 ---
 
-## 2. Seguridad — lo que está BIEN (no tocar)
+## 2. Seguridad - lo que está BIEN (no tocar)
 
 | Área | Implementación |
 |---|---|
@@ -49,9 +49,9 @@ Los problemas reales se concentran en tres frentes:
 | **HIGH ×2** | `fast-uri` | Path traversal y host confusion vía percent-encoding | fastify | Se resuelve con Fastify 5 |
 | **HIGH** | `ws` | DoS por agotamiento de memoria | socket.io | Subir socket.io / override `ws>=8.21.0` |
 | **HIGH ×7** | `tar` | Path traversal / overwrite (solo build-time) | `bcrypt→node-pre-gyp` | Migrar a `bcryptjs` o pnpm override |
-| MODERATE | `fast-jwt`, `fastify`, `uuid`, `tar` | Varios | — | Mismos upgrades |
+| MODERATE | `fast-jwt`, `fastify`, `uuid`, `tar` | Varios | - | Mismos upgrades |
 
-**Contexto de riesgo real:** las 3 críticas de `fast-jwt` están **mitigadas parcialmente** hoy porque el server fuerza `algorithms: ['HS256']` en firma y verificación, y `JWT_SECRET` exige mínimo 32 caracteres. Aun así, el upgrade es obligatorio a mediano plazo — es la librería que sostiene toda la autenticación.
+**Contexto de riesgo real:** las 3 críticas de `fast-jwt` están **mitigadas parcialmente** hoy porque el server fuerza `algorithms: ['HS256']` en firma y verificación, y `JWT_SECRET` exige mínimo 32 caracteres. Aun así, el upgrade es obligatorio a mediano plazo - es la librería que sostiene toda la autenticación.
 
 **Acción:** migración planificada `fastify@4 → 5`, `@fastify/jwt@8 → 10`, `@fastify/cors`, `@fastify/cookie`, `@fastify/rate-limit` a sus majors compatibles con v5. Es un cambio mecánico pero hay que probar login/refresh/webhook a fondo.
 
@@ -63,7 +63,7 @@ Los problemas reales se concentran en tres frentes:
 | S2 | **Media** | Si `META_APP_SECRET` no está configurado, el webhook acepta POSTs **sin verificar firma HMAC** (solo un `log.warn`). Cualquiera que conozca la URL puede inyectar mensajes falsos en los chats. | `routes/webhook.ts:168` |
 | S3 | Baja | Verificación del webhook GET: si `META_WEBHOOK_VERIFY_TOKEN` no está definido y la request tampoco lo trae, `undefined === undefined` pasa el handshake. | `routes/webhook.ts:185` |
 | S4 | Baja | Un admin puede crear usuarios con rol `dev` (`createUserSchema` acepta `'dev'`), y `dev` es super-rol que pasa todos los `requireRole`. Escalada de privilegios dentro de la org. | `routes/users.ts:10` |
-| S5 | Baja | No hay detección de reuso de refresh token: si un token rotado (robado) se reintenta, solo devuelve 401 — lo correcto es revocar toda la familia de tokens del usuario. | `routes/auth.ts:94` |
+| S5 | Baja | No hay detección de reuso de refresh token: si un token rotado (robado) se reintenta, solo devuelve 401 - lo correcto es revocar toda la familia de tokens del usuario. | `routes/auth.ts:94` |
 | S6 | Baja | `wpp_meta_token` (token de Meta API) guardado en texto plano en DB. Si la DB se filtra, el token de WhatsApp queda expuesto. Considerar cifrado at-rest (AES-GCM con key en env). | `schema.prisma:18` |
 | S7 | Baja | Contraseñas seed con defaults débiles (`admin123`, `josejose`) definidas en `config.ts`. Si las vars no se setean en Railway y alguien corre el seed standalone, quedan cuentas débiles. | `config.ts:20-21` |
 | S8 | Info | PDFs de facturas accesibles sin auth por URL. Mitigado: nombre incluye 12 hex aleatorios (48 bits, no adivinable). Pero las URLs no expiran nunca. | `routes/files.ts:46` |
@@ -74,7 +74,7 @@ Los problemas reales se concentran en tres frentes:
 
 | # | Severidad | Bug | Detalle | Archivo |
 |---|---|---|---|---|
-| B1 | **Media** | Falsa advertencia "los datos se perderán" en Nuevo Pedido | `hasDirty = !!(nombre.trim() \|\| telefono.trim() \|\| ...)` — al abrir desde un ticket, `nombre`/`telefono` ya vienen pre-llenados con `preNombre`/`prePhone`, así que `hasDirty` es `true` de inmediato. Cerrar sin tocar nada dispara el confirm. Fix: comparar contra los valores iniciales, no contra vacío. | `NuevoPedidoModal.tsx:75` |
+| B1 | **Media** | Falsa advertencia "los datos se perderán" en Nuevo Pedido | `hasDirty = !!(nombre.trim() \|\| telefono.trim() \|\| ...)` - al abrir desde un ticket, `nombre`/`telefono` ya vienen pre-llenados con `preNombre`/`prePhone`, así que `hasDirty` es `true` de inmediato. Cerrar sin tocar nada dispara el confirm. Fix: comparar contra los valores iniciales, no contra vacío. | `NuevoPedidoModal.tsx:75` |
 | B2 | **Media** | Subida de factura falla con PDFs > ~750 KB | Fastify tiene `bodyLimit` default de **1 MB** y el endpoint acepta base64 de hasta 28 MB. Un PDF de 1 MB (1.33 MB en base64) devuelve 413. Fix: `bodyLimit: 30_000_000` en la ruta o en el server. | `routes/files.ts:15`, `server.ts:36` |
 | B3 | **Media** | Cierre de caja borra las notas del pedido | Al mover un pedido a mañana: `data: { fecha: tomorrow, notes: 'pasado_manana:...' }` **reemplaza** las notas que el pedido ya tenía (indicaciones de entrega, etc.). Fix: concatenar en vez de sobrescribir. | `routes/cierre.ts:61` |
 | B4 | Baja | Race condition en número de pedido | `num = count + 1` se calcula fuera de la transacción de creación. Dos pedidos simultáneos (ej. dos encargados, o form + encargado) pueden chocar contra `@@unique([org_id, num, fecha])` → error 500. Fix: retry en P2002 o secuencia en DB. | `routes/orders.ts:93`, `routes/public.ts:106` |
@@ -104,7 +104,7 @@ Los problemas reales se concentran en tres frentes:
 
 ---
 
-## 6. Arquitectura — evaluación
+## 6. Arquitectura - evaluación
 
 **Bien:**
 - Monorepo pnpm limpio (`api` / `web` / `shared` con tipos compartidos).
@@ -123,7 +123,7 @@ Los problemas reales se concentran en tres frentes:
 
 ## 7. ROADMAP
 
-### Fase 0 — Esta semana (bugs + seguridad inmediata, ~1 día de trabajo)
+### Fase 0 - Esta semana (bugs + seguridad inmediata, ~1 día de trabajo)
 
 - [ ] **B1** Fix falsa advertencia en `NuevoPedidoModal` (comparar contra valores iniciales)
 - [ ] **B2** Subir `bodyLimit` para `/files/invoice`
@@ -134,7 +134,7 @@ Los problemas reales se concentran en tres frentes:
 - [ ] **S4** Quitar `'dev'` de los roles que un admin puede asignar
 - [ ] **B6** Socket: leer token del store en cada (re)conexión
 
-### Fase 1 — Próximas 2 semanas (dependencias + robustez)
+### Fase 1 - Próximas 2 semanas (dependencias + robustez)
 
 - [ ] Migrar a **Fastify 5** + `@fastify/jwt@10` + plugins v5 (elimina las 3 críticas y 4 altas)
 - [ ] Override o upgrade de `ws` (socket.io) y `tar`/`bcrypt` (o migrar a `bcryptjs`)
@@ -143,14 +143,14 @@ Los problemas reales se concentran en tres frentes:
 - [ ] Limpieza automática de `refresh_tokens` expirados
 - [ ] **B7/B8** Ajustes cosméticos (total estimado del form, historial en tab Activos)
 
-### Fase 2 — Este mes (calidad y confianza en deploys)
+### Fase 2 - Este mes (calidad y confianza en deploys)
 
 - [ ] **Vitest + tests de integración** de las rutas críticas: auth (login/refresh/rotación), orders (crear/editar/cobrar/lock), cierre de caja, webhook (HMAC/dedup/replay)
 - [ ] **GitHub Actions**: `tsc --noEmit` + tests + `pnpm audit` en cada PR a `dev`/`main`
 - [ ] Verificar/documentar `prisma migrate deploy` en el pipeline de Railway y backups de la DB
 - [ ] Limpiar las 18 ramas viejas de git
 
-### Fase 3 — Backlog (cuando haya más de 1 organización o más volumen)
+### Fase 3 - Backlog (cuando haya más de 1 organización o más volumen)
 
 - [ ] Usar `wpp_meta_app_secret` por organización en la validación del webhook (multi-tenant WPP real)
 - [ ] Cifrar `wpp_meta_token` at-rest
@@ -171,7 +171,7 @@ Los problemas reales se concentran en tres frentes:
 | Seguridad (dependencias) | 5/10 | Fastify 4 EOL-bound; upgrade a v5 es el ítem más importante |
 | Correctitud / bugs | 7/10 | 6 bugs reales, ninguno de pérdida de dinero; B3 (notas borradas) es el más dañino |
 | Calidad de código | 7.5/10 | TS estricto y limpio; archivos grandes y `as any` puntuales |
-| Testing / CI | 1/10 | Inexistente — el mayor riesgo del proyecto |
+| Testing / CI | 1/10 | Inexistente - el mayor riesgo del proyecto |
 | Arquitectura | 8/10 | Monorepo y esquema sólidos; deuda puntual bien identificada |
 
 **Prioridad #1:** Fase 0 completa (un día de trabajo elimina todos los bugs visibles para el usuario y los dos huecos de seguridad de configuración).

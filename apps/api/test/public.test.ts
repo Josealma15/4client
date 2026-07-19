@@ -74,7 +74,7 @@ describe('public form routes', () => {
     expect(order.address).toBe('Pendiente de confirmar');
     expect(order.payment_method).toBe('sin_asignar');
     expect(order.client_modified).toBe(false);
-    // The client's OWN first submission is the original order, not a later edit —
+    // The client's OWN first submission is the original order, not a later edit -
     // never flagged red even though the client is who created it.
     expect(order.items.every(i => i.added_by_client === false)).toBe(true);
   });
@@ -104,7 +104,7 @@ describe('public form routes', () => {
     });
     expect(submit.statusCode).toBe(401);
 
-    // The original device is unaffected — still works fine.
+    // The original device is unaffected - still works fine.
     const stillOk = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
     expect(stillOk.statusCode).toBe(200);
   });
@@ -117,7 +117,7 @@ describe('public form routes', () => {
         token, device_token: DEVICE,
         merge_order_id: firstOrderId,
         address: 'Calle 123 #45-67',
-        // payment_method intentionally omitted — should NOT clear the existing value
+        // payment_method intentionally omitted - should NOT clear the existing value
         // Resubmits the ORIGINAL "Mango: 2 kg" unchanged, plus a new "Piña" line.
         items: [{ product_name: 'Mango', quantity_label: '2 kg' }, { product_name: 'Piña', quantity_label: '1 unidad' }],
       },
@@ -131,8 +131,8 @@ describe('public form routes', () => {
       include: { items: true },
     });
     expect(order.items.map(i => i.product_name).sort()).toEqual(['Mango', 'Piña'].sort());
-    expect(order.address).toBe('Calle 123 #45-67'); // overwritten — a new value was sent
-    expect(order.payment_method).toBe('sin_asignar'); // untouched — nothing new was sent
+    expect(order.address).toBe('Calle 123 #45-67'); // overwritten - a new value was sent
+    expect(order.payment_method).toBe('sin_asignar'); // untouched - nothing new was sent
     expect(order.client_modified).toBe(true);
 
     const mango = order.items.find(i => i.product_name === 'Mango')!;
@@ -145,7 +145,7 @@ describe('public form routes', () => {
     expect(formOrderCount).toBe(1);
   });
 
-  it('staff saving the order clears client_modified but the per-item added_by_client flag stays permanently — never reset', async () => {
+  it('staff saving the order clears client_modified but the per-item added_by_client flag stays permanently - never reset', async () => {
     const saveRes = await app.inject({
       method: 'PATCH',
       url: `/api/v1/orders/${firstOrderId}`,
@@ -165,7 +165,7 @@ describe('public form routes', () => {
     expect(pina.added_by_client).toBe(true); // provenance survives the staff save untouched
   });
 
-  it('resubmitting the exact same items/address/payment is a no-op — does not flip client_modified or touch items', async () => {
+  it('resubmitting the exact same items/address/payment is a no-op - does not flip client_modified or touch items', async () => {
     const before = await app.prisma.order.findUniqueOrThrow({ where: { id: firstOrderId }, include: { items: true } });
 
     const res = await app.inject({
@@ -185,8 +185,8 @@ describe('public form routes', () => {
     expect(after.client_modified).toBe(false);
   });
 
-  it('POST /submit with a merge_order_id whose order became "camino" (out for delivery) while the client was editing is rejected with 409 — NOT silently duplicated as a new order', async () => {
-    // Dedicated ticket — isolates this from the shared ticketId's per-link order cap
+  it('POST /submit with a merge_order_id whose order became "camino" (out for delivery) while the client was editing is rejected with 409 - NOT silently duplicated as a new order', async () => {
+    // Dedicated ticket - isolates this from the shared ticketId's per-link order cap
     // (MAX_FORM_ORDERS_PER_TICKET), which later tests below still rely on being unspent.
     const caminoPhone = '573001112288';
     const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: caminoPhone, customer_name: 'Cliente Camino' } });
@@ -214,7 +214,7 @@ describe('public form routes', () => {
     expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
     expect(res.json().error).toContain('en camino');
 
-    // No duplicate was created — this ticket still has exactly the one order.
+    // No duplicate was created - this ticket still has exactly the one order.
     const formOrders = await app.prisma.order.findMany({ where: { ticket_id: ticket.id } });
     expect(formOrders).toHaveLength(1);
     expect(formOrders[0].id).toBe(caminoOrderId);
@@ -235,7 +235,7 @@ describe('public form routes', () => {
     expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
   });
 
-  it('GET /form-info no longer lists the closed order at all — nothing left for the client to see or do with it', async () => {
+  it('GET /form-info no longer lists the closed order at all - nothing left for the client to see or do with it', async () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
     const orders = res.json().data.orders as any[];
     expect(orders.find(o => o.id === firstOrderId)).toBeUndefined();
@@ -381,13 +381,13 @@ describe('public form routes', () => {
       const firstWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device` });
       expect(firstWorks.statusCode).toBe(200);
 
-      // The supersede check compares `iat` at whole-second resolution — wait past the
+      // The supersede check compares `iat` at whole-second resolution - wait past the
       // second boundary so the second link genuinely gets a later `iat` than the
       // first, otherwise two links minted in the same clock second would (correctly)
       // both remain valid, which isn't the scenario this test is exercising.
       await new Promise(r => setTimeout(r, 1100));
 
-      // Staff sends a second link for the same ticket (e.g. a reminder) — the first
+      // Staff sends a second link for the same ticket (e.g. a reminder) - the first
       // one must die automatically, with no separate revoke call.
       const second = await app.inject({
         method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` },
@@ -404,7 +404,7 @@ describe('public form routes', () => {
     });
   });
 
-  // Covers the "bloquear link bloquea TODOS los links de ese chat" requirement —
+  // Covers the "bloquear link bloquea TODOS los links de ese chat" requirement -
   // several links sent over time for the same ticket all embed the same ticketId,
   // and revocation is keyed purely by ticketId, so one block call must invalidate
   // every one of them at once, not just whichever was issued last.
@@ -426,12 +426,12 @@ describe('public form routes', () => {
       );
       oldToken = sign();
       // A later link, issued as if staff sent a second "Formulario" message afterward
-      // (e.g. reminding the client) — same ticket, different JWT.
+      // (e.g. reminding the client) - same ticket, different JWT.
       newToken = sign();
     });
 
     it('both an old and a newer link for the same ticket are rejected after a single block call', async () => {
-      // Same device_token for both — the device lock is scoped to the TICKET (public.ts's
+      // Same device_token for both - the device lock is scoped to the TICKET (public.ts's
       // FormLinkSession), not to any one specific link/JWT, so this is the same customer's
       // same phone using two different links sent for the same conversation over time.
       const device = 'multi-device';
@@ -453,5 +453,49 @@ describe('public form routes', () => {
       const newBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${newToken}&device_token=${device}` });
       expect(newBlocked.statusCode).toBe(401);
     });
+  });
+
+  // A ticket is now one row per phone FOREVER (schema.prisma), not per day - so the
+  // per-link new-order cap (MAX_FORM_ORDERS_PER_TICKET=3, public.ts) must be scoped
+  // to TODAY, not the ticket's whole lifetime, or a long-time customer eventually
+  // places their 4th-ever form order and is permanently locked out of the link.
+  it('the per-link new-order cap only counts TODAY\'s form orders - old-day orders never count against it, and a fresh day resets it', async () => {
+    const capPhone = '573001112244';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: capPhone, customer_name: 'Cliente Limite Diario' } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const capToken = (app.jwt.sign as any)(
+      { type: 'form_link', ticketId: ticket.id, orgId, clientName: 'Cliente Limite Diario', clientPhone: capPhone, orgName: 'org' },
+      { expiresIn: '7d' },
+    );
+    const admin = await app.prisma.user.findFirstOrThrow({ where: { org_id: orgId, role: 'admin' } });
+
+    // 5 old form orders from a past day - well over the cap of 3, but none of them
+    // should count since they're not from today.
+    for (let i = 0; i < 5; i++) {
+      await app.prisma.order.create({
+        data: {
+          org_id: orgId, ticket_id: ticket.id, num: String(i + 1).padStart(3, '0'),
+          customer_name: 'Cliente Limite Diario', address: 'Calle vieja', payment_method: 'cash',
+          registered_by: admin.id, fecha: new Date('2026-01-01'), source: 'form',
+        },
+      });
+    }
+
+    const device = 'device-limite-diario';
+    // 3 new orders TODAY should all succeed (the cap, but for today).
+    for (let i = 0; i < 3; i++) {
+      const res = await app.inject({
+        method: 'POST', url: '/api/v1/public/submit',
+        payload: { token: capToken, device_token: device, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+    // The 4th today hits the cap.
+    const blocked = await app.inject({
+      method: 'POST', url: '/api/v1/public/submit',
+      payload: { token: capToken, device_token: device, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().code).toBe('FORM_LIMIT_REACHED');
   });
 });

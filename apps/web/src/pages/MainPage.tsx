@@ -48,7 +48,7 @@ export default function MainPage() {
   const [fromTicket, setFromTicket] = useState<{ ticketId: string; nombre: string; phone: string; messages: any[] } | null>(null);
 
   const { data: orders = [], isLoading: loadingOrders } = useOrders(fecha);
-  const { data: dashboard } = useDashboard(fecha);
+  const { data: dashboard } = useDashboard(fecha, isAdmin);
   const { data: cierreStatus } = useDiaCerrado(fecha);
   const diaCerrado = cierreStatus?.cerrado ?? false;
 
@@ -57,7 +57,7 @@ export default function MainPage() {
     queryFn: () => api.get<{ data: any[] }>(`/tickets?fecha=${fecha}`).then((r) => r.data),
   });
 
-  // Same queryKey InboxPanel uses for its ticket list — sharing the cache means the
+  // Same queryKey InboxPanel uses for its ticket list - sharing the cache means the
   // floating badge always reflects real per-ticket unread_count (server resets it to 0
   // the moment a conversation is actually opened, not just when this tab is clicked),
   // and stays live since both onTicketMessage/onTicketUnread below already invalidate it.
@@ -77,15 +77,15 @@ export default function MainPage() {
     };
     joinRooms();
     // socket.io reconnects the transport on its own after a network blip, a backgrounded
-    // phone tab waking up, or a server redeploy — but it does NOT re-run app-level room
+    // phone tab waking up, or a server redeploy - but it does NOT re-run app-level room
     // joins on its own. Without this, the socket comes back "connected" yet silently stops
     // receiving org/date-scoped events (ticket:message included) until something else
-    // (e.g. an accessToken change) happens to re-run this whole effect — which is exactly
+    // (e.g. an accessToken change) happens to re-run this whole effect - which is exactly
     // the "messages don't arrive until I refresh" symptom.
     socket.on('connect', joinRooms);
 
     // Informe del día (dashboard) has its own totals/status counts computed
-    // server-side — it must be invalidated on every event that can change them,
+    // server-side - it must be invalidated on every event that can change them,
     // same as orders/tickets, or it silently drifts out of sync with the board.
     socket.on('order:created', () => {
       qc.invalidateQueries({ queryKey: ['orders', fecha] });
@@ -120,7 +120,7 @@ export default function MainPage() {
       qc.invalidateQueries({ queryKey: ['dashboard', fecha] });
     };
     // Cierre touches whichever orders/tickets it closes/defers, which can span the
-    // fecha being closed AND wherever deferred orders land (tomorrow) — not just
+    // fecha being closed AND wherever deferred orders land (tomorrow) - not just
     // whatever date this browser happens to be looking at right now, so this
     // invalidates every cached date instead of only `fecha`.
     const onCierreDone = () => {
@@ -228,7 +228,7 @@ export default function MainPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, textAlign: 'center',
         }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          Hoy es día 1 — recuerda pagar la suscripción de 4Client para que el sistema no se deshabilite.
+          Hoy es día 1 - recuerda pagar la suscripción de 4Client para que el sistema no se deshabilite.
         </div>
       )}
 

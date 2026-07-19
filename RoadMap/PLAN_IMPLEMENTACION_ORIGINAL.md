@@ -1,4 +1,4 @@
-# Plan de Implementación — 4Client
+# Plan de Implementación - 4Client
 **Versión 1.1 · Junio 2026**
 
 ---
@@ -8,7 +8,7 @@
 4Client es un SaaS multi-tenant de gestión operativa para negocios con pedidos por WhatsApp y domicilios. Fase 1 = un cliente (Fruver San Gabriel). Arquitectura diseñada para 50+ clientes sin refactorizar nada estructural.
 
 **Tres usuarios, tres experiencias:**
-- **Administrador (dueño):** Todo — bandeja WPP completa, resumen del día, historial inmutable, cierre de caja, configuración del sistema
+- **Administrador (dueño):** Todo - bandeja WPP completa, resumen del día, historial inmutable, cierre de caja, configuración del sistema
 - **Encargado:** Swimlane de tickets+pedidos, gestión operativa, sin datos financieros agregados
 - **Domiciliario:** Solo sus pedidos asignados (Fase 2)
 
@@ -23,15 +23,15 @@ Cada negocio = un tenant. Cada tabla en BD tiene `org_id`. Sin esto, el segundo 
 
 ### 2.2 WhatsApp: Meta Cloud API oficial para todos los clientes
 - **Todos los clientes sin excepción** usan Meta Cloud API (oficial, sin riesgo de ban, soporte de Meta)
-- **Número dedicado al negocio:** Cada cliente registra un número nuevo exclusivo para el sistema (chip prepago ~$5,000 COP). Este número NO funciona en la app de WhatsApp — solo via API
-- **El dueño monitorea desde 4Client PWA** instalada en su celular — ve la bandeja completa, lee y responde en tiempo real. Su número personal sigue en la app de WPP normal sin cambios
+- **Número dedicado al negocio:** Cada cliente registra un número nuevo exclusivo para el sistema (chip prepago ~$5,000 COP). Este número NO funciona en la app de WhatsApp - solo via API
+- **El dueño monitorea desde 4Client PWA** instalada en su celular - ve la bandeja completa, lee y responde en tiempo real. Su número personal sigue en la app de WPP normal sin cambios
 - **Sin Baileys, sin sesiones persistentes, sin riesgo de ban.** Arquitectura stateless y limpia desde el primer día
 
 ### 2.3 Bandeja WPP para el dueño
-El administrador tiene una vista de bandeja completa dentro de 4Client — todos los chats, historial completo, puede leer y responder. Los encargados no tienen acceso a esta vista. La app es PWA (Progressive Web App) para que el dueño la instale en su celular como app nativa.
+El administrador tiene una vista de bandeja completa dentro de 4Client - todos los chats, historial completo, puede leer y responder. Los encargados no tienen acceso a esta vista. La app es PWA (Progressive Web App) para que el dueño la instale en su celular como app nativa.
 
 ### 2.4 Audit log inmutable en base de datos
-No en arrays en memoria. Tabla `order_history` append-only con reglas PostgreSQL que rechazan UPDATE y DELETE. Ningún rol puede borrar registros de auditoría — ni el administrador.
+No en arrays en memoria. Tabla `order_history` append-only con reglas PostgreSQL que rechazan UPDATE y DELETE. Ningún rol puede borrar registros de auditoría - ni el administrador.
 
 ### 2.5 Catálogo de productos por tenant
 No hardcodeado. Tabla `products` con `org_id`. Cada negocio gestiona su propio catálogo.
@@ -106,7 +106,7 @@ WhatsApp ──webhook/socket──→ Backend ──WebSocket──→ Frontend
 
 ---
 
-## 5. Base de Datos — Schema Completo
+## 5. Base de Datos - Schema Completo
 
 ```sql
 -- ═══════════════ MULTI-TENANCY ═══════════════
@@ -154,7 +154,7 @@ CREATE TABLE products (
   category        VARCHAR(100),
   active          BOOLEAN DEFAULT true,
   sort_order      INT DEFAULT 0,
-  -- Campos para balanza (Fase 2) — nullable, no usados en Fase 1
+  -- Campos para balanza (Fase 2) - nullable, no usados en Fase 1
   price_per_unit  NUMERIC(12,2),     -- precio por kg o por unidad
   unit_type       VARCHAR(20),       -- 'kg' | 'und' | 'libra' | 'manojo'
   created_at      TIMESTAMPTZ DEFAULT now()
@@ -171,9 +171,9 @@ CREATE TABLE employees (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- ═══════════════ WHATSAPP — BANDEJA ═══════════════
+-- ═══════════════ WHATSAPP - BANDEJA ═══════════════
 -- Un ticket = una conversación con un cliente (por número de teléfono)
--- Los tickets son INMUTABLES — solo se agregan mensajes, nunca se borran
+-- Los tickets son INMUTABLES - solo se agregan mensajes, nunca se borran
 CREATE TABLE tickets (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id          UUID NOT NULL REFERENCES organizations(id),
@@ -242,14 +242,14 @@ CREATE TABLE order_items (
   quantity_label  VARCHAR(100),
   price           NUMERIC(12,2) DEFAULT 0,
   sort_order      INT DEFAULT 0,
-  -- Campos para balanza (Fase 2) — nullable, no usados en Fase 1
+  -- Campos para balanza (Fase 2) - nullable, no usados en Fase 1
   -- Cuando la balanza esté integrada, se llenan estos y price se calcula automático
   quantity_value  NUMERIC(10,3),    -- 2.500 (el número solo)
   quantity_unit   VARCHAR(20)       -- 'kg' | 'und' | 'libra'
 );
 
 -- APPEND-ONLY: inmutable por reglas PostgreSQL
--- Nadie puede hacer UPDATE ni DELETE — ni el admin
+-- Nadie puede hacer UPDATE ni DELETE - ni el admin
 CREATE TABLE order_history (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id       UUID NOT NULL REFERENCES organizations(id),
@@ -436,7 +436,7 @@ CREATE INDEX idx_history_org_fecha     ON order_history(org_id, created_at);
 
 ---
 
-## 7. Interfaz WhatsApp — Abstracción del Proveedor
+## 7. Interfaz WhatsApp - Abstracción del Proveedor
 
 ```typescript
 // apps/api/src/services/whatsapp/index.ts
@@ -457,7 +457,7 @@ export function createWhatsAppProvider(org: Organization): IWhatsAppProvider {
 
 ```
 SETUP (una sola vez por cliente):
-1. Negocio compra chip prepago nuevo (~$5,000 COP) — número dedicado al negocio
+1. Negocio compra chip prepago nuevo (~$5,000 COP) - número dedicado al negocio
 2. Se registra ese número en Meta Business Manager
 3. Meta verifica el número via SMS/llamada
 4. Se configura webhook: POST https://api.4client.shop/webhook/meta
@@ -490,7 +490,7 @@ Número del negocio (nuevo chip):
 
 ---
 
-## 8. Bandeja WhatsApp — Vista del Administrador
+## 8. Bandeja WhatsApp - Vista del Administrador
 
 Solo visible para rol `admin`. Replica experiencia de la app de WhatsApp dentro de 4Client.
 
@@ -565,20 +565,20 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 |---|---|
 | Contraseñas | bcrypt salt factor 12 |
 | Auth | JWT access (15min) + refresh token (7 días, rotado en cada uso) |
-| Multi-tenancy | Middleware inyecta `org_id` en CADA query de Prisma — imposible acceder a datos de otro tenant |
-| Roles | Guard en rutas sensibles — admin-only retorna 403 si rol != admin |
+| Multi-tenancy | Middleware inyecta `org_id` en CADA query de Prisma - imposible acceder a datos de otro tenant |
+| Roles | Guard en rutas sensibles - admin-only retorna 403 si rol != admin |
 | Audit log | Reglas PostgreSQL que rechazan UPDATE/DELETE en `order_history` |
-| Pedidos cerrados | `locked: true` post-cobro — backend rechaza cualquier modificación |
+| Pedidos cerrados | `locked: true` post-cobro - backend rechaza cualquier modificación |
 | Webhooks Meta | Validación de firma HMAC-SHA256 en cada request entrante |
-| Rate limiting | Fastify rate-limit — max 10 intentos/min en /auth/login por IP |
-| Env vars | Nunca en código — .env excluido de git, variables en Railway dashboard |
+| Rate limiting | Fastify rate-limit - max 10 intentos/min en /auth/login por IP |
+| Env vars | Nunca en código - .env excluido de git, variables en Railway dashboard |
 | Tokens WPP Meta | Encriptados con AES-256 antes de guardar en BD |
 
 ---
 
 ## 11. Fases de Implementación
 
-### FASE 1A — Fundamentos del Backend (Semanas 1–2)
+### FASE 1A - Fundamentos del Backend (Semanas 1–2)
 **Objetivo:** Backend funcionando con auth y multi-tenancy. Sin WPP aún.
 
 | # | Tarea |
@@ -599,7 +599,7 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 
 ---
 
-### FASE 1B — Frontend Conectado (Semanas 3–4)
+### FASE 1B - Frontend Conectado (Semanas 3–4)
 **Objetivo:** UI del mockup migrada a React con datos reales del backend.
 
 | # | Tarea |
@@ -620,7 +620,7 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 
 ---
 
-### FASE 1C — Integración WhatsApp (Semanas 5–6)
+### FASE 1C - Integración WhatsApp (Semanas 5–6)
 **Objetivo:** Mensajes de WhatsApp entrando y saliendo en tiempo real.
 
 | # | Tarea |
@@ -641,7 +641,7 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 
 ---
 
-### FASE 1D — Producción y Estabilización (Semana 7)
+### FASE 1D - Producción y Estabilización (Semana 7)
 
 | # | Tarea |
 |---|---|
@@ -656,44 +656,44 @@ El hook `useSocket` escucha estos eventos e invalida las queries de React Query 
 
 ---
 
-### FASE 2 — Hardware: Balanza + Impresora de Etiquetas (Futuro)
+### FASE 2 - Hardware: Balanza + Impresora de Etiquetas (Futuro)
 
 Convierte el PC del negocio en una estación de despacho completamente automatizada.
 
-#### 2A — Balanza digital conectada al PC
+#### 2A - Balanza digital conectada al PC
 
 | Módulo | Detalle |
 |---|---|
-| **Protocolo** | Web Serial API (Chrome/Edge) — sin instalar drivers, el browser lee el puerto USB directamente |
+| **Protocolo** | Web Serial API (Chrome/Edge) - sin instalar drivers, el browser lee el puerto USB directamente |
 | **Flujo** | Seleccionas producto en 4Client → pones producto en balanza → 4Client lee el peso automático → multiplica `quantity_value × price_per_unit` de la BD → llena precio solo |
-| **Cambios en BD** | Cero — los campos `quantity_value`, `quantity_unit` y `price_per_unit` ya están en el schema desde Fase 1 |
-| **Cambios en backend** | Cero — la lectura de la balanza es 100% frontend via Web Serial API |
+| **Cambios en BD** | Cero - los campos `quantity_value`, `quantity_unit` y `price_per_unit` ya están en el schema desde Fase 1 |
+| **Cambios en backend** | Cero - la lectura de la balanza es 100% frontend via Web Serial API |
 | **Cambios en frontend** | Nuevo componente `BalanzaReader` en el modal de nuevo pedido/detalle |
 | **Requisito** | PC del negocio debe usar Chrome o Edge (no Firefox, no Safari) |
 | **Gestión de precios** | El dueño actualiza precios por producto en la sección Configuración → el sistema multiplica automáticamente |
 
-#### 2B — Impresora de etiquetas térmica (stickers para bolsas)
+#### 2B - Impresora de etiquetas térmica (stickers para bolsas)
 
 | Módulo | Detalle |
 |---|---|
 | **Tipo de impresora** | Zebra, Brother QL, TSC u otras impresoras de etiquetas térmicas |
-| **Arquitectura** | Agente local Node.js corriendo en el PC del negocio (`localhost:3001`) — más robusto que Web Serial para impresoras |
+| **Arquitectura** | Agente local Node.js corriendo en el PC del negocio (`localhost:3001`) - más robusto que Web Serial para impresoras |
 | **Flujo** | Trabajador confirma pedido en 4Client → clic "Imprimir etiqueta" → 4Client POST al agente local → agente formatea en ZPL/TSPL → impresora imprime sticker |
 | **Contenido etiqueta** | Número pedido, nombre cliente, dirección, teléfono, productos, total, método de pago, hora |
-| **Cambios en BD** | Cero — todos los datos ya están en `orders` + `order_items` |
-| **Cambios en backend** | Cero — el agente local es independiente del servidor |
+| **Cambios en BD** | Cero - todos los datos ya están en `orders` + `order_items` |
+| **Cambios en backend** | Cero - el agente local es independiente del servidor |
 | **Entregable** | Sticker listo para pegar en la bolsa del pedido antes de salir con el domiciliario |
 
 ---
 
-### FASE 3 — Multi-Cliente, Tienda Online y Pagos (Futuro)
+### FASE 3 - Multi-Cliente, Tienda Online y Pagos (Futuro)
 
 | Módulo | Descripción |
 |---|---|
 | **Onboarding de orgs** | UI para registrar nuevos negocios, configurar número Meta API, setup inicial automatizado |
 | **Billing** | Stripe para cobrar suscripciones automáticamente |
 | **Subdominios** | `fruver.4client.shop`, `negocio2.4client.shop` |
-| **App móvil nativa** | React Native — comparte lógica y tipos del monorepo |
+| **App móvil nativa** | React Native - comparte lógica y tipos del monorepo |
 | **Vista domiciliario** | App simplificada para domiciliarios en celular |
 | **Tienda online pública** | Página donde clientes hacen pedidos directamente → se crea automático en 4Client |
 | **Pasarela de pagos** | Wompi, Nequi, Daviplata integrados en la tienda online |
@@ -721,10 +721,10 @@ Convierte el PC del negocio en una estación de despacho completamente automatiz
 **Margen neto por cliente:** ~$163,000–175,000 COP/mes.
 **Con 5 clientes activos:** ~$815,000–875,000 COP/mes margen infraestructura.
 
-### Conversaciones Meta API — ¿Cuándo se paga?
+### Conversaciones Meta API - ¿Cuándo se paga?
 - Primeras **1,000 conversaciones de servicio/mes: GRATIS**
 - Un fruver con 200 clientes activos/mes → dentro del free tier
-- Si supera 1,000: ~$0.015 USD por conversación (~$60 COP) — se le cobra al cliente como extra
+- Si supera 1,000: ~$0.015 USD por conversación (~$60 COP) - se le cobra al cliente como extra
 
 ---
 
@@ -758,18 +758,18 @@ FRONTEND_URL="https://app.4client.shop"
 
 ## 14. Convenciones del Proyecto
 
-- **TypeScript estricto** (`strict: true`) — sin `any` implícito
-- **Rutas del API:** `/api/v1/[recurso]` — versionadas desde el inicio
+- **TypeScript estricto** (`strict: true`) - sin `any` implícito
+- **Rutas del API:** `/api/v1/[recurso]` - versionadas desde el inicio
 - **Respuestas del API:** `{ data: T }` en éxito, `{ error: string, code: string }` en error
-- **Eventos WebSocket:** `recurso:acción` — ej: `order:updated`, `ticket:message`
-- **Commits:** Conventional Commits — `feat:`, `fix:`, `chore:`, `docs:`
+- **Eventos WebSocket:** `recurso:acción` - ej: `order:updated`, `ticket:message`
+- **Commits:** Conventional Commits - `feat:`, `fix:`, `chore:`, `docs:`
 - **Branch principal:** `main` → producción. Features en `feature/nombre`
-- **Sin comentarios obvios** — nombres de variables/funciones autodescriptivos
-- **Sin Tailwind CSS** — CSS Modules + variables globales del mockup
+- **Sin comentarios obvios** - nombres de variables/funciones autodescriptivos
+- **Sin Tailwind CSS** - CSS Modules + variables globales del mockup
 
 ---
 
-## 15. Referencia Visual — El Mockup
+## 15. Referencia Visual - El Mockup
 
 El mockup en `/mockup/` es la fuente de verdad visual. Revisar antes de implementar cualquier componente. Las variables CSS (`--v`, `--r`, `--a`, `--az`, etc.) se migran a `globals.css` y se usan en toda la app.
 

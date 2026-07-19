@@ -24,7 +24,7 @@ export default function LoginPage() {
       );
     } catch (e: any) {
       // Always the same message no matter what actually failed (wrong password, unknown
-      // email, validation error, network failure...) — a message that varies by failure
+      // email, validation error, network failure...) - a message that varies by failure
       // reason is exactly the kind of signal that lets an attacker enumerate valid emails
       // or probe the backend. Real reason still goes to the console for our own debugging.
       console.error('[login] failed', e);

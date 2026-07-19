@@ -42,10 +42,10 @@ const fastify = Fastify({
 });
 
 // Behind Railway's proxy (trustProxy: true), req.protocol reflects the real
-// X-Forwarded-Proto — safe to gate on directly, unlike NODE_ENV which depends on
+// X-Forwarded-Proto - safe to gate on directly, unlike NODE_ENV which depends on
 // the deploy platform's env vars actually being set correctly.
 fastify.addHook('onRequest', async (req, reply) => {
-  // Excludes /health — Railway's own healthcheck hits the container directly over
+  // Excludes /health - Railway's own healthcheck hits the container directly over
   // plain HTTP, bypassing the edge proxy that would set X-Forwarded-Proto: https.
   // Enforcing this there would make the platform mark deploys unhealthy.
   if (config.NODE_ENV === 'production' && req.protocol !== 'https' && req.url !== '/health') {
@@ -91,11 +91,11 @@ async function start() {
   await fastify.register(rateLimit, {
     max: 60,
     timeWindow: '1 minute',
-    // Per-user instead of per-IP — an office/shared connection shouldn't have every
+    // Per-user instead of per-IP - an office/shared connection shouldn't have every
     // user drawing from the same bucket. This global hook runs before the per-route
-    // `authenticate` preHandler, so req.user isn't populated yet; decode (not verify —
+    // `authenticate` preHandler, so req.user isn't populated yet; decode (not verify -
     // this is just a bucketing key, not an auth decision) the bearer token directly.
-    // Falls back to IP for unauthenticated requests (public form, login — those have
+    // Falls back to IP for unauthenticated requests (public form, login - those have
     // their own tighter per-route limits already). 60/min covers the busiest
     // dashboard/inbox polling (30s intervals, several open modals) with headroom for
     // socket-triggered refetches.
@@ -135,7 +135,7 @@ async function start() {
   // Health check
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
-  // WPP status — checks if org has Meta credentials configured
+  // WPP status - checks if org has Meta credentials configured
   fastify.get('/api/v1/wpp/status', { preHandler: [authenticate] }, async (req: FastifyRequest, reply: FastifyReply) => {
     const org = await fastify.prisma.organization.findUnique({ where: { id: req.user.orgId } });
     const configured = !!(org?.wpp_meta_phone_id && org?.wpp_meta_token);

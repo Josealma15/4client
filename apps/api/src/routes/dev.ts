@@ -21,7 +21,7 @@ async function queryTable(
   switch (table) {
     case 'users':
       return {
-        // Excludes password_hash — even though this viewer is dev-role-only, there's
+        // Excludes password_hash - even though this viewer is dev-role-only, there's
         // no reason a bcrypt hash should ever cross the wire, viewable or not.
         rows: await prisma.user.findMany({
           where: { org_id: orgId }, take: lim, skip: off, orderBy: { created_at: 'desc' },
@@ -31,7 +31,7 @@ async function queryTable(
       };
     case 'organizations':
       return {
-        // Excludes wpp_meta_token/wpp_meta_app_secret — the token is encrypted at rest
+        // Excludes wpp_meta_token/wpp_meta_app_secret - the token is encrypted at rest
         // but the app secret currently isn't, so this masks both rather than leaking
         // one plaintext and one ciphertext blob through a viewer meant for eyeballing
         // data, not handling credentials.
@@ -94,7 +94,7 @@ export default async function devRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireRole('dev'));
 
-  // GET /dev/db?table=users&limit=20&offset=0 — scoped to own org only
+  // GET /dev/db?table=users&limit=20&offset=0 - scoped to own org only
   fastify.get('/db', async (req: any, reply) => {
     const { table = 'users', limit = '20', offset = '0' } = req.query as Record<string, string>;
 
@@ -110,7 +110,7 @@ export default async function devRoutes(fastify: FastifyInstance) {
     return reply.send({ data: rows, total, limit: lim, offset: off });
   });
 
-  // POST /dev/seed — idempotent upsert of base data
+  // POST /dev/seed - idempotent upsert of base data
   fastify.post('/seed', async (_req, reply) => {
     if (config.NODE_ENV === 'production') {
       return reply.status(403).send({ error: 'Seed deshabilitado en producción', code: 'FORBIDDEN' });
@@ -165,7 +165,7 @@ export default async function devRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /dev/env-status — which optional env vars are configured (boolean only, no values)
+  // GET /dev/env-status - which optional env vars are configured (boolean only, no values)
   fastify.get('/env-status', async (_req, reply) => {
     return reply.send({
       data: {
@@ -185,14 +185,14 @@ export default async function devRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // GET /dev/storage-test — actually tries to upload a tiny test file to R2 (or the
+  // GET /dev/storage-test - actually tries to upload a tiny test file to R2 (or the
   // local fallback) and reports the real error, instead of just checking env vars are
-  // set. env-status only shows booleans — this catches wrong bucket name, bad
+  // set. env-status only shows booleans - this catches wrong bucket name, bad
   // credentials, etc. that env-status can't see.
   fastify.get('/storage-test', async (_req, reply) => {
     const configured = storage.isConfigured();
     if (!configured) {
-      return reply.send({ data: { configured: false, ok: false, detail: 'R2 no configurado — usando almacenamiento local (uploads/)' } });
+      return reply.send({ data: { configured: false, ok: false, detail: 'R2 no configurado - usando almacenamiento local (uploads/)' } });
     }
     try {
       const testKey = `_healthcheck/${Date.now()}.txt`;
@@ -209,7 +209,7 @@ export default async function devRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /dev/health — extended health with DB ping
+  // GET /dev/health - extended health with DB ping
   fastify.get('/health', async (_req, reply) => {
     const start = Date.now();
     const [orgCount, userCount] = await Promise.all([

@@ -30,7 +30,7 @@ export function decryptSecret(stored: string | null | undefined): string | null 
   if (!stored.startsWith(PREFIX)) return stored; // legacy plaintext
 
   const key = getKey();
-  if (!key) return stored; // can't decrypt without the key — caller will fail auth, which is safe
+  if (!key) return stored; // can't decrypt without the key - caller will fail auth, which is safe
 
   try {
     const raw = Buffer.from(stored.slice(PREFIX.length), 'base64');

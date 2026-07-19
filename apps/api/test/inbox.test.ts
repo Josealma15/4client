@@ -65,7 +65,7 @@ describe('inbox routes', () => {
     const yesterdayOrderIds = yesterday.json().data.orders.map((o: any) => o.id);
     expect(yesterdayOrderIds).toEqual([orderYesterday.id]);
 
-    // No fecha given (older/other callers) — unscoped, backward-compatible: both show.
+    // No fecha given (older/other callers) - unscoped, backward-compatible: both show.
     const unscoped = await app.inject({
       method: 'GET',
       url: `/api/v1/inbox/${ticket.id}/messages`,

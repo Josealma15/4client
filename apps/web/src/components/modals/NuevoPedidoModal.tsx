@@ -10,6 +10,7 @@ import { getSocket } from '../../lib/socket';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
+import { todayStr } from '../../lib/format';
 
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
@@ -56,10 +57,10 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
     queryKey: ['inbox-convo', ticketId],
     queryFn: () => api.get<{ data: any }>(`/inbox/${ticketId}/messages`).then((r) => r.data),
     enabled: !!ticketId,
-    refetchInterval: 60000, // fallback only — real-time delivery is via socket below
+    refetchInterval: 60000, // fallback only - real-time delivery is via socket below
   });
 
-  // This modal never had a socket listener at all, only the interval above — meaning a
+  // This modal never had a socket listener at all, only the interval above - meaning a
   // message arriving while it's open could sit unseen for up to 15-60s. Same pattern as
   // TicketModal/DetallePedidoModal.
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
 
   const blockLinkMut = useMutation({
     mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
-    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onSuccess: () => toast('Link bloqueado - el cliente ya no puede usarlo'),
     onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
@@ -154,6 +155,10 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   }
 
   const hasChat = !!ticketId;
+  // Same reasoning as TicketModal/DetallePedidoModal - the link itself already
+  // expires by end of the Colombia day it was sent, so a past day's ticket has
+  // nothing live to send/block.
+  const isPastDay = fecha < todayStr();
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && handleClose()}>
@@ -172,7 +177,8 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               {ticketId && (
                 <button
                   className="hdr-ic-btn"
-                  title="Enviar formulario de pedido al cliente"
+                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
+                  disabled={isPastDay}
                   onClick={async () => {
                     try {
                       const res = await api.get<{ data: { url: string } }>(`/inbox/${ticketId}/form-link`);
@@ -187,9 +193,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               {ticketId && (
                 <button
                   className="hdr-ic-btn"
-                  title="Bloquear el link de formulario enviado a este cliente"
+                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
                   onClick={() => setShowBlockConfirm(true)}
-                  disabled={blockLinkMut.isPending}
+                  disabled={blockLinkMut.isPending || isPastDay}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>
@@ -325,7 +331,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
       )}
       {showBlockConfirm && (
         <ConfirmModal
-          message="Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
+          message="Vas a bloquear el link del formulario - el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
           confirmLabel="Bloquear"
           danger
           onConfirm={() => { blockLinkMut.mutate(); setShowBlockConfirm(false); }}

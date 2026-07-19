@@ -29,11 +29,19 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   const searchRef = useRef<HTMLInputElement>(null);
   const [localInputs, setLocalInputs] = useState<Record<string, { qty: string; price: string }>>({});
   // Which committed item (by product_name) is being edited inline in the Factbox
-  // table below — editing never touches the catalog's collapsed state anymore, so
+  // table below - editing never touches the catalog's collapsed state anymore, so
   // it stays collapsed by default the way the person left it.
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const editQtyRef = useRef<HTMLInputElement | null>(null);
   const editPriceRef = useRef<HTMLInputElement | null>(null);
+  // Manual/off-catalog line - for when the product genuinely isn't in the DB list
+  // yet (staff hasn't added it to Config > Productos). Lives at the end of the
+  // Factbox, works the same regardless of the order's status (nuevo/preparando/
+  // .../camino) - the only gate is `locked`, same as everything else in this file.
+  const [manualName, setManualName] = useState('');
+  const [manualQty, setManualQty] = useState('');
+  const [manualPrice, setManualPrice] = useState('');
+  const [manualError, setManualError] = useState('');
 
   // Clear local inputs when parent signals a save (clearKey increments)
   useEffect(() => {
@@ -76,7 +84,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
     const local = localInputs[productName];
     if (!local?.qty.trim() && !local?.price.trim()) return;
 
-    // Preserve provenance — staff editing qty/price on a line the client added
+    // Preserve provenance - staff editing qty/price on a line the client added
     // (typically filling in the price, which the client's form never sets) must not
     // silently clear the flag that marks it as a client-originated change.
     const priorItem = items.find(i => i.product_name === productName);
@@ -119,14 +127,14 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
 
   function editItem(item: Item) {
     // A price of "0" (unset) showed literally as "0" in the input, forcing whoever's
-    // typing to delete it first — show it empty instead, same as a genuinely unset one.
+    // typing to delete it first - show it empty instead, same as a genuinely unset one.
     const priceVal = parseFloat(item.price) > 0 ? item.price : '';
     setLocalInputs(prev => ({ ...prev, [item.product_name]: { qty: item.quantity_label, price: priceVal } }));
     onLocalDirty?.(true);
     setEditingRow(item.product_name);
   }
 
-  // Commits the currently-typed qty/price for a row WITHOUT closing its edit mode —
+  // Commits the currently-typed qty/price for a row WITHOUT closing its edit mode -
   // used when Enter just advances focus to the next field, not when the person is
   // done with the whole row (that's saveEdit, which also calls this then closes).
   function commitEditField(productName: string) {
@@ -142,21 +150,21 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
     onChange(items.map(i => i.product_name === productName ? newItem : i));
   }
 
-  // Enter in the qty field of a row being edited: save qty, jump to price — same row.
+  // Enter in the qty field of a row being edited: save qty, jump to price - same row.
   function advanceToPrice(productName: string) {
     commitEditField(productName);
     requestAnimationFrame(() => { editPriceRef.current?.focus(); editPriceRef.current?.select(); });
   }
 
   // Enter in the price field: save, then open the NEXT row's qty field straight into
-  // edit mode — the editingRow effect below already focuses editQtyRef whenever
+  // edit mode - the editingRow effect below already focuses editQtyRef whenever
   // editingRow changes, so opening the next row is all this needs to do.
   function advanceToNextRow(productName: string) {
     commitEditField(productName);
     const idx = items.findIndex(i => i.product_name === productName);
     const next = idx >= 0 ? items[idx + 1] : undefined;
     if (next) editItem(next);
-    else setEditingRow(null); // last row — nothing further to advance to
+    else setEditingRow(null); // last row - nothing further to advance to
   }
 
   function cancelEdit(productName: string) {
@@ -171,6 +179,21 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
   function saveEdit(productName: string) {
     commitProduct(productName);
     setEditingRow(null);
+  }
+
+  function addManualProduct() {
+    const name = manualName.trim();
+    if (!name) return;
+    // Items are keyed by product_name throughout this file (React key, edit/remove
+    // lookups) - a manual entry colliding with an existing line would silently merge
+    // into/overwrite it instead of adding a new one.
+    if (items.some(i => i.product_name.toLowerCase() === name.toLowerCase())) {
+      setManualError('Ya hay un producto con ese nombre en el pedido - edítalo en la tabla de arriba.');
+      return;
+    }
+    setManualError('');
+    onChange([...items, { product_name: name, quantity_label: manualQty.trim(), price: manualPrice.trim() }]);
+    setManualName(''); setManualQty(''); setManualPrice('');
   }
 
   useEffect(() => {
@@ -203,8 +226,8 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                   {i.product_name}
                   {i.added_by_client && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#DC2626' }}>· cliente</span>}
                 </td>
-                <td style={{ padding: '9px 12px', textAlign: 'center', color: i.added_by_client ? '#DC2626' : 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '—'}</td>
-                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', color: i.added_by_client ? '#DC2626' : undefined }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—'}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'center', color: i.added_by_client ? '#DC2626' : 'var(--vd)', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)' }}>{i.quantity_label || '-'}</td>
+                <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', color: i.added_by_client ? '#DC2626' : undefined }}>{parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '-'}</td>
               </tr>
             ))}
             {items.length > 0 && (
@@ -338,7 +361,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
         </>
       )}
 
-      {/* Factbox — committed items table with edit/remove */}
+      {/* Factbox - committed items table with edit/remove */}
       <div style={{ border: '1px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden', marginBottom: 14 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -378,7 +401,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         }}
                         style={{ fontSize: 13, width: '100%', textAlign: 'center' }}
                       />
-                    ) : (i.quantity_label || '—')}
+                    ) : (i.quantity_label || '-')}
                   </td>
                   <td style={{ padding: isEditing ? '5px 8px' : '9px 12px', textAlign: 'right', fontWeight: 700, borderBottom: '1px solid var(--brd)', borderRight: '1px solid var(--brd)', color: !isEditing && i.added_by_client ? '#DC2626' : undefined }}>
                     {isEditing ? (
@@ -395,7 +418,7 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
                         }}
                         style={{ fontSize: 13, width: '100%', textAlign: 'right' }}
                       />
-                    ) : (parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '—')}
+                    ) : (parseFloat(i.price) ? `$${parseFloat(i.price).toLocaleString('es-CO')}` : '-')}
                   </td>
                   <td style={{ padding: '6px', borderBottom: '1px solid var(--brd)', textAlign: 'center' }}>
                     <span style={{ display: 'inline-flex', gap: 4 }}>
@@ -436,6 +459,57 @@ export default function ProductSearch({ products, items, locked, onChange, onLoc
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Manual/off-catalog product - for when it's genuinely not in the list yet */}
+      <div style={{ border: '1px dashed var(--brd)', borderRadius: 'var(--rad)', padding: '10px 12px', marginTop: -6, marginBottom: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gt)', marginBottom: 7 }}>
+          ¿No está en el catálogo? Agrégalo manual
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 110px 32px', gap: 8, alignItems: 'center' }}>
+          <input
+            className="iinput"
+            placeholder="Nombre del producto"
+            value={manualName}
+            onChange={e => { setManualName(e.target.value); setManualError(''); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualProduct(); } }}
+            style={{ fontSize: 13 }}
+          />
+          <input
+            className="iinput"
+            placeholder="Ej: 2 kg"
+            value={manualQty}
+            onChange={e => setManualQty(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualProduct(); } }}
+            style={{ fontSize: 13 }}
+          />
+          <input
+            className="iinput no-spin"
+            placeholder="$0"
+            type="number"
+            value={manualPrice}
+            onChange={e => setManualPrice(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualProduct(); } }}
+            style={{ fontSize: 13 }}
+          />
+          <button
+            onClick={addManualProduct}
+            disabled={!manualName.trim()}
+            title="Agregar producto manual (o presiona Enter)"
+            style={{
+              width: 26, height: 26, borderRadius: '50%', border: 'none',
+              background: manualName.trim() ? 'var(--v)' : 'var(--brd)',
+              color: manualName.trim() ? '#fff' : 'var(--gt)',
+              cursor: manualName.trim() ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <Check size={13} />
+          </button>
+        </div>
+        {manualError && (
+          <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 700, marginTop: 6 }}>{manualError}</div>
+        )}
       </div>
     </>
   );

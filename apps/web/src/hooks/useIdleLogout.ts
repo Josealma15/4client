@@ -7,7 +7,7 @@ const IDLE_LIMIT_MS = 60 * 60 * 1000; // 1 hour
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'] as const;
 
 // A 7-day refresh cookie means a browser tab left open and untouched would otherwise stay
-// authenticated indefinitely (each API call silently refreshes it) — fine for "remember me
+// authenticated indefinitely (each API call silently refreshes it) - fine for "remember me
 // across days", not fine for "I stepped away from an unlocked computer for an hour". This
 // tracks actual user interaction, independent of any background API/refresh activity, and
 // force-logs-out after IDLE_LIMIT_MS of no mouse/keyboard/touch/scroll at all.

@@ -42,7 +42,7 @@ describe('dashboard routes', () => {
       data: { org_id: orgId, phone, customer_name: 'Cliente Informe', fecha: today, last_message_at: today },
     });
 
-    // Today's order: fully closed — this chat should read as "completado" for today.
+    // Today's order: fully closed - this chat should read as "completado" for today.
     await app.prisma.order.create({
       data: {
         org_id: orgId, ticket_id: ticket.id, num: '001', customer_name: 'Cliente Informe',
@@ -53,7 +53,7 @@ describe('dashboard routes', () => {
     });
 
     // An OLDER order on the same ticket (same phone, different day) that was never
-    // closed — before tickets were one-per-phone-forever this simply couldn't attach
+    // closed - before tickets were one-per-phone-forever this simply couldn't attach
     // to today's ticket; now it lives on the same row and must NOT leak into today's count.
     await app.prisma.order.create({
       data: {

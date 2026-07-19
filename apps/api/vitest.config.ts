@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load the test environment (test DB, test secrets) so it's available both to
-// this config file (e.g. if we needed it here) and — via `test.env` below —
+// this config file (e.g. if we needed it here) and - via `test.env` below -
 // to every test worker process. Values already present in process.env win,
 // same behavior as dotenv everywhere else in this repo.
 const testEnv = dotenv.config({ path: path.resolve(__dirname, '.env.test') }).parsed ?? {};

@@ -5,8 +5,8 @@ interface Props {
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  // When set, this becomes an "unsaved changes" dialog: two buttons only —
-  // cancelLabel (red, discards) and this save action (green, saves then exits) —
+  // When set, this becomes an "unsaved changes" dialog: two buttons only -
+  // cancelLabel (red, discards) and this save action (green, saves then exits) -
   // instead of the generic stay/proceed pair.
   onSave?: () => void;
   saveLabel?: string;

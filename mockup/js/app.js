@@ -23,7 +23,7 @@ let pedidos=[
 ];
 let papelera=[];
 
-// ── Tickets WPP (registro inmutable — pedidoIds[] permite múltiples pedidos) ──
+// ── Tickets WPP (registro inmutable - pedidoIds[] permite múltiples pedidos) ──
 let tickets=[
   {id:'t1',phone:'3011234501',name:'Rosario Díaz',pedidoIds:['p1'],createdAt:'07:10',msgs:[
     {from:'c',text:'Hola buenos días 🌞',t:'07:10'},
@@ -291,7 +291,7 @@ function _openDet(pid){
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;">
       <span style="color:var(--gt);">Registrado por</span>
-      <span style="font-weight:700;">${p.reg||'—'}</span>
+      <span style="font-weight:700;">${p.reg||'-'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;">
       <span style="color:var(--gt);">Pago</span>
@@ -302,7 +302,7 @@ function _openDet(pid){
   // Mover btns
   renderMovBtns(pid,locked);
 
-  // Campos — disabled si bloqueado
+  // Campos - disabled si bloqueado
   const fields=['det-nom','det-tel','det-dir','det-ps'];
   fields.forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=locked;});
   ['det-pago','det-dom'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=locked;});
@@ -580,7 +580,7 @@ function renderItems(ctx,locked=false){
     row.className='irow'+(locked?' locked-row':'');
     row.id = `${ctx}-item-${i}`;
     row.innerHTML=locked
-      ?`<div class="iname">${item.n}</div><div style="font-size:14px;">${item.q}</div><div style="font-size:14px;font-weight:700;">${item.p?fmt(item.p):'—'}</div>`
+      ?`<div class="iname">${item.n}</div><div style="font-size:14px;">${item.q}</div><div style="font-size:14px;font-weight:700;">${item.p?fmt(item.p):'-'}</div>`
       :`<div class="iname">${item.n}</div>
         <input class="iinput" type="text" placeholder="Ej: 2 kg" value="${item.q}" oninput="upItem('${ctx}',${i},'q',this.value)" onkeydown="if(event.key==='Enter') validateItem('${ctx}', ${i})">
         <input class="iinput" type="number" placeholder="$0" value="${item.p}" oninput="upItem('${ctx}',${i},'p',this.value)" onkeydown="if(event.key==='Enter') validateItem('${ctx}', ${i})">
@@ -600,7 +600,7 @@ function upFact(ctx){
   const tot=document.getElementById(ctx+'-tot');
   let total=0;
   const validItems = arr.filter(i => String(i.q).trim() && i.p);
-  rows.innerHTML=validItems.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' — '+item.q:''}</span><span>${p?fmt(p):'—'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Ingresa cantidad y precio para agregar</div>';
+  rows.innerHTML=validItems.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' - '+item.q:''}</span><span>${p?fmt(p):'-'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Ingresa cantidad y precio para agregar</div>';
   tot.textContent=fmt(total);
 }
 
@@ -795,7 +795,7 @@ function renderPapelera(){
   div.innerHTML=papelera.length?papelera.map(p=>`
     <div class="papcard">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:14px;font-weight:800;">#${p.num}</span><span style="font-size:12px;font-weight:700;color:var(--r);">🗑 ${p.tPap}</span></div>
-      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${p.cli} — ${p.dir}</div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${p.cli} - ${p.dir}</div>
       <div style="font-size:13px;color:var(--gt);">Enviado por: ${p.quien}</div>
       <div style="font-size:13px;color:var(--gt);">Productos: ${p.items.map(i=>i.n+(i.q?' '+i.q:'')).join(', ')}</div>
     </div>`).join('')
@@ -859,7 +859,7 @@ function renderSwimlane(){
     h+=`<div class="urg-strip">
       <div class="urg-strip-lbl">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Zona roja — sin atención:
+        Zona roja - sin atención:
       </div>`;
     urgentes.forEach(t=>{
       const m=tkUrgMin(t);
@@ -1365,5 +1365,5 @@ function simulateIncomingMessage() {
 // Arrancar el simulador en segundo plano
 simulateIncomingMessage();
 
-// INIT — arranca en login
+// INIT - arranca en login
 show('s-login');

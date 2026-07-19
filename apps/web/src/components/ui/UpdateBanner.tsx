@@ -1,9 +1,9 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
-// registerType is 'prompt' (not 'autoUpdate') on purpose — silently force-reloading every
+// registerType is 'prompt' (not 'autoUpdate') on purpose - silently force-reloading every
 // open tab the moment a deploy goes out is jarring on an operational tool mid-shift. But
 // 'prompt' with no actual prompt UI means a new version just sits there forever, waiting
-// for someone to fully close and reopen the app — which for most users never happens, so
+// for someone to fully close and reopen the app - which for most users never happens, so
 // they'd be stuck on stale code indefinitely. This is that missing prompt: a small banner
 // the user dismisses on their own timing, not a decision made silently in either direction.
 export default function UpdateBanner() {
@@ -14,7 +14,7 @@ export default function UpdateBanner() {
     onRegisteredSW(_url, registration) {
       if (!registration) return;
       // Long-lived tabs (this app is meant to stay open a full shift) otherwise only
-      // check for updates on load/navigation — poll periodically so a deploy is
+      // check for updates on load/navigation - poll periodically so a deploy is
       // discovered without requiring a manual refresh first.
       setInterval(() => registration.update(), 30 * 60 * 1000);
     },

@@ -79,14 +79,14 @@ describe('cierre routes', () => {
     expectedTomorrow.setDate(expectedTomorrow.getDate() + 1);
     expect(updated!.fecha.toISOString().split('T')[0]).toBe(expectedTomorrow.toISOString().split('T')[0]);
 
-    // original notes preserved, marker appended — NOT overwritten
+    // original notes preserved, marker appended - NOT overwritten
     const marker = `pasado_manana:${fecha}`;
     expect(updated!.notes).toContain(originalNotes);
     expect(updated!.notes).toContain(marker);
     expect(updated!.notes).toBe(`${originalNotes}\n${marker}`);
   });
 
-  it('a phone can only ever have one ticket per org (@@unique(org_id, phone)) — deferring to "manana" just re-flags the same row, never forks a second one', async () => {
+  it('a phone can only ever have one ticket per org (@@unique(org_id, phone)) - deferring to "manana" just re-flags the same row, never forks a second one', async () => {
     const fecha = '2026-02-12';
     const tomorrow = new Date(fecha);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -107,7 +107,7 @@ describe('cierre routes', () => {
     await app.prisma.order.update({ where: { id: order.id }, data: { ticket_id: ticket.id } });
 
     // A second ticket for the same org+phone is a DB-level impossibility now, not just
-    // something the app happens to avoid — this is what actually prevents the
+    // something the app happens to avoid - this is what actually prevents the
     // "Pedidos"/"Ver conversación" vs "Chats WPP" split from ever recurring.
     await expect(
       app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Cierre', fecha: tomorrow } })
@@ -223,7 +223,7 @@ describe('cierre routes', () => {
     expect(after.json().data.closedAt).not.toBeNull();
   });
 
-  it('once a day is closed, its orders are frozen — even one left "dejar_activo" (not locked) can no longer be created, edited, or moved', async () => {
+  it('once a day is closed, its orders are frozen - even one left "dejar_activo" (not locked) can no longer be created, edited, or moved', async () => {
     const fecha = '2026-02-22';
 
     const create = await app.inject({
@@ -242,7 +242,7 @@ describe('cierre routes', () => {
     });
     expect(cierre.statusCode).toBe(200);
 
-    // Left deliberately open, not locked — this is exactly the case a plain
+    // Left deliberately open, not locked - this is exactly the case a plain
     // `existing.locked` check would let through.
     const stillOpen = await app.prisma.order.findUnique({ where: { id: order.id } });
     expect(stillOpen!.locked).toBe(false);

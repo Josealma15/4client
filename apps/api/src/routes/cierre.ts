@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 export default async function cierreRoutes(fastify: FastifyInstance) {
-  // GET /api/v1/cierre/status?fecha=2026-06-15 — any authenticated role (encargado
+  // GET /api/v1/cierre/status?fecha=2026-06-15 - any authenticated role (encargado
   // included, unlike GET /dashboard which is admin-only) so the board can freeze a
   // past closed day into a read-only snapshot regardless of who's viewing it.
   fastify.get('/status', { preHandler: [authenticate] }, async (req, reply) => {
@@ -19,7 +19,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { cerrado: !!dailyClose, closedAt: dailyClose?.closed_at ?? null } });
   });
 
-  // POST /api/v1/cierre — admin y encargado
+  // POST /api/v1/cierre - admin y encargado
   fastify.post('/', { preHandler: [authenticate, requireRole('admin', 'encargado')] }, async (req, reply) => {
     const body = z.object({
       fecha: z.string(),
@@ -75,7 +75,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const fechaStr = fecha.toISOString().split('T')[0];
 
-    // Whitelist of order IDs that belong to this org — prevents IDOR via crafted decisions keys
+    // Whitelist of order IDs that belong to this org - prevents IDOR via crafted decisions keys
     const validOrderIds = new Set(pendientes.map(p => p.id));
 
     // Aplicar decisiones y cerrar caja en transacción
@@ -89,7 +89,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
           const marker = `pasado_manana:${fechaStr}`;
           const newNotes = existingOrder?.notes ? `${existingOrder.notes}\n${marker}` : marker;
           await tx.order.update({ where: { id: orderId, org_id: req.user.orgId }, data: { fecha: tomorrow, notes: newNotes } });
-          // Move the whole conversation along with the order — otherwise the order
+          // Move the whole conversation along with the order - otherwise the order
           // shows up tomorrow but its ticket doesn't, and the swimlane (which groups
           // orders under their ticket) never renders it at all.
           if (existingOrder?.ticket_id) {
@@ -109,7 +109,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
             data: { org_id: req.user.orgId, order_id: orderId, actor_id: req.user.userId, action_type: 'cierre', notes: 'Cierre forzado por admin en cierre de caja' },
           });
         } else if (decision === 'dejar_activo') {
-          // No changes at all — order stays exactly as it is (same fecha, same status).
+          // No changes at all - order stays exactly as it is (same fecha, same status).
           // Just an explicit acknowledgment so cierre can proceed without forcing an
           // in-progress order (e.g. still "camino") into a fake close or a date it
           // hasn't actually rolled into yet.
@@ -119,7 +119,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Procesar decisiones de tickets — validate each ticketId belongs to this org
+      // Procesar decisiones de tickets - validate each ticketId belongs to this org
       const ticketDecisions = body.data.ticket_decisions ?? {};
       const ticketIds = Object.keys(ticketDecisions).filter(id => id.match(/^[0-9a-f-]{36}$/i));
       const validTickets = ticketIds.length > 0
@@ -161,7 +161,7 @@ export default async function cierreRoutes(fastify: FastifyInstance) {
     });
 
     // Cierre can move/close/cancel many orders and defer many tickets at once, but
-    // never told anyone — no other connected staff (or even this same browser on a
+    // never told anyone - no other connected staff (or even this same browser on a
     // different tab) had any signal to refetch, so "Informe del día" and the board
     // could sit showing pre-cierre numbers indefinitely.
     fastify.io.to(`org:${req.user.orgId}`).emit('cierre:done', { fecha: body.data.fecha });

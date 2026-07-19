@@ -91,7 +91,7 @@ describe('orders routes', () => {
     expect(order2.num).toBe('002');
   });
 
-  it('creates an order with no address -> 201 with a placeholder — address is only required to close (cobro), not to open a pedido', async () => {
+  it('creates an order with no address -> 201 with a placeholder - address is only required to close (cobro), not to open a pedido', async () => {
     const { address, ...rest } = sampleOrderPayload({ fecha: '2026-01-11' });
     const res = await app.inject({
       method: 'POST',
@@ -108,7 +108,7 @@ describe('orders routes', () => {
     // keeps its ORIGINAL num when it lands on a new fecha. COUNT(*)+1 has no idea that
     // num already exists, guesses it again, collides, and since count doesn't change
     // between retries with no concurrent insert, every retry recomputed the exact same
-    // doomed num — 5 identical collisions, then the raw Prisma error was thrown as a 500.
+    // doomed num - 5 identical collisions, then the raw Prisma error was thrown as a 500.
     const fecha = '2026-01-16';
     await app.prisma.order.create({
       data: {
@@ -234,7 +234,7 @@ describe('orders routes', () => {
 
   it('POST /orders/:id/cobro with correct password -> 200, paid+locked; second cobro -> 409 ORDER_LOCKED', async () => {
     // A pedido now needs every field filled in (name, phone, address, payment method,
-    // domiciliario) before it's allowed to close — this fixture must reflect that, not
+    // domiciliario) before it's allowed to close - this fixture must reflect that, not
     // just the bare minimum POST /orders accepts.
     const empleado = await app.prisma.employee.create({
       data: { org_id: orgAId, name: 'Domiciliario de Prueba' },

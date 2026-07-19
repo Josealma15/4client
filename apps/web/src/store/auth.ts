@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: '4client-auth',
       storage: createJSONStorage(() => sessionStorage),
-      // Only persist user profile — tokens live in memory (sessionStorage clears on tab close)
+      // Only persist user profile - tokens live in memory (sessionStorage clears on tab close)
       partialize: (state) => ({ user: state.user }),
     },
   ),

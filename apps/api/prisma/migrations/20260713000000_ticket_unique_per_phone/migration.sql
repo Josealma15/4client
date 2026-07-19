@@ -1,5 +1,5 @@
 -- Merge historical duplicate tickets per (org_id, phone) into a single canonical
--- ticket before the new UNIQUE(org_id, phone) constraint is added below — otherwise
+-- ticket before the new UNIQUE(org_id, phone) constraint is added below - otherwise
 -- any phone with more than one ticket row (created back when a ticket was scoped
 -- per-day) would make that ALTER TABLE fail.
 DO $$
@@ -22,7 +22,7 @@ BEGIN
     ORDER BY created_at ASC
     LIMIT 1;
 
-    -- Captured before the siblings are deleted below — this is the whole point of
+    -- Captured before the siblings are deleted below - this is the whole point of
     -- the merge: roll the canonical ticket forward to the most recent activity
     -- across every merged row, and sum unread counts, instead of leaving it stuck
     -- on whichever day it happened to be created.
@@ -43,7 +43,7 @@ BEGIN
       SELECT id FROM tickets WHERE org_id = grp.org_id AND phone = grp.phone AND id <> canonical_id
     );
 
-    -- Siblings must be gone before the canonical row's own fecha changes — otherwise
+    -- Siblings must be gone before the canonical row's own fecha changes - otherwise
     -- this could collide with the still-active OLD (org_id, phone, fecha) constraint
     -- if a sibling row already holds that exact date.
     DELETE FROM tickets
@@ -56,7 +56,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Ticket identity is now per (org_id, phone), not per (org_id, phone, fecha) — a
+-- Ticket identity is now per (org_id, phone), not per (org_id, phone, fecha) - a
 -- customer writing again after any amount of time continues the same ticket instead
 -- of forking a new row the rest of the app (orders, staff replies) can't find.
 -- Prisma created the original as a plain unique index (not a named table constraint),

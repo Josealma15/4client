@@ -90,7 +90,7 @@ async function main() {
         },
       },
     });
-    console.log(`✅ ${c.customer_name} — ${c.messages.length} mensajes (${c.unread_count} sin leer)`);
+    console.log(`✅ ${c.customer_name} - ${c.messages.length} mensajes (${c.unread_count} sin leer)`);
     console.log(`   ID: ${ticket.id}`);
   }
 

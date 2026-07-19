@@ -117,10 +117,10 @@ model Ticket {
   deferred_to     DateTime? @db.Date
   created_at      DateTime  @default(now()) @db.Timestamptz
   // Timestamp of the most recently issued form-link JWT for this ticket. Any token
-  // whose own `iat` predates this is rejected as superseded — so sending a fresh
+  // whose own `iat` predates this is rejected as superseded - so sending a fresh
   // "Formulario" link automatically kills every earlier link for the same ticket,
   // with no separate "Bloquear link" click needed. Null = no link issued yet (or
-  // issued before this field existed) — nothing to compare against, so old
+  // issued before this field existed) - nothing to compare against, so old
   // already-issued tokens keep working until their own expiry.
   form_token_min_iat DateTime? @db.Timestamptz
 
@@ -130,7 +130,7 @@ model Ticket {
   revoked_form_token RevokedFormToken?
   form_link_session  FormLinkSession?
 
-  // One ticket per customer, forever — not per day. `fecha` still tracks the most
+  // One ticket per customer, forever - not per day. `fecha` still tracks the most
   // recent day this ticket was active (or is queued for, via `deferred_to`) so the
   // day-scoped board/informe queries keep working, but it's no longer part of the
   // ticket's identity: a customer writing again next week continues the same ticket
@@ -189,9 +189,9 @@ model Order {
   source          String    @default("encargado") @db.VarChar(20)
   notes           String?
   // Set whenever the CLIENT (not staff) adds/edits/removes items on this order via
-  // the public form's merge flow — cleared when staff saves the order (routes/orders.ts
+  // the public form's merge flow - cleared when staff saves the order (routes/orders.ts
   // PATCH /:id), which is treated as "staff reviewed the change". Independent of any
-  // individual item's own `added_by_client` flag below, which never clears — this is
+  // individual item's own `added_by_client` flag below, which never clears - this is
   // a transient "needs attention" signal, that's permanent provenance.
   client_modified Boolean   @default(false)
   created_at      DateTime  @default(now()) @db.Timestamptz
@@ -222,7 +222,7 @@ model OrderItem {
   quantity_value Decimal? @db.Decimal(10, 3)
   quantity_unit  String?  @db.VarChar(20)
   // True if a client (via the public form's merge flow) added this line or changed
-  // its quantity — never reset back to false afterward, even once staff has dealt
+  // its quantity - never reset back to false afterward, even once staff has dealt
   // with it, so the item's origin stays visible in the UI (rendered in red) for as
   // long as the order exists. Items from the original submission or staff's own
   // entry stay false forever.
@@ -276,7 +276,7 @@ model DailyClose {
   @@map("daily_closes")
 }
 
-// One row per ticket at most — revoking early-invalidates that ticket's currently
+// One row per ticket at most - revoking early-invalidates that ticket's currently
 // outstanding form-link token (public.ts checks this before form-info/products/submit).
 // Generating a fresh link afterwards works normally: it's a new JWT, this row just
 // blocks whichever token was already issued when revoke was clicked.
@@ -296,13 +296,13 @@ model RevokedFormToken {
   @@map("revoked_form_tokens")
 }
 
-// Claims a ticket's form-link for whichever browser/device opens it FIRST — there's
+// Claims a ticket's form-link for whichever browser/device opens it FIRST - there's
 // no real "device identity" reachable from a web page, so `device_token` is just a
 // random value the client generates once and persists in its own localStorage
 // (public.ts's routes below). First request for a ticket with no row yet claims it;
 // any later request presenting a DIFFERENT device_token is rejected as if the link
 // were invalid, same as an expired/revoked one (never reveals *why* it failed).
-// Cleared whenever staff issues a fresh link for this ticket (inbox.ts) — that's a
+// Cleared whenever staff issues a fresh link for this ticket (inbox.ts) - that's a
 // deliberate "start over" action, e.g. after a false-positive lockout.
 model FormLinkSession {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -316,7 +316,7 @@ model FormLinkSession {
 }
 
 // Trail for security-sensitive account/config actions (user create, password reset,
-// role/active change, WPP credential update) — none of these were logged anywhere
+// role/active change, WPP credential update) - none of these were logged anywhere
 // before, unlike Order which already has OrderHistory. Write-only from the app's
 // perspective; read via the /dev DB viewer (dev role only).
 model AuditLog {

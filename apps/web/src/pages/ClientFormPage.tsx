@@ -27,7 +27,7 @@ function groupByCategory(products: Product[]) {
   return order.map(cat => ({ category: cat, products: groups[cat] }));
 }
 
-// Random value this browser generates once per link and keeps in localStorage —
+// Random value this browser generates once per link and keeps in localStorage -
 // there's no real "device identity" reachable from a web page, so this is the
 // closest available proxy. The backend (public.ts) claims the ticket's form-link
 // for whichever browser presents this value first; a different browser/device
@@ -40,7 +40,7 @@ function getOrCreateDeviceToken(token: string): string {
     if (!dt) { dt = fresh(); localStorage.setItem(key, dt); }
     return dt;
   } catch {
-    return fresh(); // localStorage unavailable (private mode) — works for this load, just won't persist
+    return fresh(); // localStorage unavailable (private mode) - works for this load, just won't persist
   }
 }
 
@@ -71,7 +71,7 @@ export default function ClientFormPage() {
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  // Live-update banner — set when a background poll (see the effect below) notices
+  // Live-update banner - set when a background poll (see the effect below) notices
   // the order being edited changed state (e.g. staff moved it to "camino") while
   // this tab sat open. Separate from submitError: this is a standing warning shown
   // the moment we find out, not just something surfaced after a failed submit.
@@ -83,7 +83,7 @@ export default function ClientFormPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   // Synchronous guard against a double-click/tap firing two submits before React's
-  // next render commits the `submitting` state update — a plain state check at the
+  // next render commits the `submitting` state update - a plain state check at the
   // top of handleSubmit can't catch that, since both click handlers can read the
   // stale `false` value in the same tick. A ref updates immediately, no render lag.
   const submittingRef = useRef(false);
@@ -103,7 +103,7 @@ export default function ClientFormPage() {
           localStorage.removeItem(draftKey);
         }
       }
-    } catch { /* localStorage unavailable (private mode, etc.) — ignore */ }
+    } catch { /* localStorage unavailable (private mode, etc.) - ignore */ }
     setHydrated(true);
 
     const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
@@ -140,15 +140,19 @@ export default function ClientFormPage() {
       } else {
         localStorage.setItem(draftKey, JSON.stringify({ items: selected, address, paymentMethod, savedAt: Date.now() }));
       }
-    } catch { /* localStorage unavailable — ignore, form still works without persistence */ }
+    } catch { /* localStorage unavailable - ignore, form still works without persistence */ }
   }, [selected, address, paymentMethod, hydrated, token]);
 
-  // Live-update: while the client has an order open on the catalog screen, poll for
-  // status changes on it (e.g. staff marks it "camino") so they find out right away
-  // instead of only at submit time via a rejected request. Doesn't touch `selected`/
-  // `address`/`paymentMethod` — never stomps whatever the client is mid-typing.
+  // Live-update: poll for status changes on the client's order(s) - both while
+  // choosing which one to edit and while actively editing one - so a board change
+  // (e.g. staff marks it "camino") shows up right away instead of only surfacing at
+  // submit time via a rejected request. There's no authenticated public socket
+  // channel a stranger holding just a link could safely join, so this is a fast poll
+  // rather than a push - 5s reads as close to instant without adding new public
+  // attack surface the night before a client demo. Doesn't touch `selected`/
+  // `address`/`paymentMethod` - never stomps whatever the client is mid-typing.
   useEffect(() => {
-    if (state !== 'catalog' || !token) return;
+    if ((state !== 'catalog' && state !== 'choose') || !token) return;
     const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
     const poll = () => {
       fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()).then(info => {
@@ -159,14 +163,20 @@ export default function ClientFormPage() {
           if (!target || !target.editable) {
             setLiveWarning(
               target
-                ? `Tu pedido #${target.num} ya no se puede modificar — su estado cambió a "${STATUS_LABEL_CLIENT[target.status] ?? target.status}". Contáctanos directamente si necesitas hacer un cambio.`
+                ? `Tu pedido #${target.num} ya no se puede modificar - su estado cambió a "${STATUS_LABEL_CLIENT[target.status] ?? target.status}". Contáctanos directamente si necesitas hacer un cambio.`
                 : 'Este pedido ya no está disponible. Contáctanos directamente si necesitas hacer un cambio.',
             );
           }
         }
-      }).catch(() => { /* transient poll failure — just try again next tick */ });
+      }).catch(() => { /* transient poll failure - just try again next tick */ });
+      // Catalog rarely changes mid-visit, but keeps a long-open tab (or a client who
+      // walks away and comes back) from working off a stale product list if staff
+      // edited it in the meantime - same reasoning as the orders poll above.
+      fetch(`${API}/api/v1/public/products?${qs}`).then(r => r.json()).then(prods => {
+        if (Array.isArray(prods?.data)) setProducts(prods.data);
+      }).catch(() => { /* transient poll failure - just try again next tick */ });
     };
-    const iv = setInterval(poll, 20000);
+    const iv = setInterval(poll, 5000);
     return () => clearInterval(iv);
   }, [state, token, deviceToken, mergeTarget]);
 
@@ -217,12 +227,12 @@ export default function ClientFormPage() {
     setMergeTarget(target);
     if (target !== 'new') {
       // Pre-fill from the order they're adding to, so the fields show what's already
-      // on file — they only need to type something if they actually want to change it.
+      // on file - they only need to type something if they actually want to change it.
       const order = dayOrders.find(o => o.id === target);
       if (order) {
         if (order.address) setAddress(order.address);
         if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
-        // Hydrate with what's already on the order — otherwise the client has no way
+        // Hydrate with what's already on the order - otherwise the client has no way
         // to see/edit/remove existing items, only ever add more on top blind.
         setSelected(order.items.map(i => ({
           product_name: i.product_name,
@@ -262,7 +272,7 @@ export default function ClientFormPage() {
   }
 
   async function handleSubmit() {
-    // Synchronous ref check — the very first tap to reach here wins and flips this
+    // Synchronous ref check - the very first tap to reach here wins and flips this
     // immediately, so a rapid double tap's second event is dropped right here, before
     // it can ever fire a second fetch. Whatever happens next (success or a real
     // error), it happens to the FIRST tap's request, never gets silently lost to a
@@ -288,8 +298,8 @@ export default function ClientFormPage() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({} as { error?: string; code?: string }));
         // Every branch below prefers the server's own explanatory `error` text when
-        // present — it's already specific (e.g. "Tu pedido #12 ya está en camino y
-        // no se puede modificar") — only falling back to a made-up message when the
+        // present - it's already specific (e.g. "Tu pedido #12 ya está en camino y
+        // no se puede modificar") - only falling back to a made-up message when the
         // server didn't send one. Previously this always got overwritten with a
         // generic "Hubo un problema", discarding a message that already answered
         // "why" for the client.
@@ -302,12 +312,12 @@ export default function ClientFormPage() {
           return;
         }
         if (res.status === 401) {
-          setSubmitError('Este link ya no es válido — expiró, fue reemplazado por uno nuevo, o fue bloqueado. Pide un link actualizado.');
+          setSubmitError('Este link ya no es válido - expiró, fue reemplazado por uno nuevo, o fue bloqueado. Pide un link actualizado.');
           return;
         }
-        // 404 (pedido/ticket ya no existe) and 409 (pedido ya no editable — cambió de
+        // 404 (pedido/ticket ya no existe) and 409 (pedido ya no editable - cambió de
         // estado justo cuando el cliente envió) both come with a specific, accurate
-        // reason already worded for the client — show it as-is.
+        // reason already worded for the client - show it as-is.
         setSubmitError(err.error ?? 'Hubo un problema. Intenta de nuevo.');
         return;
       }
@@ -486,7 +496,7 @@ export default function ClientFormPage() {
         </div>
       )}
 
-      {/* Summary panel — always visible once something's added, collapses past 2 items */}
+      {/* Summary panel - always visible once something's added, collapses past 2 items */}
       {selectedCount > 0 && (
         <div ref={summaryRef} style={{ background: '#fff', margin: '0 0 2px', padding: '12px 16px', borderBottom: '2px solid #e0e0e0' }}>
           <div style={{ fontWeight: 800, fontSize: 13, color: GREEN, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
@@ -519,7 +529,7 @@ export default function ClientFormPage() {
             </button>
           </div>
 
-          {/* Delivery details — collected here so the order comes in ready to
+          {/* Delivery details - collected here so the order comes in ready to
               dispatch instead of needing staff to fill these in before anything
               can happen with it. Still editable by staff afterward if needed. */}
           <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 10, paddingTop: 10 }}>

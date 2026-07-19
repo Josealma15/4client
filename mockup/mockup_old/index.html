@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>4Client — Sistema de Gestión</title>
+<title>4Client - Sistema de Gestión</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -439,7 +439,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
         <div style="display:flex;align-items:center;gap:9px;">
           <div class="huser">
             <div class="uav" id="h-av">U</div>
-            <div><div class="un" id="h-un">—</div><div class="ur2" id="h-rol">—</div></div>
+            <div><div class="un" id="h-un">-</div><div class="ur2" id="h-rol">-</div></div>
           </div>
           <button class="bnew" id="btn-cierre" style="background:var(--az);padding:8px 14px;font-size:13px;display:none;" onclick="openCierre()">🏦 Cierre de caja</button>
           <button class="bout" onclick="doLogout()">Salir</button>
@@ -534,7 +534,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
         <div class="fg2"><label class="fl2">Dirección de entrega *</label>
           <input class="fi2" id="np-dir" placeholder="Ej: Cra 45 #12-34, Casa azul" oninput="dirty('m-nuevo')"></div>
         <div class="fg2"><label class="fl2">Domiciliario</label>
-          <select class="fi2" id="np-dom"><option value="">— Sin asignar —</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
+          <select class="fi2" id="np-dom"><option value="">- Sin asignar -</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
         <div class="stit">Productos</div>
         <div class="psearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gt)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="np-ps" type="text" placeholder="Buscar producto..." oninput="bProd(this.value,'np')"></div>
@@ -576,7 +576,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
         <div class="fg2"><label class="fl2">Método de pago</label>
           <select class="fi2" id="det-pago" onchange="dirty('m-det')"><option value="casa">💵 Cobra en casa</option><option value="transferencia">📲 Transferencia</option><option value="efectivo">💳 Pagado en tienda</option></select></div>
         <div class="fg2"><label class="fl2">Domiciliario</label>
-          <select class="fi2" id="det-dom" onchange="dirty('m-det')"><option value="">— Sin asignar —</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
+          <select class="fi2" id="det-dom" onchange="dirty('m-det')"><option value="">- Sin asignar -</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
       </div>
       <div class="stit">Productos</div>
       <div class="psearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gt)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -621,7 +621,7 @@ body{font-family:var(--f);background:var(--bg);color:var(--n);min-height:100vh;f
 <div class="moverlay" id="m-cierre">
   <div class="cierre-win">
     <div class="mhead">
-      <div><div class="mtit">🏦 Cierre de Caja</div><div class="msub">Resumen del día — Fruver San Gabriel</div></div>
+      <div><div class="mtit">🏦 Cierre de Caja</div><div class="msub">Resumen del día - Fruver San Gabriel</div></div>
       <button class="mclose" onclick="closeModal('m-cierre')">×</button>
     </div>
     <div class="mbody">
@@ -693,7 +693,7 @@ let pedidos=[
 ];
 let papelera=[];
 
-// ── Tickets WPP (registro inmutable — pedidoIds[] permite múltiples pedidos) ──
+// ── Tickets WPP (registro inmutable - pedidoIds[] permite múltiples pedidos) ──
 let tickets=[
   {id:'t1',phone:'3011234501',name:'Rosario Díaz',pedidoIds:['p1'],createdAt:'07:10',msgs:[
     {from:'c',text:'Hola buenos días 🌞',t:'07:10'},
@@ -936,7 +936,7 @@ function _openDet(pid,fromAdmin){
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;">
       <span style="color:var(--gt);">Registrado por</span>
-      <span style="font-weight:700;">${p.reg||'—'}</span>
+      <span style="font-weight:700;">${p.reg||'-'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:14px;">
       <span style="color:var(--gt);">Pago</span>
@@ -947,7 +947,7 @@ function _openDet(pid,fromAdmin){
   // Mover btns
   renderMovBtns(pid,locked);
 
-  // Campos — disabled si bloqueado
+  // Campos - disabled si bloqueado
   const fields=['det-nom','det-tel','det-dir','det-ps'];
   fields.forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=locked;});
   ['det-pago','det-dom'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=locked;});
@@ -1127,7 +1127,7 @@ function renderItems(ctx,locked=false){
     const row=document.createElement('div');
     row.className='irow'+(locked?' locked-row':'');
     row.innerHTML=locked
-      ?`<div class="iname">${item.n}</div><div style="font-size:14px;">${item.q}</div><div style="font-size:14px;font-weight:700;">${item.p?fmt(item.p):'—'}</div>`
+      ?`<div class="iname">${item.n}</div><div style="font-size:14px;">${item.q}</div><div style="font-size:14px;font-weight:700;">${item.p?fmt(item.p):'-'}</div>`
       :`<div class="iname">${item.n}</div><input class="iinput" type="text" placeholder="Ej: 2 kg" value="${item.q}" oninput="upItem('${ctx}',${i},'q',this.value)"><input class="iinput" type="number" placeholder="$0" value="${item.p}" oninput="upItem('${ctx}',${i},'p',this.value)"><button class="idel" onclick="remItem('${ctx}',${i})">×</button>`;
     list.appendChild(row);
   });
@@ -1140,7 +1140,7 @@ function upFact(ctx){
   const rows=document.getElementById(ctx+'-fr');
   const tot=document.getElementById(ctx+'-tot');
   let total=0;
-  rows.innerHTML=arr.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' — '+item.q:''}</span><span>${p?fmt(p):'—'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Agrega productos con el buscador</div>';
+  rows.innerHTML=arr.map(item=>{const p=parseInt(item.p)||0;total+=p;return`<div class="factrow"><span>${item.n}${item.q?' - '+item.q:''}</span><span>${p?fmt(p):'-'}</span></div>`;}).join('')||'<div style="font-size:13px;color:var(--gt);text-align:center;padding:8px 0;">Agrega productos con el buscador</div>';
   tot.textContent=fmt(total);
 }
 
@@ -1322,7 +1322,7 @@ function renderPapelera(){
   div.innerHTML=papelera.length?papelera.map(p=>`
     <div class="papcard">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:14px;font-weight:800;">#${p.num}</span><span style="font-size:12px;font-weight:700;color:var(--r);">🗑 ${p.tPap}</span></div>
-      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${p.cli} — ${p.dir}</div>
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${p.cli} - ${p.dir}</div>
       <div style="font-size:13px;color:var(--gt);">Enviado por: ${p.quien}</div>
       <div style="font-size:13px;color:var(--gt);">Productos: ${p.items.map(i=>i.n+(i.q?' '+i.q:'')).join(', ')}</div>
     </div>`).join('')
@@ -1336,7 +1336,7 @@ function renderEditados(){
   document.getElementById('edit-cnt').textContent='('+edits.length+')';
   div.innerHTML=edits.length?[...edits].reverse().map(e=>`
     <div class="elogcard">
-      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:14px;font-weight:800;">Pedido #${e.pnum} — ${e.pcli}</span><span style="font-size:12px;font-weight:700;color:var(--a);">✏️ ${e.t}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;"><span style="font-size:14px;font-weight:800;">Pedido #${e.pnum} - ${e.pcli}</span><span style="font-size:12px;font-weight:700;color:var(--a);">✏️ ${e.t}</span></div>
       <div style="font-size:15px;font-weight:800;margin-bottom:6px;">${e.what}</div>
       ${e.antes!==null&&e.despues!==null?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;"><span class="diff-old">− ${e.antes}</span><span class="diff-arrow">→</span><span class="diff-new">+ ${e.despues}</span></div>`:''}
       <div style="font-size:13px;color:var(--gt);">Por: ${e.who}</div>
@@ -1400,7 +1400,7 @@ function renderSwimlane(){
     h+=`<div class="urg-strip">
       <div class="urg-strip-lbl">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Zona roja — sin atención:
+        Zona roja - sin atención:
       </div>`;
     urgentes.forEach(t=>{
       const m=tkUrgMin(t);
@@ -1753,7 +1753,7 @@ function simulateIncomingMessage() {
 // Arrancar el simulador en segundo plano
 simulateIncomingMessage();
 
-// INIT — arranca en login
+// INIT - arranca en login
 show('s-login');
 </script>
 </body>

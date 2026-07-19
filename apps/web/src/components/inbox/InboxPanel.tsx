@@ -7,7 +7,7 @@ import { getSocket } from '../../lib/socket';
 import { toast } from '../ui/Toast';
 import { colombiaDateStr } from '../../lib/format';
 
-// Safe URL regex — no backtracking ambiguity, no ReDoS risk
+// Safe URL regex - no backtracking ambiguity, no ReDoS risk
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
   const parts = text.split(URL_RE);
@@ -22,7 +22,7 @@ function renderText(text: string) {
   });
 }
 
-// Messages only — viewing and replying. Creating/opening pedidos from a chat happens
+// Messages only - viewing and replying. Creating/opening pedidos from a chat happens
 // in "Ver conversación" (TicketModal), not here.
 export default function InboxPanel() {
   const qc = useQueryClient();
@@ -76,7 +76,7 @@ export default function InboxPanel() {
         ? api.get<{ data: any }>(`/inbox/${selectedId}/messages`).then((r) => r.data)
         : null,
     enabled: !!selectedId,
-    // Fallback only — real-time delivery is via socket, but a missed/late socket event
+    // Fallback only - real-time delivery is via socket, but a missed/late socket event
     // (reconnect race, room not rejoined yet) shouldn't leave the open conversation stale
     // for longer than this.
     refetchInterval: 60000,

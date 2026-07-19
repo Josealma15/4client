@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 export default async function dashboardRoutes(fastify: FastifyInstance) {
-  // GET /api/v1/dashboard?fecha=2026-06-15 — solo admin
+  // GET /api/v1/dashboard?fecha=2026-06-15 - solo admin
   fastify.get('/', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
     const query = z.object({ fecha: z.string().optional() }).parse(req.query);
     const fecha = query.fecha ? new Date(query.fecha) : new Date();
@@ -27,7 +27,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
         take: 300,
       }),
       fastify.prisma.ticket.findMany({
-        // Same resolution as GET /tickets (the swimlane board) — a ticket whose order
+        // Same resolution as GET /tickets (the swimlane board) - a ticket whose order
         // was deferred to another day only gets `deferred_to` set, its own `fecha`
         // stays put, so a plain `{ fecha }` match here silently dropped it from
         // whichever day it actually landed on and left it double-counted on the day
@@ -41,12 +41,12 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
           ],
         },
         include: {
-          // Scoped to `fecha` too, not just non-papelera — a ticket is now one row
+          // Scoped to `fecha` too, not just non-papelera - a ticket is now one row
           // per phone forever (not per day), so without this it pulls in EVERY order
           // that ticket has ever had across its whole history. A chat whose 3 orders
           // today are all paid+cerrado was still coming back "activo" here because
           // some unrelated order from a different day, sitting on the same ticket,
-          // wasn't closed — this is what "chats completados"/"con pedido activo"
+          // wasn't closed - this is what "chats completados"/"con pedido activo"
           // meant to reflect right now, today, not the ticket's entire lifetime.
           orders: {
             where: { status: { not: 'papelera' }, fecha },
@@ -61,7 +61,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
       }),
     ]);
 
-    // Same phone dedup as GET /tickets — belt-and-suspenders now that a phone can
+    // Same phone dedup as GET /tickets - belt-and-suspenders now that a phone can
     // only ever have one ticket row (@@unique(org_id, phone) on Ticket).
     const seenPhones = new Set<string>();
     const tickets_ = tickets.filter(t => {

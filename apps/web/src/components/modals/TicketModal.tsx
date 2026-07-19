@@ -4,7 +4,7 @@ import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList, Ban } from 'luc
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
-import { fmtCOP, STATUS_LABEL } from '../../lib/format';
+import { fmtCOP, STATUS_LABEL, todayStr } from '../../lib/format';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 
@@ -37,7 +37,7 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
   const chatRef = useRef<HTMLDivElement>(null);
 
   // Orders shown here must be scoped to the day currently being viewed on the board
-  // (fecha), not every order this ticket ever had — opening today's chat for a
+  // (fecha), not every order this ticket ever had - opening today's chat for a
   // customer who also ordered yesterday must not show yesterday's pedido here.
   const { data: ticket, isLoading } = useQuery({
     queryKey: ['ticket', ticketId, fecha],
@@ -71,12 +71,21 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
   }, [ticket?.messages?.length]);
 
   const sendMut = useMutation({
-    mutationFn: () => api.post(`/inbox/${ticketId}/reply`, { text: reply }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+    mutationFn: () => api.post<{ data: any; wpp_status: string; wpp_error?: string }>(`/inbox/${ticketId}/reply`, { text: reply }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
       qc.invalidateQueries({ queryKey: ['tickets'] });
       setReply('');
-      toast('Mensaje enviado');
+      // e.g. outside Meta's 24h customer-service window - the message still saves
+      // and shows in the chat, so without this staff has no way to know it never
+      // actually reached the client's WhatsApp.
+      if (res?.wpp_status === 'failed') {
+        toast(`Mensaje guardado pero falló el envío a WhatsApp: ${res.wpp_error ?? 'error Meta API'}`, true);
+      } else if (res?.wpp_status === 'no_credentials') {
+        toast('Mensaje guardado, pero este negocio no tiene WhatsApp conectado', true);
+      } else {
+        toast('Mensaje enviado');
+      }
     },
     onError: (e: any) => toast(e.message, true),
   });
@@ -102,12 +111,18 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
 
   const blockLinkMut = useMutation({
     mutationFn: () => api.post(`/inbox/${ticketId}/form-link/revoke`, {}),
-    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onSuccess: () => toast('Link bloqueado - el cliente ya no puede usarlo'),
     onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
 
   const activeOrders = (ticket?.orders ?? []).filter((o: any) => o.status !== 'papelera');
   const hasOrders = activeOrders.length > 0;
+  // The link itself already expires (end of the Colombia calendar day it was sent, or
+  // sooner - see inbox.ts's /form-link route) - viewing a past day's chat here means
+  // whatever link was ever sent for it is already dead, so sending/blocking one from
+  // this stale view can only confuse ("bloqueado" a link that already expired, or a
+  // fresh link that's really meant for TODAY's conversation, not the day being read).
+  const isPastDay = fecha < todayStr();
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -138,18 +153,18 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
             <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
               <button
                 className="hdr-ic-btn"
-                title="Enviar formulario de pedido al cliente"
+                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
                 onClick={sendFormLink}
-                disabled={formLinkMut.isPending}
+                disabled={formLinkMut.isPending || isPastDay}
               >
                 <ClipboardList size={13} />
                 Formulario
               </button>
               <button
                 className="hdr-ic-btn"
-                title="Bloquear el link de formulario enviado a este cliente"
+                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
                 onClick={() => setShowBlockConfirm(true)}
-                disabled={blockLinkMut.isPending}
+                disabled={blockLinkMut.isPending || isPastDay}
               >
                 <Ban size={13} />
                 <span>Bloquear<br />Link</span>
@@ -157,7 +172,7 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
             </div>
           </div>
 
-          {/* Messages — scrollable */}
+          {/* Messages - scrollable */}
           <div ref={chatRef} style={{
             flex: 1, overflowY: 'auto', padding: '10px',
             display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0,
@@ -301,7 +316,7 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
 
       {showBlockConfirm && (
         <ConfirmModal
-          message="Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
+          message="Vas a bloquear el link del formulario - el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?"
           confirmLabel="Bloquear"
           danger
           onConfirm={() => { blockLinkMut.mutate(); setShowBlockConfirm(false); }}

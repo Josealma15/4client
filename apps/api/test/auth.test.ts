@@ -84,7 +84,7 @@ describe('auth routes', () => {
     expect(refreshRes.statusCode).toBe(200);
     const newAccessToken = refreshRes.json().data.accessToken;
     expect(newAccessToken).toEqual(expect.any(String));
-    // Note: not asserting newAccessToken !== loginAccessToken — a JWT's contents
+    // Note: not asserting newAccessToken !== loginAccessToken - a JWT's contents
     // (userId/orgId/role/iat/exp) are deterministic, so two tokens issued for the
     // same user within the same wall-clock second are legitimately identical.
     // The functional check below (it authenticates) plus the cookie-rotation
@@ -120,7 +120,7 @@ describe('auth routes', () => {
     const cookieGen2 = getRfCookie(refresh1)!;
     expect(cookieGen2).toBeDefined();
 
-    // Replay the now-rotated-away generation-1 cookie — simulates a stolen/replayed token.
+    // Replay the now-rotated-away generation-1 cookie - simulates a stolen/replayed token.
     const reuseAttempt = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/refresh',
@@ -130,7 +130,7 @@ describe('auth routes', () => {
     expect(reuseAttempt.json().code).toBe('TOKEN_REUSE_DETECTED');
 
     // The whole session family (including the legitimately-rotated generation-2 cookie)
-    // must now be revoked too — otherwise a thief racing the real user could still get in.
+    // must now be revoked too - otherwise a thief racing the real user could still get in.
     const gen2NowInvalid = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/refresh',

@@ -47,7 +47,7 @@ function minsSinceDate(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
 }
 
-// Past 60 minutes, "375min" is unreadable at a glance — switch to "Xh Ymin" instead
+// Past 60 minutes, "375min" is unreadable at a glance - switch to "Xh Ymin" instead
 // of a raw minute count that just keeps growing with no natural break.
 function formatElapsed(mins: number): string {
   if (mins < 60) return `${mins}min`;
@@ -56,15 +56,15 @@ function formatElapsed(mins: number): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
-// Red-zone timer — exactly two scenarios, nothing else:
+// Red-zone timer - exactly two scenarios, nothing else:
 // - No order yet → minutes since the ticket's first message.
 // - An order exists but isn't closed (paid + cerrado) yet → minutes since the earliest
 //   still-open order was created.
 // A ticket whose orders are all paid+cerrado is never urgent, no matter how long ago
-// that was or whether the customer wrote again after — that's not what this alerts on.
+// that was or whether the customer wrote again after - that's not what this alerts on.
 function ticketElapsedMins(ticket: Ticket, ticketOrders: Order[]): number {
   if (ticketOrders.length === 0) {
-    // Since the FIRST message, not the last — otherwise the client sending another
+    // Since the FIRST message, not the last - otherwise the client sending another
     // message while still unattended keeps resetting the clock instead of the wait
     // actually getting more urgent the longer it drags on.
     return minsSinceDate(ticket.created_at);
@@ -96,7 +96,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
   const [, setTick] = useState(0);
   const moveOrder = useMoveOrder();
   const drag = useRef<{ orderId: string; ticketId: string | null } | null>(null);
-  // Red-zone only means something for what's happening right now — looking at a past
+  // Red-zone only means something for what's happening right now - looking at a past
   // day shouldn't paint everything on it as urgent forever.
   const isToday = fecha === todayStr();
 
@@ -139,7 +139,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
     if (idx < 0 || idx >= STATUS_ORDER.length - 1) return; // already 'cerrado'
     const nextStatus = STATUS_ORDER[idx + 1];
     if (nextStatus === 'cerrado') {
-      // 'cerrado' isn't a plain status move — the backend only allows reaching it
+      // 'cerrado' isn't a plain status move - the backend only allows reaching it
       // through the guarded /cobro flow (amount received + password). Same path the
       // drag-and-drop-onto-"cerrado" column already uses below.
       const total = order.items.reduce((s, i) => s + Number(i.price), 0);
@@ -172,7 +172,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
   function handleDrop(e: React.DragEvent, targetStatus: string, targetTicketId: string | null) {
     e.preventDefault();
     if (!drag.current) return;
-    if (diaCerrado) { toast('Día cerrado — vista de solo lectura', true); drag.current = null; return; }
+    if (diaCerrado) { toast('Día cerrado - vista de solo lectura', true); drag.current = null; return; }
     if (drag.current.ticketId !== targetTicketId) {
       toast('Solo puedes mover el pedido dentro de la fila de este cliente', true);
       drag.current = null;
@@ -220,23 +220,23 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
     const hasMore = ord.items.length > 2;
 
     // Deferred badge logic
-    // notes can contain MULTIPLE 'pasado_manana:SOURCE_DATE' markers, one per deferral —
+    // notes can contain MULTIPLE 'pasado_manana:SOURCE_DATE' markers, one per deferral -
     // an order left open two cierres in a row picks up a second one on top of the first
     // (see cierre.ts, notes are appended, never replaced). Matching only the FIRST marker
     // (old behavior) meant an order deferred twice showed as a normal, fully-interactive
-    // card on the day it briefly sat on in between — its real fecha had already moved on
+    // card on the day it briefly sat on in between - its real fecha had already moved on
     // again, so that day no longer owned it either, but nothing here said so. Collecting
     // every marker and checking whether ANY of them names the day being viewed is what
     // actually mirrors "this order passed through here at some point".
     const deferredDates = [...((ord as any).notes?.matchAll(/pasado_manana:(\d{4}-\d{2}-\d{2})/g) ?? [])].map((m) => m[1]);
     const ordFecha: string | null = (ord as any).fecha ? new Date((ord as any).fecha).toISOString().split('T')[0] : null;
-    // Ghost: viewing a day it was deferred AWAY FROM — this board no longer owns it (it
+    // Ghost: viewing a day it was deferred AWAY FROM - this board no longer owns it (it
     // lives on ordFecha now), show as a dimmed, non-interactive trace.
     const isGhost = deferredDates.includes(fecha);
-    // Arrived: viewing the day it's actually on now (its real, current fecha) — fully
+    // Arrived: viewing the day it's actually on now (its real, current fecha) - fully
     // active/interactive, just flagged with a badge noting it came from a deferral.
     const isDeferred = deferredDates.length > 0 && ordFecha !== null && ordFecha === fecha;
-    // Once cierre ran for this day, the whole board becomes a read-only snapshot —
+    // Once cierre ran for this day, the whole board becomes a read-only snapshot -
     // every card on it freezes (not just the specific order that got deferred away),
     // so a "dejar_activo" order left open at close time doesn't stay silently
     // draggable/editable forever on a day that's supposed to be closed history.
@@ -257,7 +257,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
         onClick={() => setDetailId(ord.id)}
       >
         {ord.client_modified && (
-          <div title="El cliente modificó este pedido — sin revisar"
+          <div title="El cliente modificó este pedido - sin revisar"
             style={{
               position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%',
               background: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -371,7 +371,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
         }}>
           <Lock size={16} color="var(--gt)" />
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--gt)' }}>
-            Día cerrado — vista de solo lectura, nada se puede mover ni modificar.
+            Día cerrado - vista de solo lectura, nada se puede mover ni modificar.
           </span>
         </div>
       )}
@@ -397,13 +397,13 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
             const isCollapsed = collapsedTickets.has(ticket.id);
             const tNum = `T-${String(filteredTickets.indexOf(ticket) + 1).padStart(2, '0')}`;
 
-            // Same ghost/arrived split as orders above, applied to the ticket itself —
+            // Same ghost/arrived split as orders above, applied to the ticket itself -
             // cierre.ts sets deferred_to on the ticket but never touches its own `fecha`
             // (see schema comment on Ticket.fecha), so `fecha` is still the day it left
             // FROM and `deferred_to` is the day it landed ON. Before this, the "Pospuesto"
             // badge showed identically on both days (just `!!deferred_to`, no date check),
             // so a chat looked exactly as "live" on the day it already left as on the day
-            // it arrived — the one place a viewer could actually tell the two apart was
+            // it arrived - the one place a viewer could actually tell the two apart was
             // its order card underneath (dimmed vs not), which made the row visually
             // contradict itself.
             const ticketFechaStr = (ticket as any).fecha ? new Date((ticket as any).fecha).toISOString().split('T')[0] : null;
@@ -424,7 +424,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                     {ticket.unread_count > 0 && <span className="inbox-unread" style={{ fontSize: 10, padding: '1px 5px' }}>{ticket.unread_count}</span>}
                     <span style={{ fontSize: 13, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.customer_name}</span>
                     <span className={`tk-badge ${ticketOrders.length > 0 ? (ticketOrders.every((o) => o.paid) ? 'done' : 'activo') : 'sin'}`}>
-                      {ticketOrders.length > 0 ? `${ticketOrders.length}p` : '—'}
+                      {ticketOrders.length > 0 ? `${ticketOrders.length}p` : '-'}
                     </span>
                   </div>
                   {STATUS_ORDER.map((s) => (

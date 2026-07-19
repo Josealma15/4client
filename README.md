@@ -60,7 +60,7 @@
 │                                               │          │
 │                                  ┌────────────▼───────┐ │
 │                                  │  Cloudflare R2      │ │
-│                                  │  (PDFs — gratis)    │ │
+│                                  │  (PDFs - gratis)    │ │
 │                                  └────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -158,13 +158,13 @@ Organization ──┬── User (admin | encargado | domiciliario)
                │    ├── Message (mensajes WPP)
                │    └── Order[]
                │         ├── OrderItem[] (product_name como VARCHAR, no FK)
-               │         └── OrderHistory[] (append-only — INMUTABLE a nivel DB)
+               │         └── OrderHistory[] (append-only - INMUTABLE a nivel DB)
                └── RefreshToken
 ```
 
 **Invariantes de integridad:**
 - `order_history` protegido con PostgreSQL RULEs `no_update` + `no_delete`
-- Todos los queries scopeados por `org_id` — aislamiento multi-tenant garantizado
+- Todos los queries scopeados por `org_id` - aislamiento multi-tenant garantizado
 - Fechas de negocio en zona Colombia (UTC-5, sin DST)
 - Eliminar un producto no rompe pedidos históricos (nombre guardado como texto)
 
@@ -223,7 +223,7 @@ Organization ──┬── User (admin | encargado | domiciliario)
 
 ## 🏗️ Deploy en producción
 
-### Variables de entorno — Railway (API)
+### Variables de entorno - Railway (API)
 
 ```env
 DATABASE_URL=postgresql://...        # Auto-provisto por Railway PostgreSQL
@@ -246,7 +246,7 @@ R2_SECRET_ACCESS_KEY=...
 R2_BUCKET_NAME=4client-files
 ```
 
-### Variables de entorno — Vercel (Web)
+### Variables de entorno - Vercel (Web)
 
 ```env
 VITE_API_URL=https://tu-api.up.railway.app
@@ -299,9 +299,9 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 │       ├── public/                (icons PWA)
 │       └── src/
 │           ├── components/
-│           │   ├── config/        (ConfigTab — productos, empleados, usuarios)
+│           │   ├── config/        (ConfigTab - productos, empleados, usuarios)
 │           │   ├── dashboard/     (ResumenTab)
-│           │   ├── inbox/         (InboxPanel — chats WPP)
+│           │   ├── inbox/         (InboxPanel - chats WPP)
 │           │   ├── modals/        (NuevoPedido, DetallePedido, Ticket, Cierre)
 │           │   ├── orders/        (Swimlane, ProductSearch)
 │           │   └── ui/            (Toast, ConfirmModal)
@@ -322,7 +322,7 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1 — Core + WhatsApp (COMPLETO)
+### ✅ Phase 1 - Core + WhatsApp (COMPLETO)
 - Kanban de pedidos por día
 - WhatsApp Business API integración completa
 - Facturas PDF con descarga
@@ -332,14 +332,14 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 - Deploy Railway + Vercel + Cloudflare R2
 - Multi-tenant desde el día 1
 
-### 🔄 Phase 2 — Escalabilidad Multi-cliente
+### 🔄 Phase 2 - Escalabilidad Multi-cliente
 - [ ] Panel super-admin para gestionar orgs
 - [ ] Onboarding automático de nuevos negocios
 - [ ] Landing page pública de 4Client
 - [ ] Facturación a clientes (Stripe / PSE)
 - [ ] Dominio personalizado por cliente (`app.sunegocio.com`)
 
-### 🔮 Phase 3 — Inteligencia de negocio
+### 🔮 Phase 3 - Inteligencia de negocio
 - [ ] Historial de clientes frecuentes
 - [ ] Notificaciones de demora al cliente por WPP
 - [ ] Catálogo automático por WhatsApp
@@ -352,7 +352,7 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 
 | Rol | Acceso |
 |-----|--------|
-| `admin` | Todo — Configuración, Informe del día, Chats WPP, gestión de usuarios |
+| `admin` | Todo - Configuración, Informe del día, Chats WPP, gestión de usuarios |
 | `encargado` | Gestionar pedidos, crear pedidos, ver swimlane |
 | `domiciliario` | Ver y mover pedidos propios |
 
@@ -362,6 +362,6 @@ push/PR → typecheck (API + Web) → build (API + Web) → ✅
 
 Hecho con ❤️ en Colombia 🇨🇴
 
-**4Client** — *Tecnología para negocios que crecen*
+**4Client** - *Tecnología para negocios que crecen*
 
 </div>

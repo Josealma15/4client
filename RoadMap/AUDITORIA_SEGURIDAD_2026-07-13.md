@@ -64,7 +64,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 - [ ] All credentials rotated and verified working
 - [ ] New values only in deployment platform (Railway, Vercel), never in git
 - [ ] .env.example has only placeholders
-- [ ] git log checked — no real secrets in history
+- [ ] git log checked - no real secrets in history
 
 ---
 
@@ -460,7 +460,7 @@ Update `vercel.json` CSP header:
 
 ### MEDIUM Finding #9-13: Token Storage, Draft Privacy, Pagination, CORS, Audit Logging
 
-(Details in full report above — address in prioritized order)
+(Details in full report above - address in prioritized order)
 
 **Timeline:** 1-2 days total for all 5 medium items
 
@@ -478,43 +478,43 @@ Update `vercel.json` CSP header:
 
 The application demonstrates excellent foundational security:
 
-- ✓ **Input Validation** — Zod schemas on all routes with constraints
-- ✓ **JWT Auth** — Verification on all protected endpoints
-- ✓ **Role-Based Access** — requireRole() enforces admin/encargado/dev
-- ✓ **Organization Scoping** — All queries filtered by org_id (no IDOR)
-- ✓ **Webhook Security** — HMAC-SHA256 signature verification
-- ✓ **File Upload Protection** — Filename regex validation, path traversal prevention
-- ✓ **Error Handling** — Stack traces hidden in production
-- ✓ **API Design** — POST-only mutations, consistent error responses
-- ✓ **Real-time Security** — JWT verification on Socket.IO, room-based auth
-- ✓ **Cryptography** — AES-256-GCM with random IVs for token encryption
-- ✓ **Dependency Management** — pnpm lockfile, no known vulnerabilities
-- ✓ **Security Headers** — X-Frame-Options, X-Content-Type-Options, CSP
-- ✓ **Code Quality** — TypeScript strict mode, structured logging
+- ✓ **Input Validation** - Zod schemas on all routes with constraints
+- ✓ **JWT Auth** - Verification on all protected endpoints
+- ✓ **Role-Based Access** - requireRole() enforces admin/encargado/dev
+- ✓ **Organization Scoping** - All queries filtered by org_id (no IDOR)
+- ✓ **Webhook Security** - HMAC-SHA256 signature verification
+- ✓ **File Upload Protection** - Filename regex validation, path traversal prevention
+- ✓ **Error Handling** - Stack traces hidden in production
+- ✓ **API Design** - POST-only mutations, consistent error responses
+- ✓ **Real-time Security** - JWT verification on Socket.IO, room-based auth
+- ✓ **Cryptography** - AES-256-GCM with random IVs for token encryption
+- ✓ **Dependency Management** - pnpm lockfile, no known vulnerabilities
+- ✓ **Security Headers** - X-Frame-Options, X-Content-Type-Options, CSP
+- ✓ **Code Quality** - TypeScript strict mode, structured logging
 
 ---
 
 ## Remediation Timeline
 
 ### IMMEDIATE (Before Launch - 4 hours)
-- [ ] Rotate all credentials (Critical #1) — 1h
-- [ ] Update password policy (Critical #2) — 0.5h
-- [ ] Implement form-link revocation (Critical #3) — 1.5h
-- [ ] Deploy and verify all 3 fixes — 1h
+- [ ] Rotate all credentials (Critical #1) - 1h
+- [ ] Update password policy (Critical #2) - 0.5h
+- [ ] Implement form-link revocation (Critical #3) - 1.5h
+- [ ] Deploy and verify all 3 fixes - 1h
 
 ### Week 1 (Post-Launch)
-- [ ] Implement per-user rate limiting (High #4) — 0.5h
-- [ ] Sanitize error logs (High #5) — 1h
-- [ ] Sanitize WhatsApp messages (High #6) — 1h
-- [ ] Add HTTPS enforcement (High #7) — 0.25h
-- [ ] Fix CSP (High #8) — 0.25h
-- [ ] Address 5 medium items — 2-3h
+- [ ] Implement per-user rate limiting (High #4) - 0.5h
+- [ ] Sanitize error logs (High #5) - 1h
+- [ ] Sanitize WhatsApp messages (High #6) - 1h
+- [ ] Add HTTPS enforcement (High #7) - 0.25h
+- [ ] Fix CSP (High #8) - 0.25h
+- [ ] Address 5 medium items - 2-3h
 
 ### Month 1 (Backlog)
-- [ ] Audit logging system (Medium #5) — 2h
-- [ ] 2FA for admin accounts (Low #17) — 3h
-- [ ] Security.txt & disclosure policy (Low #21) — 0.5h
-- [ ] Remaining 10 low-priority items — backlog
+- [ ] Audit logging system (Medium #5) - 2h
+- [ ] 2FA for admin accounts (Low #17) - 3h
+- [ ] Security.txt & disclosure policy (Low #21) - 0.5h
+- [ ] Remaining 10 low-priority items - backlog
 
 ---
 

@@ -2,7 +2,7 @@ import { useAuthStore } from '../store/auth';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api/v1';
 
-// Prevent concurrent refresh calls — all 401s share one in-flight refresh
+// Prevent concurrent refresh calls - all 401s share one in-flight refresh
 let refreshPromise: Promise<boolean> | null = null;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -19,7 +19,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   // Only treat a 401 as "session expired, try to refresh" when this request actually
   // carried a session token. Without this guard, a 401 from e.g. login with a wrong
-  // password (no token attached — nothing to refresh) triggered a doomed refresh
+  // password (no token attached - nothing to refresh) triggered a doomed refresh
   // attempt anyway, which always failed and overwrote the real "Credenciales
   // incorrectas" server message with a generic "UNAUTHORIZED" error.
   if (res.status === 401 && token) {
@@ -32,8 +32,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = await res.json();
   if (!res.ok) {
     // Carry the full response body on the thrown error (not just the top-level
-    // message) so callers that need structured detail — e.g. cierre's list of
-    // orders still missing a decision — don't have to re-fetch or guess.
+    // message) so callers that need structured detail - e.g. cierre's list of
+    // orders still missing a decision - don't have to re-fetch or guess.
     const err = new Error(data?.error ?? 'Error del servidor') as Error & { code?: string; data?: any };
     err.code = data?.code;
     err.data = data;
@@ -53,16 +53,16 @@ async function doRefresh(): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/auth/refresh`, {
       method: 'POST',
-      // No body is sent — the refresh token lives in the HttpOnly cookie, nothing else
+      // No body is sent - the refresh token lives in the HttpOnly cookie, nothing else
       // is needed. A 'Content-Type: application/json' header with no body made Fastify
       // reject every single refresh attempt with 400 FST_ERR_CTP_EMPTY_JSON_BODY before
-      // the route handler (and its cookie check) ever ran — this is THE actual cause of
+      // the route handler (and its cookie check) ever ran - this is THE actual cause of
       // "session closes on reload/refresh": refresh never worked, full stop, regardless
       // of the cookie's SameSite/Secure attributes being correct.
       credentials: 'include', // HttpOnly cookie sent automatically
     });
     if (!res.ok) {
-      // Diagnostic only — this is the one path that keeps causing "session closes
+      // Diagnostic only - this is the one path that keeps causing "session closes
       // out of nowhere" reports with no way to tell WHY from the outside. Next time
       // it happens, check the browser console for this line: it tells us whether the
       // cookie made it to the server at all (401 body) vs the request never reached

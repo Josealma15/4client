@@ -9,17 +9,17 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-// Pre-computed dummy hash — prevents timing attack revealing user existence.
+// Pre-computed dummy hash - prevents timing attack revealing user existence.
 // bcrypt.compare always runs regardless of whether user was found.
 const DUMMY_HASH = '$2b$12$LzVFpXDW.jkMhGlXb2WiIeq3rAhnWPvVRqSRLCLdTT0W5HjCMfBtm';
 
 // Frontend (Vercel) and backend (Railway) are different origins, so this cookie is
 // sent on cross-site fetches. SameSite=Strict/Lax is NEVER sent cross-site by
-// browsers — that silently broke refresh on every page reload, logging users out.
+// browsers - that silently broke refresh on every page reload, logging users out.
 // SameSite=None requires Secure, which requires HTTPS.
 //
 // This is derived from the actual request protocol (via trustProxy + X-Forwarded-Proto,
-// set by Railway's edge) instead of NODE_ENV — if NODE_ENV isn't explicitly set to
+// set by Railway's edge) instead of NODE_ENV - if NODE_ENV isn't explicitly set to
 // "production" in the deploy platform's env vars (easy to miss, defaults to
 // "development" in config.ts), basing this on NODE_ENV would silently reintroduce
 // the exact same cross-site cookie bug in a "production" deploy that just forgot
@@ -36,7 +36,7 @@ function cookieOpts(req: FastifyRequest) {
 }
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  // POST /api/v1/auth/login — rate limited to 10 attempts/min per IP
+  // POST /api/v1/auth/login - rate limited to 10 attempts/min per IP
   fastify.post('/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = loginSchema.safeParse(req.body);
     if (!body.success) {
@@ -74,7 +74,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       data: { last_login: new Date() },
     });
 
-    // Best-effort cleanup of this user's stale tokens — keeps the table from growing forever.
+    // Best-effort cleanup of this user's stale tokens - keeps the table from growing forever.
     fastify.prisma.refreshToken.deleteMany({
       where: { user_id: user.id, OR: [{ revoked: true }, { expires_at: { lt: new Date() } }] },
     }).catch((err) => fastify.log.warn({ err }, 'No se pudo limpiar refresh tokens vencidos'));
@@ -100,7 +100,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // POST /api/v1/auth/refresh — reads refresh token from HttpOnly cookie
+  // POST /api/v1/auth/refresh - reads refresh token from HttpOnly cookie
   fastify.post('/refresh', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const rawRefresh = (req.cookies as Record<string, string>)?.rf;
     if (!rawRefresh) {
@@ -110,7 +110,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const tokenHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
 
     // Look up regardless of revoked status so we can distinguish "never existed"
-    // from "already used" — the latter means the token was stolen and replayed.
+    // from "already used" - the latter means the token was stolen and replayed.
     const stored = await fastify.prisma.refreshToken.findFirst({
       where: { token_hash: tokenHash },
       include: { user: { include: { org: true } } },

@@ -26,7 +26,7 @@ function toYMD(y: number, m: number, d: number): string {
 }
 
 // Native <input type="date"> renders its popup calendar via internal browser UI (not
-// page DOM) — its "Today"/"Clear" button labels follow the browser's own interface
+// page DOM) - its "Today"/"Clear" button labels follow the browser's own interface
 // language, not the page's `lang` attribute or content, so there is no way to make
 // that native picker show Spanish text. This component replaces it with one we fully
 // control instead of another attribute that silently doesn't do anything in Chromium.

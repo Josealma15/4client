@@ -1,5 +1,5 @@
 // Shared test infrastructure: boots a Fastify instance the same way server.ts does
-// (same plugin registrations — cookie, cors, jwt, rate-limit, prisma, socket.io — and
+// (same plugin registrations - cookie, cors, jwt, rate-limit, prisma, socket.io - and
 // the same routes under test) but without calling .listen(), plus fixture helpers that
 // insert directly via Prisma. Uses fastify.inject() instead of real HTTP requests.
 import Fastify, { type FastifyInstance, type FastifyError } from 'fastify';

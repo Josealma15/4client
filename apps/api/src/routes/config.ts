@@ -5,7 +5,7 @@ import { encryptSecret } from '../lib/crypto.js';
 import { audit } from '../lib/audit.js';
 
 export default async function configRoutes(fastify: FastifyInstance) {
-  // GET /api/v1/config/org — get org config visible to admin/dev
+  // GET /api/v1/config/org - get org config visible to admin/dev
   fastify.get('/org', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const org = await fastify.prisma.organization.findUnique({
       where: { id: req.user.orgId },
@@ -20,7 +20,7 @@ export default async function configRoutes(fastify: FastifyInstance) {
     return reply.send({ data: org });
   });
 
-  // PATCH /api/v1/config/wpp — update WPP credentials + welcome message
+  // PATCH /api/v1/config/wpp - update WPP credentials + welcome message
   fastify.patch('/wpp', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const body = z.object({
       wpp_meta_phone_id: z.string().min(1).optional(),

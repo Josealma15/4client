@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// 12+ chars with upper/lower/digit — NIST-aligned minimum, applied to user creation
+// 12+ chars with upper/lower/digit - NIST-aligned minimum, applied to user creation
 // and password resets. Login (auth.ts) intentionally does NOT use this: it must keep
 // accepting whatever an already-existing user's password is, even a pre-policy one.
 export const passwordSchema = z.string()

@@ -7,11 +7,11 @@ export function fmtDate(d: string | Date): string {
   return date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Bogota' });
 }
 
-// Colombia's calendar date (UTC-5, no DST) for an instant — NOT the device's own local
+// Colombia's calendar date (UTC-5, no DST) for an instant - NOT the device's own local
 // date. Using the device's local getters (new Date().getFullYear() etc.) only happens
 // to be correct if the device's own timezone is set to Bogotá; on any other timezone
 // (or just a misconfigured device) "today" could read as the wrong day, off by one
-// around the boundary — which is exactly what shifts a Saturday into showing as Sunday.
+// around the boundary - which is exactly what shifts a Saturday into showing as Sunday.
 export function colombiaDateStr(d: Date | string = new Date()): string {
   const date = typeof d === 'string' ? new Date(d) : d;
   const col = new Date(date.getTime() - 5 * 3600000);

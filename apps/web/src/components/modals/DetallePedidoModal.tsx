@@ -8,7 +8,7 @@ import { getSocket } from '../../lib/socket';
 import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useDiaCerrado } from '../../hooks/useCierre';
-import { STATUS_LABEL, STATUS_ORDER, fmtCOP, PAYMENT_LABEL } from '../../lib/format';
+import { STATUS_LABEL, STATUS_ORDER, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
 import { toast } from '../ui/Toast';
 import ProductSearch from '../orders/ProductSearch';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -25,7 +25,7 @@ function formatHour(raw: string | null | undefined): string {
   if (!raw) return '-';
   // order_hour is a DB TIME column (no date/timezone) stored using the server's clock
   // (UTC on Railway). Prisma serializes it as an epoch-day ISO string with a "Z" suffix,
-  // so it must be converted to Colombia local time explicitly — reading getUTCHours()
+  // so it must be converted to Colombia local time explicitly - reading getUTCHours()
   // directly (old behavior) showed the raw UTC hour, ~5h ahead of the real local time.
   const d = raw.includes('T') ? new Date(raw) : new Date(`1970-01-01T${raw}Z`);
   return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
@@ -35,6 +35,21 @@ function formatDateTime(raw: string | null | undefined): string {
   if (!raw) return '-';
   return new Date(raw).toLocaleString('es-CO', {
     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota',
+  });
+}
+
+// order.fecha is a DATE-only column (no real time-of-day), serialized as midnight UTC
+// for that calendar day. Converting that straight through a Bogota (UTC-5) timezone
+// conversion — like formatDateTime does for real timestamps — reads it as 7pm the
+// PREVIOUS day, which is exactly why an invoice for a past pedido was printing
+// today's date if built from `new Date()`, or would print the wrong day even if built
+// from the order's own fecha the naive way. Pin to noon UTC first so no timezone
+// offset in practical use can push it across a day boundary either direction.
+function formatFechaLong(raw: string | null | undefined): string {
+  if (!raw) return '-';
+  const ymd = raw.split('T')[0];
+  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CO', {
+    day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota',
   });
 }
 
@@ -56,7 +71,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const accessToken = useAuthStore((s) => s.accessToken);
   const isAdmin = user?.role === 'admin';
   // encargado has the same order-management permissions as admin everywhere else in
-  // the app (can cobro, move status, etc. — see requireRole('admin', 'encargado') on
+  // the app (can cobro, move status, etc. - see requireRole('admin', 'encargado') on
   // the backend) except this modal, where a stricter admin-only isAdmin left them
   // without the papelera button and other actions admin has on the exact same order.
   const canManage = isAdmin || user?.role === 'encargado' || user?.role === 'dev';
@@ -71,7 +86,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   });
 
   // The order's OWN day, not whatever day the caller happened to be viewing when it
-  // opened this modal — this can be opened from search/notifications too, not just
+  // opened this modal - this can be opened from search/notifications too, not just
   // the board for the currently-selected date.
   const orderFecha: string | undefined = order?.fecha ? new Date(order.fecha).toISOString().split('T')[0] : undefined;
   const { data: cierreStatus } = useDiaCerrado(orderFecha);
@@ -95,7 +110,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
   useEffect(() => {
     if (!order) return;
-    // Don't stomp an in-progress edit — if the person has unsaved local changes when
+    // Don't stomp an in-progress edit - if the person has unsaved local changes when
     // a live update lands (e.g. the client added items to this order from the form),
     // the fresh data is still in the cache for whenever they save/close, but pulling
     // it into the form fields right now would silently discard what they were typing.
@@ -114,20 +129,29 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     setIsDirty(false);
   }, [order]);
 
-  // Live-update this open order when it changes elsewhere — most importantly, a
+  // Live-update this open order when it changes elsewhere - most importantly, a
   // client adding items to it via the form (merge flow) while a staff member already
   // has it open. Without this, they'd only see the new items after closing and
   // reopening the modal.
   useEffect(() => {
     if (!accessToken || !orderId) return;
     const sock = getSocket(accessToken);
-    const onOrderChange = (data: { id?: string; orderId?: string }) => {
+    const onOrderChange = (data: any) => {
       const changedId = data?.id ?? data?.orderId;
       if (changedId !== orderId) return;
       if (isDirty || catalogDirty) {
-        toast('Este pedido se actualizó (el cliente agregó productos) — guarda tus cambios para no perderlos');
+        toast('Este pedido se actualizó (el cliente agregó productos) - guarda tus cambios para no perderlos');
       }
-      qc.invalidateQueries({ queryKey: ['order', orderId] });
+      // order:updated already carries the FULL fresh order (public.ts/orders.ts emit
+      // the complete row) - write it straight into the cache instead of just
+      // invalidating and waiting on a redundant network refetch. That extra round
+      // trip was the visible lag between a client's edit landing and this modal
+      // (when not mid-edit itself) actually showing the new address/payment/items.
+      if (data?.id && data?.items) {
+        qc.setQueryData(['order', orderId], data);
+      } else {
+        qc.invalidateQueries({ queryKey: ['order', orderId] });
+      }
     };
     sock.on('order:updated', onOrderChange);
     sock.on('order:paid', onOrderChange);
@@ -145,7 +169,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       ? api.get<{ data: any }>(`/inbox/${order.ticket_id}/messages`).then((r) => r.data)
       : null,
     enabled: !!order?.ticket_id,
-    // Fallback only — real-time delivery is via socket, but a missed/late socket event
+    // Fallback only - real-time delivery is via socket, but a missed/late socket event
     // shouldn't leave this open conversation stale for longer than this.
     refetchInterval: 30000,
   });
@@ -219,10 +243,19 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   });
 
   const replyMut = useMutation({
-    mutationFn: (text: string) => api.post(`/inbox/${order?.ticket_id}/reply`, { text }),
-    onSuccess: () => {
+    mutationFn: (text: string) => api.post<{ data: any; wpp_status: string; wpp_error?: string }>(`/inbox/${order?.ticket_id}/reply`, { text }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['inbox-convo', order?.ticket_id] });
       setReplyText('');
+      // This panel silently dropped WhatsApp send failures (e.g. outside Meta's 24h
+      // customer-service window) - the message still saved+showed here, so staff had
+      // no way to know it never reached the client. InboxPanel already surfaces this;
+      // match it here.
+      if (res?.wpp_status === 'failed') {
+        toast(`Mensaje guardado pero falló el envío a WhatsApp: ${res.wpp_error ?? 'error Meta API'}`, true);
+      } else if (res?.wpp_status === 'no_credentials') {
+        toast('Mensaje guardado, pero este negocio no tiene WhatsApp conectado', true);
+      }
     },
     onError: (e: any) => toast(e.message, true),
   });
@@ -248,7 +281,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
   const blockLinkMut = useMutation({
     mutationFn: () => api.post(`/inbox/${order?.ticket_id}/form-link/revoke`, {}),
-    onSuccess: () => toast('Link bloqueado — el cliente ya no puede usarlo'),
+    onSuccess: () => toast('Link bloqueado - el cliente ya no puede usarlo'),
     onError: (e: any) => toast(e.message ?? 'No se pudo bloquear el link', true),
   });
 
@@ -265,7 +298,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     doc.text(user?.orgName ?? '4Client', 40, y, { align: 'center' }); y += 7;
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.text(`Pedido #${order.num}`, 40, y, { align: 'center' }); y += 5;
-    doc.text(new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota' }), 40, y, { align: 'center' }); y += 5;
+    doc.text(formatFechaLong(order.fecha), 40, y, { align: 'center' }); y += 5;
     doc.line(3, y, 77, y); y += 5;
 
     doc.setFontSize(9);
@@ -285,7 +318,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     }
 
     doc.line(3, y, 77, y); y += 5;
-    // Column table — Producto | Cantidad | Precio, each value aligned under its own
+    // Column table - Producto | Cantidad | Precio, each value aligned under its own
     // header instead of one concatenated line, so a printed copy reads like a real
     // invoice/receipt rather than a run-on list.
     doc.setFont('helvetica', 'bold');
@@ -301,7 +334,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       const priceStr = `$${price.toLocaleString('es-CO')}`;
       const nameLines = doc.splitTextToSize(i.product_name, 34);
       doc.text(nameLines, 3, y);
-      doc.text(i.quantity_label || '—', 48, y, { align: 'center' });
+      doc.text(i.quantity_label || '-', 48, y, { align: 'center' });
       doc.text(priceStr, 77, y, { align: 'right' });
       y += nameLines.length * 4 + 1.5;
     });
@@ -321,7 +354,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   function generatePDF(): void {
     const doc = buildPDFDoc();
     if (!doc || !order) return;
-    // doc.save() always forces a browser download with no way to opt out — open it in
+    // doc.save() always forces a browser download with no way to opt out - open it in
     // a new tab instead so the browser's own PDF viewer shows it; downloading from
     // there, if wanted, stays a deliberate action the person takes themselves.
     window.open(doc.output('bloburl'), '_blank');
@@ -397,16 +430,20 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
   const locked = order.locked;
   // Frozen because its day was closed (regardless of this specific order's own
-  // `locked` flag — even an order left "dejar_activo" at cierre time stops being
+  // `locked` flag - even an order left "dejar_activo" at cierre time stops being
   // editable once that day is history) vs. frozen because it was individually paid
-  // and closed — same read-only effect, different reason, so the "already
+  // and closed - same read-only effect, different reason, so the "already
   // paid/closed" info banner below stays tied to `locked` alone, not `readOnly`.
   const readOnly = locked || diaCerrado;
+  // Same reasoning as TicketModal - the link itself already expires by end of the
+  // Colombia day it was sent, so sending/blocking one from a past-day order's chat
+  // is always acting on an already-dead link.
+  const isPastDay = !!orderFecha && orderFecha < todayStr();
   const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
   const recibido = parseFloat(cobroRec) || 0;
   const devolucion = recibido - total;
   const faltaOSobra = recibido > 0 ? (devolucion >= 0 ? `Vuelto: ${fmtCOP(devolucion)}` : `Falta: ${fmtCOP(-devolucion)}`) : null;
-  // A pedido can't be closed with any of these missing — mirrors the same check enforced
+  // A pedido can't be closed with any of these missing - mirrors the same check enforced
   // server-side in POST /orders/:id/cobro, so the UI blocks it before the request even goes out.
   const cierreMissing: string[] = [];
   if (!nombre.trim()) cierreMissing.push('nombre');
@@ -448,22 +485,22 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                 <button
                   className="hdr-ic-btn"
-                  title="Enviar formulario de pedido al cliente"
+                  title={isPastDay ? 'Este pedido es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
                   onClick={sendFormLink}
-                  disabled={formLinkMut.isPending}
+                  disabled={formLinkMut.isPending || isPastDay}
                 >
                   <ClipboardList size={13} />
                   Formulario
                 </button>
                 <button
                   className="hdr-ic-btn"
-                  title="Bloquear el link de formulario enviado a este cliente"
+                  title={isPastDay ? 'Este pedido es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
                   onClick={() => setConfirmDlg({
-                    msg: 'Vas a bloquear el link del formulario — el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
+                    msg: 'Vas a bloquear el link del formulario - el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
                     onOk: () => blockLinkMut.mutate(),
                     danger: true,
                   })}
-                  disabled={blockLinkMut.isPending}
+                  disabled={blockLinkMut.isPending || isPastDay}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>
@@ -503,7 +540,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Reply bar — visible to all roles */}
+            {/* Reply bar - visible to all roles */}
             <div style={{
               display: 'flex', gap: 6, padding: '8px 8px',
               borderTop: '1px solid rgba(0,0,0,.1)', background: '#F0F0F0', flexShrink: 0,
@@ -545,7 +582,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div className="mtit" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 Pedido #{order.num}
                 {order.client_modified && (
-                  <span title="El cliente modificó este pedido desde el formulario — revisa los cambios (en rojo) y guarda para confirmar que ya los viste"
+                  <span title="El cliente modificó este pedido desde el - revisa los cambios (en rojo) y guarda para confirmar que ya los viste"
                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#DC2626' }}>
                     <Bell size={12} color="#fff" fill="#fff" />
                   </span>
@@ -595,7 +632,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
             {!locked && diaCerrado && (
               <div style={{ background: 'var(--gm)', border: '1.5px solid var(--brd)', borderRadius: 'var(--rad)', padding: '12px 14px', marginBottom: 14, fontSize: 13, color: 'var(--gt)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Lock size={15} /> Este día ya fue cerrado — vista de solo lectura.
+                <Lock size={15} /> Este día ya fue cerrado - vista de solo lectura.
               </div>
             )}
 
@@ -666,7 +703,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               clearKey={catalogClearKey}
             />
 
-            {/* History — visible to whoever can manage this order */}
+            {/* History - visible to whoever can manage this order */}
             {canManage && order.history && order.history.length > 0 && (
               <div>
                 <div className={`hist-toggle${showHist ? ' open' : ''}`} onClick={() => setShowHist(!showHist)}>

@@ -19,20 +19,20 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
   const qc = useQueryClient();
 
   // GET /orders (orders.ts) includes an order here for two different reasons: (a) its
-  // real, current `fecha` is today, or (b) it's a "ghost" — already deferred AWAY from
+  // real, current `fecha` is today, or (b) it's a "ghost" - already deferred AWAY from
   // today by an earlier cierre, kept only so the board can show a dimmed trace of where
   // it used to be (see Swimlane.tsx's identical isGhost logic). Only (b) should be
-  // excluded here. The previous check — any `pasado_manana:` substring, regardless of
-  // date — also matched orders deferred out of some OTHER, earlier day that are still
+  // excluded here. The previous check - any `pasado_manana:` substring, regardless of
+  // date - also matched orders deferred out of some OTHER, earlier day that are still
   // genuinely pending today (fecha really is today), silently hiding them from this
   // modal's decision list. cierre.ts's backend check only looks at the real `fecha`
-  // column, so it still demanded a decision for them — a 400 MISSING_DECISIONS the UI
+  // column, so it still demanded a decision for them - a 400 MISSING_DECISIONS the UI
   // gave no way to fix, since the order was invisible here. Matching the marker's own
   // date against the day being closed (like Swimlane does) fixes that.
   const nonPapelera = orders.filter((o) => {
     if (o.status === 'papelera') return false;
     // notes can carry MULTIPLE pasado_manana:DATE markers (one per deferral, if an
-    // order got left open two cierres in a row) — matching only the first one (old
+    // order got left open two cierres in a row) - matching only the first one (old
     // behavior) missed a ghost whenever its marker wasn't first in the string. Same
     // fix as Swimlane.tsx: check every marker, not just one.
     const deferredDates = [...(o.notes?.matchAll(/pasado_manana:(\d{4}-\d{2}-\d{2})/g) ?? [])].map((m: RegExpMatchArray) => m[1]);
@@ -42,8 +42,8 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
   const completados = nonPapelera.filter((o) => o.paid || o.status === 'cerrado');
   const pendingOrders = nonPapelera.filter((o) => !o.paid && o.status !== 'cerrado');
 
-  // A pending order tied to a chat drives its ticket's fate on its own — cierre.ts
-  // already sets ticket.deferred_to when that order's decision is "manana" — so there's
+  // A pending order tied to a chat drives its ticket's fate on its own - cierre.ts
+  // already sets ticket.deferred_to when that order's decision is "manana" - so there's
   // no separate ticket-level decision to make for these; showing both was two decisions
   // for what's really one action. Group them: chat header, its pending order(s) indented
   // underneath with their normal per-order decision selects.
@@ -56,7 +56,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
     orders: pendingOrdersWithTicket.filter((o) => o.ticket_id === ticketId),
   }));
 
-  // Chats that still need their OWN decision — nothing pending to hang it on (already
+  // Chats that still need their OWN decision - nothing pending to hang it on (already
   // shown grouped above), just no order at all or unread messages to acknowledge.
   const ticketOnlyRows = tickets.filter((t: any) => {
     if (t.deferred_to) return false; // ya fue diferido antes, no mostrar de nuevo
@@ -66,7 +66,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
     return hasNoOrders || hasUnread;
   });
 
-  // No defaults — user must explicitly choose for each pending order
+  // No defaults - user must explicitly choose for each pending order
   const [decisions, setDecisions] = useState<Record<string, Decision | ''>>(() =>
     Object.fromEntries(pendingOrders.map((o) => [o.id, '' as Decision | '']))
   );
@@ -235,7 +235,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 </div>
               )}
 
-              {/* Chat + su(s) pedido(s) pendiente(s) indentados debajo — una sola decisión
+              {/* Chat + su(s) pedido(s) pendiente(s) indentados debajo - una sola decisión
                   (la del pedido) mueve ambos, cierre.ts ya difiere el ticket junto con él. */}
               {ticketGroups.map(({ ticketId, ticketInfo, orders: tOrders }) => (
                 <div key={ticketId} className="warn-ord" style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: '3px solid var(--az)' }}>
@@ -266,7 +266,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                             onChange={(e) => setDecisions({ ...decisions, [o.id]: e.target.value as Decision | '' })}
                             style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--a)' }}
                           >
-                            <option value="" disabled>— Elegir acción —</option>
+                            <option value="" disabled>- Elegir acción -</option>
                             <option value="dejar_activo">Dejar activo (sin cambios)</option>
                             <option value="manana">Pasar a mañana</option>
                             <option value="forzar_cierre">Cerrar sin cobro</option>
@@ -299,7 +299,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                       onChange={(e) => setTicketDecisions({ ...ticketDecisions, [t.id]: e.target.value as TicketDecision | '' })}
                       style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--az)' }}
                     >
-                      <option value="" disabled>— Elegir acción —</option>
+                      <option value="" disabled>- Elegir acción -</option>
                       <option value="manana">Pasar a mañana</option>
                       <option value="atendido">Marcar como atendido</option>
                     </select>
@@ -307,7 +307,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 );
               })}
 
-              {/* Pedidos sin chat asociado (llamada/en persona) — no hay ticket bajo el cual agrupar */}
+              {/* Pedidos sin chat asociado (llamada/en persona) - no hay ticket bajo el cual agrupar */}
               {pendingOrdersNoTicket.map((o) => {
                 const total = o.items.reduce((s: number, i: any) => s + Number(i.price), 0);
                 const hasDecision = !!decisions[o.id];
@@ -325,7 +325,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                       onChange={(e) => setDecisions({ ...decisions, [o.id]: e.target.value as Decision | '' })}
                       style={{ borderColor: hasDecision ? 'var(--v)' : 'var(--a)' }}
                     >
-                      <option value="" disabled>— Elegir acción —</option>
+                      <option value="" disabled>- Elegir acción -</option>
                       <option value="dejar_activo">Dejar activo (sin cambios)</option>
                       <option value="manana">Pasar a mañana</option>
                       <option value="forzar_cierre">Cerrar sin cobro</option>

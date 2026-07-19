@@ -205,7 +205,7 @@ export default function ProductsSection() {
           const collapsed = !expandedCats.has(cat);
           return (
             <div key={cat} style={{ marginBottom: 12, border: '1.5px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden' }}>
-              {/* Category header — clickable to collapse */}
+              {/* Category header - clickable to collapse */}
               <button
                 onClick={() => toggleCat(cat)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--gm)', border: 'none', cursor: 'pointer', textAlign: 'left' }}>

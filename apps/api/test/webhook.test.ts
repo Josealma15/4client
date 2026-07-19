@@ -4,7 +4,7 @@ import { buildTestServer } from './helpers.js';
 
 // Only the GET verification handshake is covered here. The POST message-ingestion
 // path requires real Meta HMAC signing and org WPP credentials, which is a heavier
-// fixture — intentionally out of scope / lower priority per the audit roadmap.
+// fixture - intentionally out of scope / lower priority per the audit roadmap.
 describe('webhook verification handshake', () => {
   let app: FastifyInstance;
 

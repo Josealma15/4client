@@ -5,7 +5,7 @@ import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 import { config } from '../config.js';
 
 export default async function inboxRoutes(fastify: FastifyInstance) {
-  // GET /api/v1/inbox — lista de todas las conversaciones, solo admin
+  // GET /api/v1/inbox - lista de todas las conversaciones, solo admin
   fastify.get('/', { preHandler: [authenticate, requireRole('admin')] }, async (req, reply) => {
     const query = z.object({ page: z.coerce.number().default(1) }).parse(req.query);
 
@@ -33,8 +33,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     return reply.send({ data: tickets });
   });
 
-  // GET /api/v1/inbox/:ticketId/messages — historial completo del chat (todos los roles pueden ver)
-  // Orders attached to the ticket are scoped to `fecha` when given — a chat opened
+  // GET /api/v1/inbox/:ticketId/messages - historial completo del chat (todos los roles pueden ver)
+  // Orders attached to the ticket are scoped to `fecha` when given - a chat opened
   // from a given day on the board must only show that day's pedido, not every order
   // this customer ever placed (a ticket is one row per phone forever, see schema).
   // No `fecha` (older/other callers) falls back to the previous unscoped behavior.
@@ -68,7 +68,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     return reply.send({ data: ticket });
   });
 
-  // POST /api/v1/inbox/:ticketId/reply — responder desde 4Client, todos los roles
+  // POST /api/v1/inbox/:ticketId/reply - responder desde 4Client, todos los roles
   fastify.post('/:ticketId/reply', { preHandler: [authenticate] }, async (req, reply) => {
     const { ticketId } = req.params as { ticketId: string };
     const body = z.object({ text: z.string().min(1).max(4096) }).safeParse(req.body);
@@ -90,7 +90,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
       include: { sender: { select: { id: true, name: true } } },
     });
 
-    // Do NOT update last_message_at on outgoing replies — only incoming customer messages should
+    // Do NOT update last_message_at on outgoing replies - only incoming customer messages should
     // move a ticket up in the queue, so the inbox order stays stable when agents reply.
     fastify.io.to(`org:${req.user.orgId}`).emit('ticket:message', { ticketId, message: message as any });
 
@@ -115,7 +115,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ data: message, wpp_status, wpp_error });
   });
 
-  // GET /api/v1/inbox/:ticketId/form-link — genera link firmado para el formulario del cliente
+  // GET /api/v1/inbox/:ticketId/form-link - genera link firmado para el formulario del cliente
   fastify.get('/:ticketId/form-link', { preHandler: [authenticate] }, async (req, reply) => {
     const { ticketId } = req.params as { ticketId: string };
 
@@ -128,7 +128,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     const sender = await fastify.prisma.user.findUnique({ where: { id: req.user.userId }, select: { name: true } });
 
     // Expires at the end of the current Colombia calendar day (UTC-5), not a flat N
-    // days from now — a link generated at 11pm and one generated at 8am must both die
+    // days from now - a link generated at 11pm and one generated at 8am must both die
     // at the same midnight, so "the link only works today" actually means today, and
     // staff sending a fresh one tomorrow is what lets that new order find/merge with
     // whatever's already open from today (see public.ts's open-orders lookup).
@@ -138,7 +138,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     const expiresInSeconds = Math.max(60, Math.floor((tomorrowColMidnightUtcMs - Date.now()) / 1000));
 
     // Explicit iat (instead of leaving jsonwebtoken to stamp its own "now") so it
-    // matches exactly what's written to form_token_min_iat below — the two must
+    // matches exactly what's written to form_token_min_iat below - the two must
     // agree down to the millisecond-rounded-to-second for THIS token to still pass
     // its own supersede check (public.ts's assertLinkStillValid: strictly-older
     // tokens are rejected, this one must not count as older than itself).
@@ -162,10 +162,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     ) as string;
 
     // A fresh link supersedes any earlier revocation AND every previously-issued
-    // still-unexpired link on this ticket — bumping form_token_min_iat makes
+    // still-unexpired link on this ticket - bumping form_token_min_iat makes
     // public.ts's assertLinkStillValid reject any older token automatically, so
     // staff no longer has to separately "Bloquear link" the old one before sending
-    // a new one. Also clears any device lock (public.ts's FormLinkSession) —
+    // a new one. Also clears any device lock (public.ts's FormLinkSession) -
     // sending a new link is a deliberate "start over" action, e.g. to fix a
     // false-positive lockout from the wrong device claiming an earlier link.
     await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt } });
@@ -177,7 +177,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { url } });
   });
 
-  // POST /api/v1/inbox/:ticketId/form-link/revoke — invalidates the currently
+  // POST /api/v1/inbox/:ticketId/form-link/revoke - invalidates the currently
   // outstanding form-link token for this ticket (e.g. sent to the wrong number).
   fastify.post('/:ticketId/form-link/revoke', { preHandler: [authenticate] }, async (req, reply) => {
     const { ticketId } = req.params as { ticketId: string };

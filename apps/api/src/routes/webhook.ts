@@ -62,9 +62,19 @@ async function ingestMessage(
   // Use Colombia local date (UTC-5) derived from the message timestamp
   // so the ticket fecha matches what the frontend shows as "today"
   const localMs = sentAt.getTime() + (-5 * 60 * 60 * 1000);
-  const todayLocal = new Date(new Date(localMs).toISOString().split('T')[0]);
+  const localDateStr = new Date(localMs).toISOString().split('T')[0];
+  const todayLocal = new Date(localDateStr);
 
-  // One ticket per (org, phone), forever — not per day. A customer who wrote a month
+  // Real Bogota (UTC-5, no DST) calendar-day boundaries, in actual UTC instants - used
+  // to find how many INBOUND messages this ticket already got today, so the welcome
+  // message can fire once per day rather than only using `todayLocal` (a date-only
+  // value with no time-of-day meaning, fine for ticket.fecha but not for a sent_at
+  // range query).
+  const [y, m, d] = localDateStr.split('-').map(Number);
+  const dayStartUtc = new Date(Date.UTC(y, m - 1, d, 5, 0, 0));
+  const dayEndUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000);
+
+  // One ticket per (org, phone), forever - not per day. A customer who wrote a month
   // ago and writes again today continues the exact same ticket; there's no other
   // ticket for this phone this could possibly collide with (enforced by the
   // @@unique([org_id, phone]) constraint), so this is just find-or-create.
@@ -72,10 +82,14 @@ async function ingestMessage(
     where: { org_id: org.id, phone },
   });
 
-  let isNewTicket = false;
+  // Gates the welcome auto-reply - must be "first message TODAY", not "first message
+  // this ticket ever had". A ticket is now permanent per phone (one row forever, see
+  // schema.prisma), so gating on "is this ticket brand new" alone meant a returning
+  // customer who wrote last month would never get the welcome message again.
+  let isFirstMessageToday: boolean;
 
   if (!ticket) {
-    isNewTicket = true;
+    isFirstMessageToday = true;
     ticket = await fastify.prisma.ticket.create({
       data: {
         org_id: org.id,
@@ -87,6 +101,11 @@ async function ingestMessage(
       },
     });
   } else {
+    const priorInboundToday = await fastify.prisma.ticketMessage.count({
+      where: { ticket_id: ticket.id, direction: 'in', sent_at: { gte: dayStartUtc, lt: dayEndUtc } },
+    });
+    isFirstMessageToday = priorInboundToday === 0;
+
     // Roll it forward to today (and drop any stale "queued for a specific day" flag)
     // so the board/informe pick it up wherever the conversation actually is now.
     ticket = await fastify.prisma.ticket.update({
@@ -115,7 +134,7 @@ async function ingestMessage(
   const newUnread = (ticket.unread_count ?? 0) + 1;
 
   // Auto-reply welcome message on first message of the day
-  if (isNewTicket && org.welcome_message) {
+  if (isFirstMessageToday && org.welcome_message) {
     const provider = MetaCloudProvider.fromOrg(org);
     if (provider) {
       provider.sendText(phone, org.welcome_message)
@@ -155,9 +174,9 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
   if (!config.META_APP_SECRET) {
     if (config.NODE_ENV === 'production') {
       // Fail closed: without HMAC verification the webhook would accept forged messages.
-      throw new Error('META_APP_SECRET es obligatorio en producción — configúralo antes de desplegar');
+      throw new Error('META_APP_SECRET es obligatorio en producción - configúralo antes de desplegar');
     }
-    fastify.log.warn('⚠️  META_APP_SECRET no configurado — webhook acepta solicitudes sin verificar firma HMAC (solo permitido fuera de producción)');
+    fastify.log.warn('⚠️  META_APP_SECRET no configurado - webhook acepta solicitudes sin verificar firma HMAC (solo permitido fuera de producción)');
   }
   // Capture raw body for HMAC validation before JSON parsing
   fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => {
@@ -170,7 +189,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET — Meta webhook verification handshake
+  // GET - Meta webhook verification handshake
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
     if (q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === config.META_WEBHOOK_VERIFY_TOKEN) {
@@ -180,11 +199,11 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
     return reply.status(403).send({ error: 'Token inválido' });
   });
 
-  // POST — incoming messages from Meta
+  // POST - incoming messages from Meta
   fastify.post('/', {
     config: { rateLimit: { max: 300, timeWindow: '1 minute' } },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    // HMAC-SHA256 signature validation — mandatory when META_APP_SECRET is set
+    // HMAC-SHA256 signature validation - mandatory when META_APP_SECRET is set
     const signature = (req.headers['x-hub-signature-256'] as string) ?? '';
     const rawBody = (req as FastifyRequest & { rawBody?: Buffer }).rawBody;
 
@@ -201,7 +220,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
     const payload = req.body as MetaWebhookPayload;
 
-    // Always return 200 fast — Meta retries if we're slow or error
+    // Always return 200 fast - Meta retries if we're slow or error
     reply.status(200).send({ ok: true });
 
     if (payload?.object !== 'whatsapp_business_account') return;

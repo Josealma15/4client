@@ -11,7 +11,7 @@ async function login(app: FastifyInstance, email: string, password: string): Pro
 }
 
 // Builds a filename in the exact shape POST /files/invoice generates
-// (Factura-YYYYMMDD-HHMMSS-org-num-id.pdf), stamped `hoursAgo` hours in the past —
+// (Factura-YYYYMMDD-HHMMSS-org-num-id.pdf), stamped `hoursAgo` hours in the past -
 // mirrors the -5h Bogota shift baked in at upload time (routes/files.ts).
 function stampedFilename(hoursAgo: number): string {
   const bogotaMs = Date.now() - 5 * 3600000 - hoursAgo * 3600000;

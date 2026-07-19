@@ -26,7 +26,7 @@ export default function DevDbPanel() {
   const SECRET_COLS = new Set(['password_hash', 'token_hash', 'wpp_meta_token', 'wpp_meta_app_secret']);
 
   function fmtVal(col: string, val: any): string {
-    if (val === null || val === undefined) return '—';
+    if (val === null || val === undefined) return '-';
     if (SECRET_COLS.has(col)) return '••••••••';
     if (typeof val === 'boolean') return val ? 'Sí' : 'No';
     const s = String(val);

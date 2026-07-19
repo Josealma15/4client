@@ -78,10 +78,10 @@ export default function HistoryTable({ history, showOrder }: Props) {
                   {h.notes && !isCobro && <div style={{ fontWeight: 400, color: 'var(--gt)', fontSize: 11, marginTop: 2 }}>{h.notes}</div>}
                 </td>
                 <td style={{ ...td, color: '#DC2626' }}>
-                  {fmtHistVal(h.value_before) || (isCobro ? h.notes : '') || '—'}
+                  {fmtHistVal(h.value_before) || (isCobro ? h.notes : '') || '-'}
                 </td>
                 <td style={{ padding: '8px 10px', borderBottom: '1px solid var(--brd)', color: 'var(--v)' }}>
-                  {fmtHistVal(h.value_after) || '—'}
+                  {fmtHistVal(h.value_after) || '-'}
                 </td>
               </tr>
             );

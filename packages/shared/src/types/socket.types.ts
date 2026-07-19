@@ -9,6 +9,7 @@ export interface ServerToClientEvents {
   'ticket:message': (data: { ticketId: string; message: TicketMessage }) => void;
   'ticket:unread': (data: { ticketId: string; count: number }) => void;
   'cierre:done': (data: { fecha: string }) => void;
+  'product:changed': (data: { id: string }) => void;
 }
 
 export interface ClientToServerEvents {

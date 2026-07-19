@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const org = await prisma.organization.findFirst();
-  if (!org) throw new Error('No org found — run seed first');
+  if (!org) throw new Error('No org found - run seed first');
 
   await prisma.organization.update({
     where: { id: org.id },

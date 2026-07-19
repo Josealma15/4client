@@ -213,7 +213,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
 
             return (
               <div key={key} style={{ borderBottom: '2px solid var(--brd)' }}>
-                {/* Group header — always shown */}
+                {/* Group header - always shown */}
                 <div
                   onClick={() => toggleGroup(key)}
                   style={{
@@ -272,7 +272,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
                       {isExp && (
                         <div className="ord-hist-sub" style={{ paddingLeft: 32 }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px 12px', fontSize: 13, marginBottom: orderHist.length > 0 ? 10 : 0 }}>
-                            <div><span style={{ color: 'var(--gt)' }}>Teléfono: </span>{o.customer_phone ?? '—'}</div>
+                            <div><span style={{ color: 'var(--gt)' }}>Teléfono: </span>{o.customer_phone ?? '-'}</div>
                             <div><span style={{ color: 'var(--gt)' }}>Pago: </span>{PAYMENT_LABEL[o.payment_method] ?? o.payment_method ?? '-'}</div>
                             <div><span style={{ color: 'var(--gt)' }}>Dom: </span>{o.employee?.name ?? 'Sin asignar'}</div>
                           </div>

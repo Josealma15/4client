@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>4Client — Sistema de Gestión</title>
+<title>4Client - Sistema de Gestión</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -79,7 +79,7 @@
         <div style="display:flex;align-items:center;gap:9px;">
           <div class="huser">
             <div class="uav" id="h-av">U</div>
-            <div><div class="un" id="h-un">—</div><div class="ur2" id="h-rol">—</div></div>
+            <div><div class="un" id="h-un">-</div><div class="ur2" id="h-rol">-</div></div>
           </div>
           <button class="bnew" id="btn-cierre" style="background:var(--az);padding:8px 14px;font-size:13px;display:none;" onclick="openCierre()">🏦 Cierre de caja</button>
           <button class="bout" onclick="doLogout()">Salir</button>
@@ -176,7 +176,7 @@
         <div class="fg2"><label class="fl2">Dirección de entrega *</label>
           <input class="fi2" id="np-dir" placeholder="Ej: Cra 45 #12-34, Casa azul" oninput="dirty('m-nuevo')"></div>
         <div class="fg2"><label class="fl2">Domiciliario</label>
-          <select class="fi2" id="np-dom"><option value="">— Sin asignar —</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
+          <select class="fi2" id="np-dom"><option value="">- Sin asignar -</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
         <div class="stit">Productos</div>
         <div class="psearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gt)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="np-ps" type="text" placeholder="Buscar producto..." oninput="bProd(this.value,'np')"></div>
@@ -222,7 +222,7 @@
         <div class="fg2"><label class="fl2">Método de pago</label>
           <select class="fi2" id="det-pago" onchange="dirty('m-det')"><option value="casa">💵 Cobra en casa</option><option value="transferencia">📲 Transferencia</option><option value="efectivo">💳 Pagado en tienda</option></select></div>
         <div class="fg2"><label class="fl2">Domiciliario</label>
-          <select class="fi2" id="det-dom" onchange="dirty('m-det')"><option value="">— Sin asignar —</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
+          <select class="fi2" id="det-dom" onchange="dirty('m-det')"><option value="">- Sin asignar -</option><option value="Pedro Gómez">🛵 Pedro Gómez</option><option value="Andrés Castillo">🛵 Andrés Castillo</option></select></div>
       </div>
       <div class="stit" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleProdList('det')">
         <span>Productos</span>
@@ -281,7 +281,7 @@
 <div class="moverlay" id="m-cierre">
   <div class="cierre-win">
     <div class="mhead">
-      <div><div class="mtit">🏦 Cierre de Caja</div><div class="msub">Resumen del día — Fruver San Gabriel</div></div>
+      <div><div class="mtit">🏦 Cierre de Caja</div><div class="msub">Resumen del día - Fruver San Gabriel</div></div>
       <button class="mclose" onclick="closeModal('m-cierre')">×</button>
     </div>
     <div class="mbody">

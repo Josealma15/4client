@@ -7,7 +7,7 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 // Computes the next sequential order number for org+fecha and creates the order,
 // retrying on a unique-constraint collision (@@unique([org_id, num, fecha])).
 //
-// Uses MAX(num)+1, not COUNT(*)+1 — a deferred order (cierre.ts, decision "manana")
+// Uses MAX(num)+1, not COUNT(*)+1 - a deferred order (cierre.ts, decision "manana")
 // keeps its ORIGINAL num when its fecha moves to the next day, so that day's number
 // space can already have gaps/low numbers "occupied" that have nothing to do with how
 // many orders exist there. COUNT(*)+1 doesn't see that and can guess a num that's
@@ -44,7 +44,7 @@ const orderItemSchema = z.object({
   price:          z.number().min(0).max(9_999_999),
   sort_order:     z.number().default(0),
   // Round-tripped from GET /orders/:id, not staff-settable in practice (the UI never
-  // exposes a way to toggle it) — staff editing/saving an order must not silently
+  // exposes a way to toggle it) - staff editing/saving an order must not silently
   // clear this provenance flag on items the client themselves added/changed earlier.
   added_by_client: z.boolean().optional().default(false),
 });
@@ -53,7 +53,7 @@ const createOrderSchema = z.object({
   ticket_id:      z.string().uuid().optional(),
   customer_name:  z.string().min(1).max(200),
   customer_phone: z.string().max(20).optional(),
-  // Not required at creation — only enforced at closing time (POST /:id/cobro
+  // Not required at creation - only enforced at closing time (POST /:id/cobro
   // already checks it), so an order can be opened/dispatched before an address is
   // confirmed and only has to be filled in before it's actually closed.
   address:        z.string().max(500).optional(),
@@ -81,7 +81,7 @@ const ORDER_FIELD_LABELS: Record<string, string> = {
   employee_id: 'domiciliario', notes: 'notas', fecha: 'fecha', items: 'productos',
 };
 
-// A blanket "Datos inválidos" doesn't tell anyone which field actually failed — turns
+// A blanket "Datos inválidos" doesn't tell anyone which field actually failed - turns
 // a 2-second fix into a guessing game. Zod already knows exactly which field and why
 // (body.error.flatten()); this just turns that into a Spanish sentence naming it,
 // e.g. "Falta dirección, nombre del cliente" instead of a dead end.
@@ -99,7 +99,7 @@ function orderValidationMessage(error: z.ZodError): string {
   return 'Revisa: ' + parts.join(', ');
 }
 
-// A day with a DailyClose row is a frozen, closed-out snapshot — cierre.ts already
+// A day with a DailyClose row is a frozen, closed-out snapshot - cierre.ts already
 // forced a decision on every order that was open when it ran, so nothing on that day
 // should change afterward, no matter which specific decision an order got (even
 // "dejar_activo", deliberately left as-is at the time). Mirrors the `existing.locked`
@@ -168,14 +168,14 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     const fechaDate = new Date(fecha ?? todayUTC);
 
     if (await findDayClose(fastify.prisma, req.user.orgId, fechaDate)) {
-      return reply.status(409).send({ error: 'Ese día ya fue cerrado — no se pueden crear pedidos en él', code: 'DAY_CLOSED' });
+      return reply.status(409).send({ error: 'Ese día ya fue cerrado - no se pueden crear pedidos en él', code: 'DAY_CLOSED' });
     }
 
     const order = await createOrderWithRetryNum(fastify.prisma, req.user.orgId, fechaDate, (num) =>
       fastify.prisma.order.create({
         data: {
           ...rest,
-          // Placeholder when left blank — matches the client-form path (public.ts),
+          // Placeholder when left blank - matches the client-form path (public.ts),
           // and is what POST /:id/cobro's "missing fields" check already looks for.
           address: rest.address?.trim() || 'Pendiente de confirmar',
           org_id: req.user.orgId,
@@ -230,7 +230,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
     if (existing.locked) return reply.status(409).send({ error: 'Pedido bloqueado', code: 'ORDER_LOCKED' });
     if (await findDayClose(fastify.prisma, req.user.orgId, existing.fecha)) {
-      return reply.status(409).send({ error: 'Ese día ya fue cerrado — el pedido quedó congelado', code: 'DAY_CLOSED' });
+      return reply.status(409).send({ error: 'Ese día ya fue cerrado - el pedido quedó congelado', code: 'DAY_CLOSED' });
     }
 
     const { items, ...fields } = body.data;
@@ -295,7 +295,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
           historyEntries.push({
             org_id: req.user.orgId, order_id: id, actor_id: req.user.userId,
             action_type: 'producto_eliminado', field: 'Producto eliminado',
-            value_before: `${ri.quantity_label ? ri.quantity_label + ' ' : ''}${ri.product_name} — $${Number(ri.price).toLocaleString('es-CO')}`,
+            value_before: `${ri.quantity_label ? ri.quantity_label + ' ' : ''}${ri.product_name} - $${Number(ri.price).toLocaleString('es-CO')}`,
             value_after: 'Eliminado',
             notes: `Estado al eliminar: ${existing.status}`,
           });
@@ -305,7 +305,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
             org_id: req.user.orgId, order_id: id, actor_id: req.user.userId,
             action_type: 'producto_agregado', field: 'Producto agregado',
             value_before: '',
-            value_after: `${ai.quantity_label ? ai.quantity_label + ' ' : ''}${ai.product_name} — $${ai.price}`,
+            value_after: `${ai.quantity_label ? ai.quantity_label + ' ' : ''}${ai.product_name} - $${ai.price}`,
             notes: `Estado al agregar: ${existing.status}`,
           });
         }
@@ -317,7 +317,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       const updated = await tx.order.update({
         where: { id },
         // Staff saving the order is treated as "reviewed whatever the client
-        // changed" — clears the bell unconditionally, every save, not just ones
+        // changed" - clears the bell unconditionally, every save, not just ones
         // that touch items (per user confirmation: any save acknowledges it).
         data: { ...fields, client_modified: false, updated_at: new Date() },
         select: buildOrderSelect(false),
@@ -344,7 +344,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
     if (existing.locked) return reply.status(409).send({ error: 'Pedido bloqueado', code: 'ORDER_LOCKED' });
     if (await findDayClose(fastify.prisma, req.user.orgId, existing.fecha)) {
-      return reply.status(409).send({ error: 'Ese día ya fue cerrado — el pedido quedó congelado', code: 'DAY_CLOSED' });
+      return reply.status(409).send({ error: 'Ese día ya fue cerrado - el pedido quedó congelado', code: 'DAY_CLOSED' });
     }
 
     const updated = await fastify.prisma.$transaction(async (tx) => {
@@ -392,10 +392,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
     if (existing.locked) return reply.status(409).send({ error: 'Pedido ya cobrado', code: 'ORDER_LOCKED' });
     if (await findDayClose(fastify.prisma, req.user.orgId, existing.fecha)) {
-      return reply.status(409).send({ error: 'Ese día ya fue cerrado — el pedido quedó congelado', code: 'DAY_CLOSED' });
+      return reply.status(409).send({ error: 'Ese día ya fue cerrado - el pedido quedó congelado', code: 'DAY_CLOSED' });
     }
 
-    // A pedido must be fully filled in before it can be closed — required so orders
+    // A pedido must be fully filled in before it can be closed - required so orders
     // created from the client form (which starts with a placeholder address, no
     // payment method, no domiciliario assigned) can't be cobrado half-empty.
     const missing: string[] = [];
@@ -405,7 +405,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     if (!existing.payment_method || existing.payment_method === 'sin_asignar') missing.push('método de pago');
     if (!existing.employee_id) missing.push('domiciliario');
     if (existing.items.length === 0) missing.push('productos');
-    // Every item needs a real price — a single unpriced product (even just one, even
+    // Every item needs a real price - a single unpriced product (even just one, even
     // if the rest of the order totals something > 0) must block closing, not just an
     // all-zero order.
     const unpriced = existing.items.filter(i => Number(i.price) <= 0);

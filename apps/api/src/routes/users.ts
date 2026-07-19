@@ -24,7 +24,7 @@ const resetPassSchema = z.object({
 });
 
 export default async function userRoutes(fastify: FastifyInstance) {
-  // GET /api/v1/users — list org users, admin only
+  // GET /api/v1/users - list org users, admin only
   fastify.get('/', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const users = await fastify.prisma.user.findMany({
       where: { org_id: req.user.orgId },
@@ -34,7 +34,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ data: users });
   });
 
-  // POST /api/v1/users — create user in org, admin only
+  // POST /api/v1/users - create user in org, admin only
   fastify.post('/', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const body = createUserSchema.safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos', code: 'VALIDATION_ERROR' });
@@ -62,7 +62,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ data: user });
   });
 
-  // PATCH /api/v1/users/:id — update user (name, role, active), admin only
+  // PATCH /api/v1/users/:id - update user (name, role, active), admin only
   fastify.patch('/:id', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = updateUserSchema.safeParse(req.body);
@@ -94,7 +94,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { ok: true } });
   });
 
-  // POST /api/v1/users/:id/reset-password — admin resets any user's password
+  // POST /api/v1/users/:id/reset-password - admin resets any user's password
   fastify.post('/:id/reset-password', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = resetPassSchema.safeParse(req.body);

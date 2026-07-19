@@ -57,7 +57,7 @@ export default function DevSistemaPanel() {
               ['Slug', org?.slug],
               ['Plan', org?.plan],
               ['WPP', org?.wpp_meta_phone_id ? 'configurado' : 'sin config'],
-              ['Bienvenida', org?.welcome_message ? 'activa' : '—'],
+              ['Bienvenida', org?.welcome_message ? 'activa' : '-'],
             ].map(([label, value]) => (
               <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
                 <span style={{ color: 'var(--gt)', minWidth: 80, flexShrink: 0 }}>{label}</span>
@@ -87,7 +87,7 @@ export default function DevSistemaPanel() {
               ].map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', gap: 8, fontSize: 12 }}>
                   <span style={{ color: 'var(--gt)', minWidth: 80, flexShrink: 0 }}>{label}</span>
-                  <span style={{ color: 'var(--n)', fontFamily: 'monospace', fontSize: 11 }}>{String(value ?? '—')}</span>
+                  <span style={{ color: 'var(--n)', fontFamily: 'monospace', fontSize: 11 }}>{String(value ?? '-')}</span>
                 </div>
               ))}
             </div>
@@ -131,7 +131,7 @@ export default function DevSistemaPanel() {
         )}
       </div>
 
-      {/* Storage test card — actually tries a real R2 upload, not just checking env vars are set */}
+      {/* Storage test card - actually tries a real R2 upload, not just checking env vars are set */}
       <div style={{ background: 'var(--b)', border: '1px solid var(--brd)', borderRadius: 'var(--rad)', padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gt)', textTransform: 'uppercase', letterSpacing: 1 }}>
