@@ -1,11 +1,15 @@
 import { useState, useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
   Package, PackageCheck, Clock, Banknote, ArrowLeftRight, Wallet,
-  FileText, Trash2, History, ChevronDown, ChevronRight, Lock, Download,
+  FileText, Trash2, History, ChevronDown, ChevronRight, Lock, Download, Ban,
   MessageSquare, MessageCircleWarning, MessageCircleCheck,
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
 import { downloadCierreCSV } from '../../lib/csv';
+import { api } from '../../lib/api';
+import { toast } from '../ui/Toast';
+import { ConfirmModal } from '../ui/ConfirmModal';
 import HistoryTable from '../ui/HistoryTable';
 import DatePickerES from '../ui/DatePickerES';
 
@@ -33,6 +37,16 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
   const [resumenTab, setResumenTab] = useState<'activos' | 'papelera' | 'cambios'>('activos');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [showBlockAllConfirm, setShowBlockAllConfirm] = useState(false);
+
+  // Emergency kill switch - e.g. the store closes early one day and every form link
+  // sent out today needs to die right now, not just the one someone remembers to
+  // individually revoke. A fresh link sent afterward works normally again.
+  const blockAllLinksMut = useMutation({
+    mutationFn: () => api.post('/inbox/form-links/block-all', {}),
+    onSuccess: () => toast('Todos los links de formulario activos fueron bloqueados'),
+    onError: (e: any) => toast(e.message ?? 'No se pudo bloquear los links', true),
+  });
 
   function toggleOrder(id: string) {
     setExpandedOrders((prev) => {
@@ -127,8 +141,25 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
               <Lock size={15} /> Cerrar caja
             </button>
           )}
+          <button
+            onClick={() => setShowBlockAllConfirm(true)}
+            disabled={blockAllLinksMut.isPending}
+            title="Bloquea todos los links de formulario activos ahora mismo, sin importar la hora"
+            style={{ background: 'var(--rc)', color: 'var(--r)', border: '1px solid var(--r)', padding: '11px 16px', borderRadius: 'var(--rad)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+            <Ban size={15} /> Bloquear todos los links
+          </button>
         </div>
       </div>
+
+      {showBlockAllConfirm && (
+        <ConfirmModal
+          message="Vas a bloquear TODOS los links de formulario activos ahora mismo, para todos los chats. Ningún cliente podrá crear ni editar pedidos por el link hasta que le envíes uno nuevo. ¿Deseas continuar?"
+          confirmLabel="Bloquear todos"
+          danger
+          onConfirm={() => { blockAllLinksMut.mutate(); setShowBlockAllConfirm(false); }}
+          onCancel={() => setShowBlockAllConfirm(false)}
+        />
+      )}
 
       {dashboard && (
         <>

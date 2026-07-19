@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
-  ClipboardList, BarChart2, MessageSquare, Settings, AlertTriangle, Ban,
+  ClipboardList, BarChart2, MessageSquare, Settings, AlertTriangle,
 } from 'lucide-react';
 import { useAuthStore } from '../store/auth';
 import { useOrders } from '../hooks/useOrders';
@@ -20,9 +20,8 @@ import DetallePedidoModal from '../components/modals/DetallePedidoModal';
 import InboxPanel from '../components/inbox/InboxPanel';
 import ResumenTab from '../components/dashboard/ResumenTab';
 import ConfigTab from '../components/config/ConfigTab';
-import Toast, { toast } from '../components/ui/Toast';
+import Toast from '../components/ui/Toast';
 import DatePickerES from '../components/ui/DatePickerES';
-import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 interface Ticket {
   id: string; phone: string; customer_name: string;
@@ -47,13 +46,6 @@ export default function MainPage() {
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [fromTicket, setFromTicket] = useState<{ ticketId: string; nombre: string; phone: string; messages: any[] } | null>(null);
-  const [showBlockAllConfirm, setShowBlockAllConfirm] = useState(false);
-
-  const blockAllLinksMut = useMutation({
-    mutationFn: () => api.post('/inbox/form-links/block-all', {}),
-    onSuccess: () => toast('Todos los links de formulario activos fueron bloqueados'),
-    onError: (e: any) => toast(e.message ?? 'No se pudo bloquear los links', true),
-  });
 
   const { data: orders = [], isLoading: loadingOrders } = useOrders(fecha);
   const { data: dashboard } = useDashboard(fecha, isAdmin);
@@ -280,30 +272,9 @@ export default function MainPage() {
                 <div className="ktit">Chats WhatsApp</div>
                 <div className="kmeta">Bandeja de entrada - todas las conversaciones</div>
               </div>
-              {/* Emergency kill switch - e.g. the store closes early one day and every
-                  form link sent out today needs to die right now, not just the one
-                  someone remembers to individually revoke. A fresh link sent
-                  afterward works normally again. */}
-              <button
-                onClick={() => setShowBlockAllConfirm(true)}
-                disabled={blockAllLinksMut.isPending}
-                title="Bloquea todos los links de formulario activos ahora mismo, sin importar la hora"
-                style={{ background: 'var(--rc)', color: 'var(--r)', border: '1px solid var(--r)', padding: '9px 14px', borderRadius: 'var(--rad)', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <Ban size={14} /> Bloquear todos los links
-              </button>
             </div>
             <InboxPanel />
           </>
-        )}
-
-        {showBlockAllConfirm && (
-          <ConfirmModal
-            message="Vas a bloquear TODOS los links de formulario activos ahora mismo, para todos los chats. Ningún cliente podrá crear ni editar pedidos por el link hasta que le envíes uno nuevo. ¿Deseas continuar?"
-            confirmLabel="Bloquear todos"
-            danger
-            onConfirm={() => { blockAllLinksMut.mutate(); setShowBlockAllConfirm(false); }}
-            onCancel={() => setShowBlockAllConfirm(false)}
-          />
         )}
 
         {tab === 'resumen' && isAdmin && (
