@@ -188,7 +188,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
       }),
     );
 
-    // Audit log
+    // Audit log - one 'create' entry for the pedido itself, plus one producto_agregado
+    // per starting item (same shape/label a later edit would produce) so "who added
+    // what, at what price" is visible from the very first save, not only for changes
+    // made afterward.
     await fastify.prisma.orderHistory.create({
       data: {
         org_id: req.user.orgId,
@@ -198,6 +201,17 @@ export default async function orderRoutes(fastify: FastifyInstance) {
         notes: 'Pedido creado',
       },
     });
+    if (order.items.length > 0) {
+      await fastify.prisma.orderHistory.createMany({
+        data: order.items.map((i) => ({
+          org_id: req.user.orgId, order_id: order.id, actor_id: req.user.userId,
+          action_type: 'producto_agregado', field: 'Producto agregado',
+          value_before: '',
+          value_after: `${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name} - $${Number(i.price).toLocaleString('es-CO')}`,
+          notes: 'Agregado al crear el pedido',
+        })),
+      });
+    }
 
     fastify.io.to(`org:${req.user.orgId}`).emit('order:created', order as any);
 

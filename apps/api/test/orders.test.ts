@@ -209,6 +209,62 @@ describe('orders routes', () => {
     expect(historyEntry!.value_after).toBe('preparando');
   });
 
+  it('PATCH /orders/:id with a changed items list logs producto_agregado/producto_eliminado/producto_modificado in OrderHistory', async () => {
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/v1/orders',
+      headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({ fecha: '2026-01-14' }),
+    });
+    expect(create.statusCode).toBe(201);
+    const order = create.json().data;
+
+    // Papa Criolla: price 5000 -> 6000 (modificado). Cebolla Roja: removed (eliminado).
+    // Zanahoria: new line (agregado).
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/orders/${order.id}`,
+      headers: authHeader(encargadoToken),
+      payload: {
+        items: [
+          { product_name: 'Papa Criolla', quantity_label: '2 kg', price: 6000, sort_order: 0 },
+          { product_name: 'Zanahoria', quantity_label: '1 kg', price: 2000, sort_order: 1 },
+        ],
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const history = await app.prisma.orderHistory.findMany({ where: { order_id: order.id } });
+
+    const modificado = history.find(h => h.action_type === 'producto_modificado');
+    expect(modificado).toBeDefined();
+    expect(modificado!.value_before).toContain('Papa Criolla - $5.000');
+    expect(modificado!.value_after).toContain('Papa Criolla - $6.000');
+
+    const eliminado = history.find(h => h.action_type === 'producto_eliminado');
+    expect(eliminado).toBeDefined();
+    expect(eliminado!.value_before).toContain('Cebolla Roja');
+
+    // Two producto_agregado entries exist by now: one from order creation (Papa
+    // Criolla, Cebolla Roja) and this PATCH's new one (Zanahoria) - match on content,
+    // not just the first hit, so this doesn't collide with the creation-time entries.
+    const agregado = history.find(h => h.action_type === 'producto_agregado' && h.value_after?.includes('Zanahoria'));
+    expect(agregado).toBeDefined();
+
+    // The response from GET /:id (what the modal actually renders) must carry these
+    // through too - admin/dev only (buildOrderSelect gates `history` on isAdmin).
+    const adminEmail = `hist-admin-${Date.now()}@example.com`;
+    const admin = await createTestUser(app.prisma, orgAId, 'admin', 'HistAdminPass1!', { email: adminEmail });
+    const adminToken = await login(app, adminEmail, 'HistAdminPass1!');
+    const getRes = await app.inject({
+      method: 'GET', url: `/api/v1/orders/${order.id}`, headers: authHeader(adminToken),
+    });
+    expect(getRes.statusCode).toBe(200);
+    const returnedTypes = (getRes.json().data.history ?? []).map((h: any) => h.action_type);
+    expect(returnedTypes).toEqual(expect.arrayContaining(['producto_modificado', 'producto_eliminado', 'producto_agregado']));
+    void admin;
+  });
+
   it('POST /orders/:id/cobro with wrong password -> 403 INVALID_PASSWORD, order not marked paid', async () => {
     const create = await app.inject({
       method: 'POST',

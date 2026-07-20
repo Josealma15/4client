@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronDown, ChevronRight, Search } from 'lucide-react';
+
+// Same fixed order as the backend (apps/api/src/lib/categoryOrder.ts) - Frutas/
+// Verduras first, everything else alphabetically after. The `products` list itself
+// already arrives pre-sorted that way, but this component re-groups it by category
+// into its own object (`grouped`, below) and would otherwise re-sort those group
+// names alphabetically (Frutas, Otros, Verduras) when rendering, undoing it.
+const CATEGORY_PRIORITY = ['Frutas', 'Verduras', 'Otros'];
+function categoryRank(cat: string): number {
+  const idx = CATEGORY_PRIORITY.indexOf(cat);
+  return idx === -1 ? CATEGORY_PRIORITY.length : idx;
+}
 import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -22,6 +33,7 @@ export default function ProductsSection() {
   const [editId, setEditId] = useState<string | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [search, setSearch] = useState('');
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
@@ -112,6 +124,38 @@ export default function ProductsSection() {
     return acc;
   }, {});
 
+  // While searching, skip the collapsible-by-category view entirely - a flat, matched
+  // list is what actually saves the scrolling/expanding this was asked to avoid.
+  const searchLower = search.trim().toLowerCase();
+  const filteredFlat = searchLower
+    ? (products as any[]).filter(p =>
+        p.name.toLowerCase().includes(searchLower) || (p.category ?? '').toLowerCase().includes(searchLower))
+    : [];
+
+  function renderProductRow(p: any) {
+    return (
+      <div key={p.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--b)', padding: '10px 14px', gap: 10, borderTop: '1px solid var(--brd)' }}>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{p.name}</span>
+        {searchLower && (
+          <span style={{ fontSize: 11, color: 'var(--gt)', fontWeight: 600 }}>{p.category || 'Sin categoría'}</span>
+        )}
+        {p.price_per_unit != null && (
+          <span style={{ fontSize: 12, color: 'var(--vd)', fontWeight: 700, background: 'var(--vc)', padding: '2px 8px', borderRadius: 12, whiteSpace: 'nowrap' }}>
+            ${Number(p.price_per_unit).toLocaleString('es-CO')}/{p.unit_type ?? 'kg'}
+          </span>
+        )}
+        <button className="dc-btn" title="Editar" onClick={() => openEdit(p)}>
+          <Pencil size={13} />
+        </button>
+        <button className="dc-btn" title="Desactivar"
+          onClick={() => setConfirmDelete({ id: p.id, name: p.name })}
+          style={{ borderColor: 'var(--r)', color: 'var(--r)' }}>
+          <Trash2 size={13} />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       {confirmDelete && (
@@ -122,9 +166,21 @@ export default function ProductsSection() {
         />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, color: 'var(--gt)' }}>{(products as any[]).length} productos activos</span>
-        <button className="bnew" onClick={openCreate}><Plus size={14} /> Nuevo producto</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} color="var(--gt)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              className="fi"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar producto..."
+              style={{ paddingLeft: 32, width: 220 }}
+            />
+          </div>
+          <button className="bnew" onClick={openCreate}><Plus size={14} /> Nuevo producto</button>
+        </div>
       </div>
 
       {form !== null && (
@@ -205,8 +261,19 @@ export default function ProductsSection() {
         <div style={{ color: 'var(--gt)', padding: 24 }}>Cargando...</div>
       ) : (products as any[]).length === 0 ? (
         <div style={{ color: 'var(--gt)', fontSize: 14, padding: 16 }}>No hay productos. Crea el primero.</div>
+      ) : searchLower ? (
+        filteredFlat.length === 0 ? (
+          <div style={{ color: 'var(--gt)', fontSize: 14, padding: 16 }}>Sin resultados para "{search}"</div>
+        ) : (
+          <div style={{ border: '1.5px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden' }}>
+            {filteredFlat.map(renderProductRow)}
+          </div>
+        )
       ) : (
-        Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([cat, prods]) => {
+        Object.entries(grouped).sort(([a], [b]) => {
+          const ra = categoryRank(a), rb = categoryRank(b);
+          return ra !== rb ? ra - rb : a.localeCompare(b);
+        }).map(([cat, prods]) => {
           const collapsed = !expandedCats.has(cat);
           return (
             <div key={cat} style={{ marginBottom: 12, border: '1.5px solid var(--brd)', borderRadius: 'var(--rad)', overflow: 'hidden' }}>
@@ -220,24 +287,7 @@ export default function ProductsSection() {
               </button>
               {!collapsed && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {(prods as any[]).map((p: any) => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--b)', padding: '10px 14px', gap: 10, borderTop: '1px solid var(--brd)' }}>
-                      <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{p.name}</span>
-                      {p.price_per_unit != null && (
-                        <span style={{ fontSize: 12, color: 'var(--vd)', fontWeight: 700, background: 'var(--vc)', padding: '2px 8px', borderRadius: 12, whiteSpace: 'nowrap' }}>
-                          ${Number(p.price_per_unit).toLocaleString('es-CO')}/{p.unit_type ?? 'kg'}
-                        </span>
-                      )}
-                      <button className="dc-btn" title="Editar" onClick={() => openEdit(p)}>
-                        <Pencil size={13} />
-                      </button>
-                      <button className="dc-btn" title="Desactivar"
-                        onClick={() => setConfirmDelete({ id: p.id, name: p.name })}
-                        style={{ borderColor: 'var(--r)', color: 'var(--r)' }}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
+                  {(prods as any[]).map(renderProductRow)}
                 </div>
               )}
             </div>

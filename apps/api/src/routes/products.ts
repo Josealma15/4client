@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { sortByCategoryOrder } from '../lib/categoryOrder.js';
 
 const productSchema = z.object({
   name:           z.string().min(1),
@@ -18,7 +19,7 @@ export default async function productRoutes(fastify: FastifyInstance) {
       where: { org_id: req.user.orgId, active: true },
       orderBy: [{ category: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
     });
-    return reply.send({ data: products });
+    return reply.send({ data: sortByCategoryOrder(products) });
   });
 
   // POST /api/v1/products - solo admin

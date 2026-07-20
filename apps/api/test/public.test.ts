@@ -17,7 +17,7 @@ async function login(app: FastifyInstance, email: string, password: string): Pro
 // under NODE_ENV=test specifically so the rest of this file's app.inject calls don't
 // pass or fail depending on what hour it happens to be when the suite runs. This is
 // what actually verifies the 8pm Colombia boundary is correct.
-describe('isWithinFormHours - form links only work until 8pm Colombia time', () => {
+describe('isWithinFormHours - form links only work between 4am and 8pm Colombia time', () => {
   it('7:59pm Colombia -> still within hours', () => {
     expect(isWithinFormHours(new Date('2026-01-15T19:59:00-05:00').getTime())).toBe(true);
   });
@@ -27,8 +27,14 @@ describe('isWithinFormHours - form links only work until 8pm Colombia time', () 
   it('11:59pm Colombia -> closed', () => {
     expect(isWithinFormHours(new Date('2026-01-15T23:59:00-05:00').getTime())).toBe(false);
   });
-  it('midnight / early morning Colombia -> within hours', () => {
-    expect(isWithinFormHours(new Date('2026-01-15T00:00:00-05:00').getTime())).toBe(true);
+  it('midnight / pre-4am Colombia -> closed', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T00:00:00-05:00').getTime())).toBe(false);
+    expect(isWithinFormHours(new Date('2026-01-15T03:59:00-05:00').getTime())).toBe(false);
+  });
+  it('exactly 4:00am Colombia -> within hours', () => {
+    expect(isWithinFormHours(new Date('2026-01-15T04:00:00-05:00').getTime())).toBe(true);
+  });
+  it('mid-morning Colombia -> within hours', () => {
     expect(isWithinFormHours(new Date('2026-01-15T07:00:00-05:00').getTime())).toBe(true);
   });
 });
