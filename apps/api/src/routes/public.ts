@@ -26,6 +26,11 @@ interface FormTokenPayload {
 // with no revocation, so this caps spam from a leaked/shared link.
 const MAX_FORM_ORDERS_PER_TICKET = 3;
 
+// Wording for the client-facing WhatsApp confirmation messages - matches the buttons
+// shown on the form itself (ClientFormPage.tsx), not the staff-side PAYMENT_LABELS
+// used in orders.ts (which says "Efectivo" instead of "En tienda" for `cash`).
+const PAYMENT_LABEL_CLIENT: Record<string, string> = { transfer: 'Transferencia', cash: 'En tienda', cod: 'Cobro en casa' };
+
 // Form links only work until 8pm Colombia time (UTC-5, no DST), every day - outside
 // that window an order needs a staff member handling it directly (chat), not
 // self-service via the link. A plain function of `now` (defaults to the real clock)
@@ -269,7 +274,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     const body = z.object({
       token: z.string().min(1),
       device_token: z.string().min(1),
-      address: z.string().max(500).optional(),
+      // Required - a pedido without a delivery address can't actually be dispatched,
+      // and staff kept having to chase clients down for it after the fact.
+      address: z.string().trim().min(1, 'La dirección es obligatoria').max(500),
       payment_method: z.enum(['cash', 'transfer', 'cod']).optional(),
       // Set when the client chose "add to my active order" instead of a new one.
       // Re-validated below (not trusted blindly) - if it's gone stale (e.g. staff
@@ -378,7 +385,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         const anyItemChange = mergedItemsData.length !== target.items.length
           || mergedItemsData.some(it => { const prior = priorByName.get(it.product_name); return !prior || prior.quantity_label !== it.quantity_label; })
           || target.items.some(i => !submittedNames.has(i.product_name));
-        const addressChanged = !!body.data.address?.trim() && body.data.address.trim() !== target.address;
+        const addressChanged = body.data.address !== target.address;
         const paymentChanged = !!body.data.payment_method && body.data.payment_method !== target.payment_method;
 
         // Nothing actually changed (client opened the form and resubmitted as-is) -
@@ -391,7 +398,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         const updated = await fastify.prisma.order.update({
           where: { id: target.id },
           data: {
-            ...(addressChanged ? { address: body.data.address!.trim() } : {}),
+            ...(addressChanged ? { address: body.data.address } : {}),
             ...(paymentChanged ? { payment_method: body.data.payment_method } : {}),
             client_modified: true,
             items: { deleteMany: {}, create: mergedItemsData },
@@ -413,7 +420,10 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         });
 
         const lines = updated.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label ?? '')}`);
-        const msgText = `*Tu pedido #${updated.num} fue actualizado*\n${lines.join('\n')}\n\n_El encargado revisará los cambios._`;
+        const updatedPaymentLabel = updated.payment_method && updated.payment_method !== 'sin_asignar'
+          ? (PAYMENT_LABEL_CLIENT[updated.payment_method] ?? updated.payment_method)
+          : 'Sin especificar';
+        const msgText = `*Tu pedido #${updated.num} fue actualizado*\n${lines.join('\n')}\n\n_Dirección: ${sanitizeForWhatsApp(updated.address)}_\n_Método de pago: ${updatedPaymentLabel}_\n\n_El encargado revisará los cambios._`;
 
         const message = await fastify.prisma.ticketMessage.create({
           data: { ticket_id: ticket.id, direction: 'out', text: msgText, sent_at: new Date(), sent_by: actorUser.id },
@@ -475,9 +485,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           num,
           customer_name: payload.clientName,
           customer_phone: payload.clientPhone,
-          // Placeholders when the client left these blank - dirección/método de pago
-          // are optional on the form, only the products are required.
-          address: body.data.address?.trim() || 'Pendiente de confirmar',
+          address: body.data.address,
           channel: 'whatsapp',
           payment_method: body.data.payment_method ?? 'sin_asignar',
           status: 'nuevo',
@@ -497,11 +505,11 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     const num = order.num;
 
     // Mensaje en el chat del ticket
-    const total = orderItems.reduce((s, i) => s + i.price, 0);
     const lines = body.data.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label)}`);
-    // "quantity_label" is free text (e.g. "2 kg"), so this sum is per-unit catalog price,
-    // not a real total - labeled as a rough reference, not a firm estimate.
-    const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}${total > 0 ? `\n\n_Precio referencial (según catálogo, sin confirmar cantidades): $${total.toLocaleString('es-CO')}_` : ''}\n\n_El encargado revisará y confirmará el pedido._`;
+    const paymentLabel = body.data.payment_method
+      ? (PAYMENT_LABEL_CLIENT[body.data.payment_method] ?? body.data.payment_method)
+      : 'Sin especificar';
+    const msgText = `*Pedido #${num} recibido desde el formulario*\n${lines.join('\n')}\n\n_Dirección: ${sanitizeForWhatsApp(body.data.address)}_\n_Método de pago: ${paymentLabel}_\n\n_El encargado revisará y confirmará el pedido._`;
 
     const message = await fastify.prisma.ticketMessage.create({
       data: {

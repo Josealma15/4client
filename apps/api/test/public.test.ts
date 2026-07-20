@@ -83,17 +83,27 @@ describe('public form routes', () => {
 
   let firstOrderId: string;
 
-  it('POST /submit with no merge_order_id creates a new order (address/payment optional), items not flagged as client-added', async () => {
+  it('POST /submit without an address is rejected - address is required, payment method is not', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
       payload: { token, device_token: DEVICE, items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
     });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+  });
+
+  it('POST /submit with no merge_order_id creates a new order (address required, payment optional), items not flagged as client-added', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/public/submit',
+      payload: { token, device_token: DEVICE, address: 'Calle 1 #2-34', items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
+    });
     expect(res.statusCode).toBe(201);
     firstOrderId = res.json().data.orderId;
 
     const order = await app.prisma.order.findUniqueOrThrow({ where: { id: firstOrderId }, include: { items: true } });
-    expect(order.address).toBe('Pendiente de confirmar');
+    expect(order.address).toBe('Calle 1 #2-34');
     expect(order.payment_method).toBe('sin_asignar');
     expect(order.client_modified).toBe(false);
     // The client's OWN first submission is the original order, not a later edit -
@@ -122,7 +132,7 @@ describe('public form routes', () => {
     const submit = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: 'some-other-device', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token, device_token: 'some-other-device', address: 'Calle Test 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(submit.statusCode).toBe(401);
 
@@ -219,7 +229,7 @@ describe('public form routes', () => {
     );
     const create = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: caminoToken, device_token: 'device-camino', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: caminoToken, device_token: 'device-camino', address: 'Calle Camino 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     const caminoOrderId = create.json().data.orderId;
     await app.prisma.order.update({ where: { id: caminoOrderId }, data: { status: 'camino' } });
@@ -229,6 +239,7 @@ describe('public form routes', () => {
       url: '/api/v1/public/submit',
       payload: {
         token: caminoToken, device_token: 'device-camino', merge_order_id: caminoOrderId,
+        address: 'Calle Camino 1',
         items: [{ product_name: 'Mango', quantity_label: '1 kg' }, { product_name: 'Piña', quantity_label: '1 unidad' }],
       },
     });
@@ -251,7 +262,7 @@ describe('public form routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: DEVICE, merge_order_id: firstOrderId, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token, device_token: DEVICE, merge_order_id: firstOrderId, address: 'Calle Cerrado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
@@ -273,7 +284,7 @@ describe('public form routes', () => {
     );
     const create = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: caminoToken2, device_token: 'device-camino-2', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: caminoToken2, device_token: 'device-camino-2', address: 'Calle Camino 2', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     const orderId = create.json().data.orderId;
     await app.prisma.order.update({ where: { id: orderId }, data: { status: 'camino' } });
@@ -316,7 +327,7 @@ describe('public form routes', () => {
     const submitRes = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token: sentToken, device_token: 'device-002', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: sentToken, device_token: 'device-002', address: 'Calle Atribucion 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(submitRes.statusCode).toBe(201);
     const newOrderId = submitRes.json().data.orderId;
@@ -372,7 +383,7 @@ describe('public form routes', () => {
       const submit = await app.inject({
         method: 'POST',
         url: '/api/v1/public/submit',
-        payload: { token: revokedToken, device_token: DEVICE, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+        payload: { token: revokedToken, device_token: DEVICE, address: 'Calle Revocado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
       });
       expect(submit.statusCode).toBe(401);
       expect(submit.json().code).toBe('INVALID_TOKEN');
@@ -508,14 +519,14 @@ describe('public form routes', () => {
     for (let i = 0; i < 3; i++) {
       const res = await app.inject({
         method: 'POST', url: '/api/v1/public/submit',
-        payload: { token: capToken, device_token: device, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+        payload: { token: capToken, device_token: device, address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
       });
       expect(res.statusCode).toBe(201);
     }
     // The 4th today hits the cap.
     const blocked = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: capToken, device_token: device, items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: capToken, device_token: device, address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(blocked.statusCode).toBe(429);
     expect(blocked.json().code).toBe('FORM_LIMIT_REACHED');
