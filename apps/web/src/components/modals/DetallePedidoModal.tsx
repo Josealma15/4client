@@ -13,6 +13,7 @@ import { toast } from '../ui/Toast';
 import ProductSearch from '../orders/ProductSearch';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import HistoryTable from '../ui/HistoryTable';
+import PasswordInput from '../ui/PasswordInput';
 
 interface Props { orderId: string; onClose: () => void; openCobro?: boolean; }
 
@@ -837,7 +838,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <label className="fl2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Lock size={13} /> Tu contraseña para confirmar <span style={{ color: 'var(--r)', fontWeight: 800 }}>*</span>
               </label>
-              <input className="fi2" type="password" placeholder="Contraseña de tu sesión"
+              <PasswordInput className="fi2" placeholder="Contraseña de tu sesión"
                 value={cobroPass} onChange={(e) => setCobroPass(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && cobroValido && !cobroMut.isPending) { e.preventDefault(); cobroMut.mutate(); } }}
                 autoComplete="current-password" />

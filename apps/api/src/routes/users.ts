@@ -27,7 +27,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
   // GET /api/v1/users - list org users, admin only
   fastify.get('/', { preHandler: [authenticate, requireRole('admin', 'dev')] }, async (req, reply) => {
     const users = await fastify.prisma.user.findMany({
-      where: { org_id: req.user.orgId },
+      // An admin (not dev) never sees dev-role accounts at all - not just blocked
+      // from acting on them, they don't appear in the list in the first place, so
+      // there's nothing to even suggest they could be edited/reset/deactivated.
+      where: { org_id: req.user.orgId, ...(req.user.role !== 'dev' ? { role: { not: 'dev' } } : {}) },
       select: { id: true, name: true, email: true, role: true, active: true, last_login: true, created_at: true },
       orderBy: [{ role: 'asc' }, { name: 'asc' }],
     });
@@ -83,7 +86,10 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     const updateData = { ...body.data, ...(body.data.email ? { email: body.data.email.toLowerCase() } : {}) };
     const result = await fastify.prisma.user.updateMany({
-      where: { id, org_id: req.user.orgId },
+      // An admin can never touch a dev-role account (only another dev can) - matched
+      // out here the same way the list above hides it, so this 404s exactly like a
+      // nonexistent id instead of a distinguishable "forbidden".
+      where: { id, org_id: req.user.orgId, ...(req.user.role !== 'dev' ? { role: { not: 'dev' } } : {}) },
       data: updateData,
     });
     if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });
@@ -102,7 +108,7 @@ export default async function userRoutes(fastify: FastifyInstance) {
 
     const password_hash = await bcrypt.hash(body.data.password, 12);
     const result = await fastify.prisma.user.updateMany({
-      where: { id, org_id: req.user.orgId },
+      where: { id, org_id: req.user.orgId, ...(req.user.role !== 'dev' ? { role: { not: 'dev' } } : {}) },
       data: { password_hash },
     });
     if (result.count === 0) return reply.status(404).send({ error: 'Usuario no encontrado', code: 'NOT_FOUND' });

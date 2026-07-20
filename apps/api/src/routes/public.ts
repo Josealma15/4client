@@ -411,13 +411,64 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           },
         });
 
-        await fastify.prisma.orderHistory.create({
-          data: {
-            org_id: payload.orgId, order_id: updated.id, actor_id: actorUser.id,
-            action_type: 'edit',
-            notes: `Pedido actualizado por el cliente desde el formulario (enviado por ${actorUser.name})`,
-          },
-        });
+        // Item-level diff, same shape/labels as staff edits (orders.ts) - a client
+        // merge used to write one generic "Pedido actualizado" note with no detail,
+        // so which product/price/quantity actually changed was invisible in the
+        // Historial. `notes` still says it came from the client via the form, so
+        // it stays distinguishable from a staff-made edit.
+        const histNotes = `Vía formulario del cliente (enviado por ${actorUser.name})`;
+        const historyEntries: any[] = [];
+        for (const ri of target.items.filter(i => !submittedNames.has(i.product_name))) {
+          historyEntries.push({
+            org_id: payload.orgId, order_id: target.id, actor_id: actorUser.id,
+            action_type: 'producto_eliminado', field: 'Producto eliminado',
+            value_before: `${ri.quantity_label ? ri.quantity_label + ' ' : ''}${ri.product_name} - $${Number(ri.price).toLocaleString('es-CO')}`,
+            value_after: 'Eliminado',
+            notes: histNotes,
+          });
+        }
+        for (const item of mergedItemsData) {
+          const prior = priorByName.get(item.product_name);
+          if (!prior) {
+            historyEntries.push({
+              org_id: payload.orgId, order_id: target.id, actor_id: actorUser.id,
+              action_type: 'producto_agregado', field: 'Producto agregado',
+              value_before: '',
+              value_after: `${item.quantity_label ? item.quantity_label + ' ' : ''}${item.product_name} - $${item.price}`,
+              notes: histNotes,
+            });
+          } else {
+            const qtyChanged = (prior.quantity_label ?? '') !== (item.quantity_label ?? '');
+            const priceChanged = Number(prior.price) !== Number(item.price);
+            if (qtyChanged || priceChanged) {
+              historyEntries.push({
+                org_id: payload.orgId, order_id: target.id, actor_id: actorUser.id,
+                action_type: 'producto_modificado', field: 'Producto modificado',
+                value_before: `${prior.quantity_label ? prior.quantity_label + ' ' : ''}${prior.product_name} - $${Number(prior.price).toLocaleString('es-CO')}`,
+                value_after: `${item.quantity_label ? item.quantity_label + ' ' : ''}${item.product_name} - $${Number(item.price).toLocaleString('es-CO')}`,
+                notes: histNotes,
+              });
+            }
+          }
+        }
+        if (addressChanged) {
+          historyEntries.push({
+            org_id: payload.orgId, order_id: target.id, actor_id: actorUser.id,
+            action_type: 'edit', field: 'Dirección',
+            value_before: target.address, value_after: body.data.address,
+            notes: histNotes,
+          });
+        }
+        if (paymentChanged) {
+          historyEntries.push({
+            org_id: payload.orgId, order_id: target.id, actor_id: actorUser.id,
+            action_type: 'edit', field: 'Método de pago',
+            value_before: PAYMENT_LABEL_CLIENT[target.payment_method] ?? target.payment_method,
+            value_after: PAYMENT_LABEL_CLIENT[body.data.payment_method!] ?? body.data.payment_method,
+            notes: histNotes,
+          });
+        }
+        await fastify.prisma.orderHistory.createMany({ data: historyEntries });
 
         const lines = updated.items.map(i => `• ${sanitizeForWhatsApp(i.product_name)}: ${sanitizeForWhatsApp(i.quantity_label ?? '')}`);
         const updatedPaymentLabel = updated.payment_method && updated.payment_method !== 'sin_asignar'

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/auth';
+import PasswordInput from '../components/ui/PasswordInput';
 
 export default function LoginPage() {
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -50,7 +51,7 @@ export default function LoginPage() {
         </div>
         <div className="fg">
           <label className="fl">Contraseña</label>
-          <input className="fi" type="password" placeholder="••••••••" value={password}
+          <PasswordInput className="fi" placeholder="••••••••" value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
         </div>

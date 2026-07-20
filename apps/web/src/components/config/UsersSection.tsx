@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
 import { useAuthStore } from '../../store/auth';
 import { ConfirmDialog } from './ConfirmDialog';
+import PasswordInput from '../ui/PasswordInput';
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ export default function UsersSection() {
             </div>
             <div>
               <label className="fl">Contraseña (mín. 6 caracteres) *</label>
-              <input className="fi" type="password" value={form.password}
+              <PasswordInput className="fi" value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 placeholder="••••••" />
             </div>
@@ -273,13 +274,13 @@ export default function UsersSection() {
                     Restablecer contraseña de {u.name}
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
+                    <PasswordInput
                       className="fi"
-                      type="password"
                       value={newPass}
                       onChange={e => setNewPass(e.target.value)}
                       placeholder="Nueva contraseña (mín. 6 caracteres)"
-                      style={{ flex: 1, padding: '9px 12px', fontSize: 13 }}
+                      wrapperStyle={{ flex: 1 }}
+                      style={{ padding: '9px 12px', fontSize: 13 }}
                       autoFocus
                     />
                     <button

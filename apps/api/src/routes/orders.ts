@@ -207,7 +207,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
   // GET /api/v1/orders/:id
   fastify.get('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'dev';
 
     const order = await fastify.prisma.order.findFirst({
       where: { id, org_id: req.user.orgId },

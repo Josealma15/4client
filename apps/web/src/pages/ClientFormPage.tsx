@@ -88,6 +88,32 @@ export default function ClientFormPage() {
   // stale `false` value in the same tick. A ref updates immediately, no render lag.
   const submittingRef = useRef(false);
 
+  // Shared by the initial load AND by "volver al menú" from the done screen -
+  // fetches the client's current info/orders and returns the order list (or null on
+  // failure, having already switched to 'invalid' itself). Callers decide the actual
+  // state transition since the initial load and the post-done return route slightly
+  // differently (first-ever visit skips the menu, everything else goes to it).
+  async function loadFormInfo(): Promise<DayOrder[] | null> {
+    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
+    try {
+      const [info, prods] = await Promise.all([
+        fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()),
+        fetch(`${API}/api/v1/public/products?${qs}`).then(r => r.json()),
+      ]);
+      if (!info.data?.clientName) { setState('invalid'); setErrorMsg(info.error ?? 'Link inválido o expirado.'); return null; }
+      setClientName(info.data.clientName);
+      setOrgName(info.data.orgName ?? '');
+      setProducts(prods.data ?? []);
+      const orders: DayOrder[] = info.data.orders ?? [];
+      setDayOrders(orders);
+      return orders;
+    } catch {
+      setState('invalid');
+      setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.');
+      return null;
+    }
+  }
+
   useEffect(() => {
     if (!token) { setState('invalid'); setErrorMsg('Link inválido. Pide un nuevo link al negocio.'); return; }
 
@@ -106,28 +132,29 @@ export default function ClientFormPage() {
     } catch { /* localStorage unavailable (private mode, etc.) - ignore */ }
     setHydrated(true);
 
-    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
-    Promise.all([
-      fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()),
-      fetch(`${API}/api/v1/public/products?${qs}`).then(r => r.json()),
-    ])
-      .then(([info, prods]) => {
-        if (!info.data?.clientName) { setState('invalid'); setErrorMsg(info.error ?? 'Link inválido o expirado.'); return; }
-        setClientName(info.data.clientName);
-        setOrgName(info.data.orgName ?? '');
-        setProducts(prods.data ?? []);
-        const orders: DayOrder[] = info.data.orders ?? [];
-        setDayOrders(orders);
-        if (orders.length > 0) {
-          setState('choose');
-        } else {
-          setMergeTarget('new');
-          setState('catalog');
-          setTimeout(() => searchRef.current?.focus(), 100);
-        }
-      })
-      .catch(() => { setState('invalid'); setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.'); });
+    loadFormInfo().then(orders => {
+      if (orders === null) return;
+      // First-ever visit today (no orders yet) - straight to the catalog, nothing to
+      // choose between. Any later visit (an order already exists) - the menu, with
+      // that order to resume plus the option to start a separate new one.
+      if (orders.length > 0) {
+        setState('choose');
+      } else {
+        setMergeTarget('new');
+        setState('catalog');
+        setTimeout(() => searchRef.current?.focus(), 100);
+      }
+    });
   }, [token]);
+
+  // From the "¡Pedido enviado!" screen back to the menu - without this, a client who
+  // just finished an order had no way back in except manually refreshing the page.
+  async function goToMenu() {
+    setState('loading');
+    const orders = await loadFormInfo();
+    if (orders === null) return; // loadFormInfo already switched to 'invalid'
+    setState('choose');
+  }
 
   // Persist confirmed items as a draft so the client can resume within 1 day
   // if they close the tab mid-order. Skip until the initial restore attempt
@@ -380,10 +407,11 @@ export default function ClientFormPage() {
       <div style={{ background: '#fff', borderRadius: 18, margin: '24px 16px', padding: '36px 20px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,.1)' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><CheckCircle size={72} color={GREEN} strokeWidth={1.5} /></div>
         <div style={{ fontSize: 24, fontWeight: 800, color: GREEN, marginBottom: 10 }}>¡Pedido enviado!</div>
-        <div style={{ fontSize: 17, color: '#555', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 17, color: '#555', lineHeight: 1.6, marginBottom: 20 }}>
           Tu pedido fue enviado a <strong>{orgName}</strong>.<br />
           En breve te atenderemos por WhatsApp.
         </div>
+        <button onClick={goToMenu} style={btnPrimary}>Ver mis pedidos</button>
       </div>
     </div>
   );

@@ -13,15 +13,17 @@ type Section = 'productos' | 'domiciliarios' | 'usuarios' | 'dev';
 export default function ConfigTab() {
   const user = useAuthStore(s => s.user);
   const isDev = user?.role === 'dev';
+  // dev is a superset of admin, not a separate restricted role - it lands on
+  // DevTools by default (that's the reason a dev account exists) but can reach
+  // every admin section too, instead of having to ask an admin to make changes.
   const [section, setSection] = useState<Section>(isDev ? 'dev' : 'productos');
 
-  const tabs: { key: Section; label: string; icon: React.ReactNode }[] = isDev
-    ? [{ key: 'dev', label: 'DevTools', icon: <Code2 size={15} /> }]
-    : [
-        { key: 'productos',     label: 'Productos',     icon: <Package size={15} /> },
-        { key: 'domiciliarios', label: 'Domiciliarios', icon: <Truck size={15} /> },
-        { key: 'usuarios',      label: 'Usuarios',      icon: <Users size={15} /> },
-      ];
+  const tabs: { key: Section; label: string; icon: React.ReactNode }[] = [
+    { key: 'productos',     label: 'Productos',     icon: <Package size={15} /> },
+    { key: 'domiciliarios', label: 'Domiciliarios', icon: <Truck size={15} /> },
+    { key: 'usuarios',      label: 'Usuarios',      icon: <Users size={15} /> },
+    ...(isDev ? [{ key: 'dev' as Section, label: 'DevTools', icon: <Code2 size={15} /> }] : []),
+  ];
 
   return (
     <div>
@@ -49,11 +51,11 @@ export default function ConfigTab() {
         ))}
       </div>
 
-      {section === 'productos'     && !isDev && <ProductsSection />}
-      {section === 'domiciliarios' && !isDev && <EmployeesSection />}
-      {section === 'usuarios'      && !isDev && <UsersSection />}
+      {section === 'productos'     && <ProductsSection />}
+      {section === 'domiciliarios' && <EmployeesSection />}
+      {section === 'usuarios'      && <UsersSection />}
 
-      {section === 'dev'           &&  isDev && <DevSection />}
+      {section === 'dev'           && isDev && <DevSection />}
     </div>
   );
 }
