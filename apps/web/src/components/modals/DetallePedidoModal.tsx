@@ -8,6 +8,7 @@ import { getSocket } from '../../lib/socket';
 import { useProducts } from '../../hooks/useProducts';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useDiaCerrado } from '../../hooks/useCierre';
+import { useWithinFormHours, FORM_HOURS_CLOSED_MSG } from '../../hooks/useFormHours';
 import { STATUS_LABEL, STATUS_ORDER, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
 import { toast } from '../ui/Toast';
 import ProductSearch from '../orders/ProductSearch';
@@ -92,6 +93,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const orderFecha: string | undefined = order?.fecha ? new Date(order.fecha).toISOString().split('T')[0] : undefined;
   const { data: cierreStatus } = useDiaCerrado(orderFecha);
   const diaCerrado = cierreStatus?.cerrado ?? false;
+  const withinFormHours = useWithinFormHours();
 
   const [nombre, setNombre] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -385,9 +387,16 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   function copyInvoice() {
     if (!order) return;
     const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
-    const lines = [`Pedido #${order.num} - ${user?.orgName ?? '4Client'}`, `Cliente: ${order.customer_name}`, `Dirección: ${order.address}`, ''];
+    const lines = [
+      `Pedido #${order.num} - ${user?.orgName ?? '4Client'}`,
+      `Cliente: ${order.customer_name}`,
+      ...(order.customer_phone ? [`Teléfono: ${order.customer_phone}`] : []),
+      `Dirección: ${order.address}`,
+      `Método de pago: ${PAYMENT_LABEL[pago] ?? pago}`,
+      '',
+    ];
     items.forEach(i => lines.push(`• ${i.product_name}${i.quantity_label ? ' - ' + i.quantity_label : ''}: $${(parseFloat(i.price)||0).toLocaleString('es-CO')}`));
-    lines.push('', `Total: $${total.toLocaleString('es-CO')}`, `Pago: ${PAYMENT_LABEL[pago] ?? pago}`);
+    lines.push('', `Total: $${total.toLocaleString('es-CO')}`);
     navigator.clipboard.writeText(lines.join('\n'));
     toast('Copiado al portapapeles');
   }
@@ -497,22 +506,22 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
+                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Enviar formulario de pedido al cliente'}
                   onClick={sendFormLink}
-                  disabled={formLinkMut.isPending || isPastDay}
+                  disabled={formLinkMut.isPending || isPastDay || !withinFormHours}
                 >
                   <ClipboardList size={13} />
                   Formulario
                 </button>
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
+                  title={isPastDay ? 'Este pedido es de un día anterior o su caja ya cerró - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Bloquear el link de formulario enviado a este cliente'}
                   onClick={() => setConfirmDlg({
                     msg: 'Vas a bloquear el link del formulario - el cliente no podrá usarlo y tendrás que enviarle uno nuevo. ¿Deseas bloquearlo?',
                     onOk: () => blockLinkMut.mutate(),
                     danger: true,
                   })}
-                  disabled={blockLinkMut.isPending || isPastDay}
+                  disabled={blockLinkMut.isPending || isPastDay || !withinFormHours}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>

@@ -4,6 +4,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 import { sanitizeForWhatsApp } from '../lib/sanitize.js';
 import { config } from '../config.js';
+import { sortByCategoryOrder } from '../lib/categoryOrder.js';
 
 interface FormTokenPayload {
   type: string;
@@ -31,16 +32,18 @@ const MAX_FORM_ORDERS_PER_TICKET = 3;
 // used in orders.ts (which says "Efectivo" instead of "En tienda" for `cash`).
 const PAYMENT_LABEL_CLIENT: Record<string, string> = { transfer: 'Transferencia', cash: 'En tienda', cod: 'Cobro en casa' };
 
-// Form links only work until 8pm Colombia time (UTC-5, no DST), every day - outside
-// that window an order needs a staff member handling it directly (chat), not
-// self-service via the link. A plain function of `now` (defaults to the real clock)
-// instead of a closure reading Date.now() directly, so a test can assert the exact
-// boundary (7:59pm vs 8:00pm) deterministically instead of depending on whatever
-// real wall-clock time the suite happens to run at.
+// Form links only work between 4am and 8pm Colombia time (UTC-5, no DST), every day -
+// outside that window an order needs a staff member handling it directly (chat), not
+// self-service via the link (overnight self-service orders showed up unattended for
+// hours). A plain function of `now` (defaults to the real clock) instead of a closure
+// reading Date.now() directly, so a test can assert the exact boundaries (3:59am vs
+// 4:00am, 7:59pm vs 8:00pm) deterministically instead of depending on whatever real
+// wall-clock time the suite happens to run at.
+const FORM_OPEN_HOUR = 4;
 const FORM_CLOSED_HOUR = 20;
 export function isWithinFormHours(now: number = Date.now()): boolean {
-  const nowCol = new Date(now - 5 * 3600000);
-  return nowCol.getUTCHours() < FORM_CLOSED_HOUR;
+  const hourCol = new Date(now - 5 * 3600000).getUTCHours();
+  return hourCol >= FORM_OPEN_HOUR && hourCol < FORM_CLOSED_HOUR;
 }
 
 // Computes the next sequential order number for org+fecha and creates the order,
@@ -95,7 +98,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   // link is broken.
   function sendFormClosed(reply: FastifyReply) {
     return reply.status(403).send({
-      error: 'El formulario está disponible hasta las 8:00pm. Para hacer tu pedido ahora, escríbenos directamente por WhatsApp.',
+      error: 'El formulario está disponible de 4:00am a 8:00pm. Para hacer tu pedido ahora, escríbenos directamente por WhatsApp.',
       code: 'FORM_CLOSED',
     });
   }
@@ -243,7 +246,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
         orderBy: [{ category: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
       });
-      return reply.send({ data: products });
+      return reply.send({ data: sortByCategoryOrder(products) });
     } catch {
       return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
     }
@@ -591,7 +594,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       fastify.log.warn({ ticketId: ticket.id }, 'WPP: org sin credenciales Meta, confirmación de formulario solo guardada en BD');
     }
 
-    // Historial del pedido
+    // Historial del pedido - una entrada 'create' del pedido, más un
+    // producto_agregado por cada ítem inicial (mismo formato que un edit posterior),
+    // para que se vea qué productos/precios trajo desde el inicio, no solo en ediciones.
     await fastify.prisma.orderHistory.create({
       data: {
         org_id: payload.orgId,
@@ -601,6 +606,17 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         notes: `Pedido creado desde formulario (enviado por ${actorUser.name})`,
       },
     });
+    if (order.items.length > 0) {
+      await fastify.prisma.orderHistory.createMany({
+        data: order.items.map((i) => ({
+          org_id: payload.orgId, order_id: order.id, actor_id: actorUser.id,
+          action_type: 'producto_agregado', field: 'Producto agregado',
+          value_before: '',
+          value_after: `${i.quantity_label ? i.quantity_label + ' ' : ''}${i.product_name} - $${Number(i.price).toLocaleString('es-CO')}`,
+          notes: `Agregado al crear el pedido desde formulario (enviado por ${actorUser.name})`,
+        })),
+      });
+    }
 
     // Socket events
     fastify.io.to(`org:${payload.orgId}`).emit('order:created', order as any);

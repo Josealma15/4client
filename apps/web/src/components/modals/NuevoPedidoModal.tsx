@@ -12,6 +12,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import ProductSearch from '../orders/ProductSearch';
 import { todayStr } from '../../lib/format';
 import { useDiaCerrado } from '../../hooks/useCierre';
+import { useWithinFormHours, FORM_HOURS_CLOSED_MSG } from '../../hooks/useFormHours';
 
 const URL_RE = /(https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]{1,2000})/g;
 function renderText(text: string) {
@@ -161,6 +162,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   // nothing live to send/block. Also true the moment TODAY's caja gets closed early.
   const { data: cierreStatus } = useDiaCerrado(fecha);
   const isPastDay = fecha < todayStr() || (cierreStatus?.cerrado ?? false);
+  const withinFormHours = useWithinFormHours();
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && handleClose()}>
@@ -179,8 +181,8 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               {ticketId && (
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
-                  disabled={isPastDay}
+                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Enviar formulario de pedido al cliente'}
+                  disabled={isPastDay || !withinFormHours}
                   onClick={async () => {
                     try {
                       const res = await api.get<{ data: { url: string } }>(`/inbox/${ticketId}/form-link`);
@@ -195,9 +197,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               {ticketId && (
                 <button
                   className="hdr-ic-btn"
-                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
+                  title={isPastDay ? 'Este ticket es de un día anterior - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Bloquear el link de formulario enviado a este cliente'}
                   onClick={() => setShowBlockConfirm(true)}
-                  disabled={blockLinkMut.isPending || isPastDay}
+                  disabled={blockLinkMut.isPending || isPastDay || !withinFormHours}
                 >
                   <Ban size={13} />
                   <span>Bloquear<br />Link</span>

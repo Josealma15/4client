@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
 import { fmtCOP, STATUS_LABEL, todayStr } from '../../lib/format';
 import { useDiaCerrado } from '../../hooks/useCierre';
+import { useWithinFormHours, FORM_HOURS_CLOSED_MSG } from '../../hooks/useFormHours';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 
@@ -127,6 +128,7 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
   // closing today), same as a past day for this purpose.
   const { data: cierreStatus } = useDiaCerrado(fecha);
   const isPastDay = fecha < todayStr() || (cierreStatus?.cerrado ?? false);
+  const withinFormHours = useWithinFormHours();
 
   return (
     <div className="moverlay on" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -157,18 +159,18 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
             <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
               <button
                 className="hdr-ic-btn"
-                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : 'Enviar formulario de pedido al cliente'}
+                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Enviar formulario de pedido al cliente'}
                 onClick={sendFormLink}
-                disabled={formLinkMut.isPending || isPastDay}
+                disabled={formLinkMut.isPending || isPastDay || !withinFormHours}
               >
                 <ClipboardList size={13} />
                 Formulario
               </button>
               <button
                 className="hdr-ic-btn"
-                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : 'Bloquear el link de formulario enviado a este cliente'}
+                title={isPastDay ? 'Este chat es de un día anterior - el link ya expiró' : !withinFormHours ? FORM_HOURS_CLOSED_MSG : 'Bloquear el link de formulario enviado a este cliente'}
                 onClick={() => setShowBlockConfirm(true)}
-                disabled={blockLinkMut.isPending || isPastDay}
+                disabled={blockLinkMut.isPending || isPastDay || !withinFormHours}
               >
                 <Ban size={13} />
                 <span>Bloquear<br />Link</span>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Truck, Users, Code2 } from 'lucide-react';
+import { Package, Users, Code2 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth';
 import ProductsSection from './ProductsSection';
 import EmployeesSection from './EmployeesSection';
@@ -8,7 +8,11 @@ import DevSection from './DevSection';
 
 // ─── ConfigTab root ───────────────────────────────────────────────────────────
 
-type Section = 'productos' | 'domiciliarios' | 'usuarios' | 'dev';
+// "Domiciliarios" folded into "Usuarios" - one screen instead of two, since staff
+// kept having to manage the same person's name in both places. Still two separate
+// things under the hood (a domiciliario assigned to a pedido isn't necessarily
+// someone with a login), just no longer two separate tabs to hunt between.
+type Section = 'productos' | 'usuarios' | 'dev';
 
 export default function ConfigTab() {
   const user = useAuthStore(s => s.user);
@@ -19,9 +23,8 @@ export default function ConfigTab() {
   const [section, setSection] = useState<Section>(isDev ? 'dev' : 'productos');
 
   const tabs: { key: Section; label: string; icon: React.ReactNode }[] = [
-    { key: 'productos',     label: 'Productos',     icon: <Package size={15} /> },
-    { key: 'domiciliarios', label: 'Domiciliarios', icon: <Truck size={15} /> },
-    { key: 'usuarios',      label: 'Usuarios',      icon: <Users size={15} /> },
+    { key: 'productos', label: 'Productos', icon: <Package size={15} /> },
+    { key: 'usuarios',  label: 'Usuarios',  icon: <Users size={15} /> },
     ...(isDev ? [{ key: 'dev' as Section, label: 'DevTools', icon: <Code2 size={15} /> }] : []),
   ];
 
@@ -51,11 +54,21 @@ export default function ConfigTab() {
         ))}
       </div>
 
-      {section === 'productos'     && <ProductsSection />}
-      {section === 'domiciliarios' && <EmployeesSection />}
-      {section === 'usuarios'      && <UsersSection />}
+      {section === 'productos' && <ProductsSection />}
+      {section === 'usuarios' && (
+        <>
+          <UsersSection />
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '2px solid var(--brd)' }}>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>Domiciliarios</div>
+            <div style={{ fontSize: 12, color: 'var(--gt)', marginBottom: 14 }}>
+              Personas para asignar como responsables de entrega en los pedidos - no tienen acceso al sistema.
+            </div>
+            <EmployeesSection />
+          </div>
+        </>
+      )}
 
-      {section === 'dev'           && isDev && <DevSection />}
+      {section === 'dev' && isDev && <DevSection />}
     </div>
   );
 }

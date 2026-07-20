@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, RotateCcw, X, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
-import { useAuthStore } from '../../store/auth';
 import { ConfirmDialog } from './ConfirmDialog';
 import PasswordInput from '../ui/PasswordInput';
 
@@ -17,8 +16,6 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default function UsersSection() {
-  const currentUser = useAuthStore(s => s.user);
-  const canAssignDev = currentUser?.role === 'dev';
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [resetId, setResetId] = useState<string | null>(null);
@@ -146,8 +143,6 @@ export default function UsersSection() {
                 onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                 <option value="encargado">Encargado</option>
                 <option value="domiciliario">Domiciliario</option>
-                <option value="admin">Administrador</option>
-                {canAssignDev && <option value="dev">Dev (super-admin)</option>}
               </select>
             </div>
           </div>
@@ -179,22 +174,26 @@ export default function UsersSection() {
                   {u.name[0].toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 14 }}>{u.name}</span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                      background: u.role === 'admin' ? 'var(--vc)' : 'var(--azc)',
-                      color: u.role === 'admin' ? 'var(--vd)' : 'var(--az)',
-                    }}>
-                      {ROLE_LABEL[u.role] ?? u.role}
-                    </span>
-                    {!u.active && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'var(--rc)', color: 'var(--r)' }}>
-                        Inactivo
-                      </span>
-                    )}
-                  </div>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{u.name}</span>
                   <div style={{ fontSize: 12, color: 'var(--gt)', marginTop: 2 }}>{u.email}</div>
+                </div>
+                {/* Fixed-width columns (not inline with the name) so every row's role/
+                    status badges land in the same spot regardless of name length. */}
+                <div style={{ width: 120, flexShrink: 0 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                    background: u.role === 'admin' ? 'var(--vc)' : 'var(--azc)',
+                    color: u.role === 'admin' ? 'var(--vd)' : 'var(--az)',
+                  }}>
+                    {ROLE_LABEL[u.role] ?? u.role}
+                  </span>
+                </div>
+                <div style={{ width: 70, flexShrink: 0 }}>
+                  {!u.active && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'var(--rc)', color: 'var(--r)' }}>
+                      Inactivo
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button
@@ -249,8 +248,13 @@ export default function UsersSection() {
                         style={{ padding: '8px 11px', fontSize: 13 }}>
                         <option value="encargado">Encargado</option>
                         <option value="domiciliario">Domiciliario</option>
-                        <option value="admin">Administrador</option>
-                        {canAssignDev && <option value="dev">Dev (super-admin)</option>}
+                        {/* Not offered for NEW assignments (ya hay un admin y no debe
+                            haber más) - but kept as the selected option here so editing
+                            THIS row (e.g. just to fix a typo in the name) doesn't show a
+                            blank/mismatched dropdown for the one admin account. */}
+                        {!['encargado', 'domiciliario'].includes(editForm.role) && (
+                          <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
+                        )}
                       </select>
                     </div>
                   </div>
