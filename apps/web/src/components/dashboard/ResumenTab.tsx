@@ -31,9 +31,10 @@ interface Props {
   history: any[];
   orders: any[];
   onCierreCaja: () => void;
+  onOpenOrder: (orderId: string) => void;
 }
 
-export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders, history, onCierreCaja }: Props) {
+export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders, history, onCierreCaja, onOpenOrder }: Props) {
   const [resumenTab, setResumenTab] = useState<'activos' | 'papelera' | 'cambios'>('activos');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -364,7 +365,9 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
           {papeleraOrders.map((o: any) => {
             const total = o.items?.reduce((s: number, i: any) => s + Number(i.price), 0) ?? 0;
             return (
-              <div key={o.id} className="papcard">
+              <div key={o.id} className="papcard" onClick={() => onOpenOrder(o.id)}
+                title="Ver detalle - quién lo envió a la papelera y cuándo"
+                style={{ cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 14, fontWeight: 800 }}>#{o.num} - {o.customer_name}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--r)', display: 'flex', alignItems: 'center', gap: 4 }}>

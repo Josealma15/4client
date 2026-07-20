@@ -310,6 +310,24 @@ export default async function orderRoutes(fastify: FastifyInstance) {
           });
         }
 
+        // Same product name kept, but its price or quantity changed - the add/remove
+        // diff above misses this entirely (it only sees names, not values), so before
+        // this a price correction on an existing line left no trace in the history.
+        const prevByName = new Map(prevItems.map(i => [i.product_name, i]));
+        for (const ai of items.filter(i => prevNames.has(i.product_name))) {
+          const prior = prevByName.get(ai.product_name)!;
+          const qtyChanged = (prior.quantity_label ?? '') !== (ai.quantity_label ?? '');
+          const priceChanged = Number(prior.price) !== Number(ai.price);
+          if (!qtyChanged && !priceChanged) continue;
+          historyEntries.push({
+            org_id: req.user.orgId, order_id: id, actor_id: req.user.userId,
+            action_type: 'producto_modificado', field: 'Producto modificado',
+            value_before: `${prior.quantity_label ? prior.quantity_label + ' ' : ''}${prior.product_name} - $${Number(prior.price).toLocaleString('es-CO')}`,
+            value_after: `${ai.quantity_label ? ai.quantity_label + ' ' : ''}${ai.product_name} - $${Number(ai.price).toLocaleString('es-CO')}`,
+            notes: `Estado al modificar: ${existing.status}`,
+          });
+        }
+
         await tx.orderItem.deleteMany({ where: { order_id: id } });
         await tx.orderItem.createMany({ data: items.map(i => ({ ...i, order_id: id })) });
       }

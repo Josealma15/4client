@@ -127,6 +127,10 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       added_by_client: !!i.added_by_client,
     })));
     setIsDirty(false);
+    // Trashed orders are opened specifically to see what happened (who sent it to
+    // papelera, when) - that's in the history, so show it expanded right away
+    // instead of making the person hunt for the toggle.
+    if (order.status === 'papelera') setShowHist(true);
   }, [order]);
 
   // Live-update this open order when it changes elsewhere - most importantly, a
@@ -434,7 +438,12 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   // editable once that day is history) vs. frozen because it was individually paid
   // and closed - same read-only effect, different reason, so the "already
   // paid/closed" info banner below stays tied to `locked` alone, not `readOnly`.
-  const readOnly = locked || diaCerrado;
+  // A papelera order is also frozen - opened from the Papelera tab purely to see what
+  // happened to it (who trashed it, when, with what items/prices), not to edit or
+  // move it. It isn't necessarily `locked` (papelera never sets that flag) or on a
+  // closed day, so without this it'd otherwise still show live "Mover pedido"/
+  // "Guardar" controls on something that's already been thrown out.
+  const readOnly = locked || diaCerrado || order.status === 'papelera';
   // Same reasoning as TicketModal - the link itself already expires by end of the
   // Colombia day it was sent, so sending/blocking one from a past-day order's chat
   // is always acting on an already-dead link. Also true the moment TODAY's caja
