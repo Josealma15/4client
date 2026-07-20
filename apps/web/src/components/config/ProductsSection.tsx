@@ -83,11 +83,16 @@ export default function ProductsSection() {
   function handleSubmit() {
     if (!form?.name.trim()) return toast('El nombre es obligatorio', true);
     const category = resolvedCategory(form);
-    const price = parseFloat(form.price_per_unit);
+    // Blank input = "don't touch the price" (dropped from the payload entirely, so a
+    // PATCH leaves the stored price as-is). An explicit "0" IS a valid price - it's how
+    // a product gets marked agotado - so it must be sent through, not treated the same
+    // as blank/invalid input like a plain `price > 0` check used to.
+    const priceRaw = form.price_per_unit.trim();
+    const price = parseFloat(priceRaw);
     save.mutate({
       name: form.name.trim(),
       category: category || undefined,
-      price_per_unit: !isNaN(price) && price > 0 ? price : undefined,
+      price_per_unit: priceRaw === '' ? undefined : (!isNaN(price) && price >= 0 ? price : undefined),
       unit_type: form.unit_type.trim() || undefined,
     });
   }

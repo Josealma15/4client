@@ -286,6 +286,7 @@ export default function MainPage() {
             history={history}
             orders={orders}
             onCierreCaja={() => setShowCierre(true)}
+            onOpenOrder={(orderId) => setOpenOrderId(orderId)}
           />
         )}
 

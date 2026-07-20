@@ -11,7 +11,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      // Only set when there's an actual body - Fastify's default JSON parser rejects
+      // a request that declares Content-Type: application/json but sends no body
+      // (FST_ERR_CTP_EMPTY_JSON_BODY, 400). `api.delete()` never sends a body, so
+      // every DELETE call (e.g. deleting a product) was hitting this before it ever
+      // reached the route handler - same root cause already found and fixed for the
+      // /auth/refresh call in doRefresh() below, just not for this shared helper.
+      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },

@@ -279,6 +279,12 @@ export default function ClientFormPage() {
     // race with a second one.
     if (submittingRef.current) return;
     if (selected.length === 0) { setSubmitError('Agrega al menos un producto'); return; }
+    if (!address.trim()) {
+      setSubmitError('Ingresa la dirección de entrega');
+      setSummaryExpanded(true);
+      summaryRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
     submittingRef.current = true;
     setSubmitError('');
     setSubmitting(true);
@@ -289,7 +295,7 @@ export default function ClientFormPage() {
         body: JSON.stringify({
           token,
           device_token: deviceToken,
-          address: address.trim() || undefined,
+          address: address.trim(),
           payment_method: paymentMethod || undefined,
           merge_order_id: mergeTarget && mergeTarget !== 'new' ? mergeTarget : undefined,
           items: selected.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
@@ -466,18 +472,19 @@ export default function ClientFormPage() {
   }
 
   const selectedCount = selected.length;
-  const canGoBack = dayOrders.length > 0;
 
   return (
     <div style={page}>
-      {/* Header */}
+      {/* Header - back button always present so the client can return to the menu
+          (list of today's orders / "crear pedido nuevo") from the catalog, even on
+          their very first order of the day when there's technically nothing to go
+          back TO yet - backToChoose() still works fine (empty "Tus pedidos de hoy"
+          list, "Crear un pedido nuevo" button). */}
       <div style={header}>
-        {canGoBack && (
-          <button onClick={backToChoose} title="Volver al menú anterior" aria-label="Volver"
-            style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0 }}>
-            <ArrowLeft size={17} />
-          </button>
-        )}
+        <button onClick={backToChoose} title="Volver al menú anterior" aria-label="Volver"
+          style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0 }}>
+          <ArrowLeft size={17} />
+        </button>
         <ShoppingCart size={20} color="#fff" />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>{orgName}</div>
@@ -534,14 +541,14 @@ export default function ClientFormPage() {
               can happen with it. Still editable by staff afterward if needed. */}
           <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 10, paddingTop: 10 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
-              Dirección de entrega <span style={{ fontWeight: 400, color: '#999' }}>(opcional)</span>
+              Dirección de entrega <span style={{ fontWeight: 700, color: '#DC2626' }}>*</span>
             </label>
             <input
               type="text"
               placeholder="Calle, número, barrio..."
               value={address}
-              onChange={e => setAddress(e.target.value)}
-              style={{ width: '100%', fontSize: 14, padding: '10px 12px', border: '2px solid #ddd', borderRadius: 10, outline: 'none', fontFamily: 'inherit', color: '#111', background: '#fff', marginBottom: 10 }}
+              onChange={e => { setAddress(e.target.value); if (submitError) setSubmitError(''); }}
+              style={{ width: '100%', fontSize: 14, padding: '10px 12px', border: `2px solid ${!address.trim() && submitError ? '#DC2626' : '#ddd'}`, borderRadius: 10, outline: 'none', fontFamily: 'inherit', color: '#111', background: '#fff', marginBottom: 10 }}
             />
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#444', marginBottom: 5 }}>
               Método de pago <span style={{ fontWeight: 400, color: '#999' }}>(opcional)</span>
