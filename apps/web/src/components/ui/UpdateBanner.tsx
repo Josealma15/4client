@@ -17,6 +17,13 @@ export default function UpdateBanner() {
       // check for updates on load/navigation - poll periodically so a deploy is
       // discovered without requiring a manual refresh first.
       setInterval(() => registration.update(), 30 * 60 * 1000);
+      // Also check right away whenever the tab regains focus - during an active work
+      // session someone flips back to an already-open tab far more often than they
+      // wait out a 30min timer, and that's the exact moment a just-shipped fix should
+      // surface instead of silently sitting cached for up to half an hour more.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update();
+      });
     },
   });
 
