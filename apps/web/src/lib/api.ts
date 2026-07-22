@@ -1,6 +1,7 @@
 import { useAuthStore } from '../store/auth';
+import { resolveApiBase } from './apiBase';
 
-const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api/v1';
+const BASE = resolveApiBase() + '/api/v1';
 
 // Prevent concurrent refresh calls - all 401s share one in-flight refresh
 let refreshPromise: Promise<boolean> | null = null;

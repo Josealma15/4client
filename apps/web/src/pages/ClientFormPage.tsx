@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ShoppingCart, CheckCircle, XCircle, Check, Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Lock } from 'lucide-react';
+import { resolveApiBase } from '../lib/apiBase';
 
-const API = import.meta.env.VITE_API_URL ?? '';
+const API = resolveApiBase();
 
 interface Product { id: string; name: string; category: string; unit_type?: string | null; }
 interface SelectedItem { product_name: string; quantity_label: string; productId: string; }
