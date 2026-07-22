@@ -382,6 +382,11 @@ export default function ClientFormPage() {
     border: 'none', borderRadius: 12, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   };
+  const safetyNotice: React.CSSProperties = {
+    display: 'flex', alignItems: 'flex-start', gap: 8,
+    background: '#EFF6FF', borderBottom: '2px solid #BFDBFE', color: '#1E3A8A',
+    padding: '10px 16px', fontSize: 11.5, fontWeight: 800, lineHeight: 1.5,
+  };
 
   if (state === 'loading') return (
     <div style={page}>
@@ -427,6 +432,10 @@ export default function ClientFormPage() {
             <div style={{ fontWeight: 800, fontSize: 15 }}>{orgName}</div>
             {clientName && <div style={{ fontSize: 12, opacity: 0.85 }}>Hola, {clientName}</div>}
           </div>
+        </div>
+        <div style={safetyNotice}>
+          <Lock size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>ESTE LINK ES SOLO PARA HACER TU PEDIDO Y HACER SEGUIMIENTO DE TUS PEDIDOS. NUNCA TE PEDIREMOS DINERO NI DATOS BANCARIOS NI INFORMACIÓN CONFIDENCIAL.</span>
         </div>
         <div style={{ padding: '20px 16px' }}>
           <div style={{ background: '#fff', borderRadius: 14, padding: '18px 16px', boxShadow: '0 2px 12px rgba(0,0,0,.06)', marginBottom: 14 }}>
@@ -524,6 +533,11 @@ export default function ClientFormPage() {
             <Check size={13} /> {selectedCount} ítem{selectedCount > 1 ? 's' : ''}
           </div>
         )}
+      </div>
+
+      <div style={safetyNotice}>
+        <Lock size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>ESTE LINK ES SOLO PARA HACER TU PEDIDO Y HACER SEGUIMIENTO DE TUS PEDIDOS. NUNCA TE PEDIREMOS DINERO NI DATOS BANCARIOS NI INFORMACIÓN CONFIDENCIAL.</span>
       </div>
 
       {liveWarning && (
