@@ -183,7 +183,7 @@ describe('public form routes', () => {
     expect(formOrderCount).toBe(1);
   });
 
-  it('staff saving the order clears client_modified but the per-item added_by_client flag stays permanently - never reset', async () => {
+  it('staff saving the order does NOT clear client_modified - it stays permanently, same as the per-item added_by_client flag', async () => {
     const saveRes = await app.inject({
       method: 'PATCH',
       url: `/api/v1/orders/${firstOrderId}`,
@@ -198,12 +198,12 @@ describe('public form routes', () => {
     expect(saveRes.statusCode).toBe(200);
 
     const order = await app.prisma.order.findUniqueOrThrow({ where: { id: firstOrderId }, include: { items: true } });
-    expect(order.client_modified).toBe(false); // bell cleared by the save
+    expect(order.client_modified).toBe(true); // stays set - a staff save no longer clears it
     const pina = order.items.find(i => i.product_name === 'Piña')!;
     expect(pina.added_by_client).toBe(true); // provenance survives the staff save untouched
   });
 
-  it('resubmitting the exact same items/address/payment is a no-op - does not flip client_modified or touch items', async () => {
+  it('resubmitting the exact same items/address/payment is a no-op - does not touch client_modified or items', async () => {
     const before = await app.prisma.order.findUniqueOrThrow({ where: { id: firstOrderId }, include: { items: true } });
 
     const res = await app.inject({
@@ -220,7 +220,7 @@ describe('public form routes', () => {
     expect(res.json().data.unchanged).toBe(true);
 
     const after = await app.prisma.order.findUniqueOrThrow({ where: { id: firstOrderId } });
-    expect(after.client_modified).toBe(false);
+    expect(after.client_modified).toBe(before.client_modified);
   });
 
   it('POST /submit with a merge_order_id whose order became "camino" (out for delivery) while the client was editing is rejected with 409 - NOT silently duplicated as a new order', async () => {

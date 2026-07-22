@@ -604,7 +604,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               <div className="mtit" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 Pedido #{order.num}
                 {order.client_modified && (
-                  <span title="El cliente modificó este pedido desde el - revisa los cambios (en rojo) y guarda para confirmar que ya los viste"
+                  <span title="El cliente modificó este pedido desde el formulario - revisa los cambios (en rojo). Este aviso queda permanente, no se quita al guardar."
                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#DC2626' }}>
                     <Bell size={12} color="#fff" fill="#fff" />
                   </span>
