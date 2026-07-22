@@ -59,7 +59,7 @@ export default function LoginPage() {
           {loading ? 'Ingresando...' : 'Ingresar al sistema'}
         </button>
         <div className="login-err">{error}</div>
-        <div className="lfooter">4client.shop</div>
+        <div className="lfooter">4client.shop — DEV TEST</div>
       </div>
     </div>
   );
