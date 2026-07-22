@@ -348,10 +348,10 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
       const updated = await tx.order.update({
         where: { id },
-        // Staff saving the order is treated as "reviewed whatever the client
-        // changed" - clears the bell unconditionally, every save, not just ones
-        // that touch items (per user confirmation: any save acknowledges it).
-        data: { ...fields, client_modified: false, updated_at: new Date() },
+        // client_modified is never cleared by a staff save (per updated user
+        // direction - it must stay visible permanently, same as each item's own
+        // added_by_client flag, not just until someone opens and saves the order).
+        data: { ...fields, updated_at: new Date() },
         select: buildOrderSelect(false),
       });
 

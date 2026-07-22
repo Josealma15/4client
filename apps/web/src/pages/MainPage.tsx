@@ -178,8 +178,8 @@ export default function MainPage() {
             {isDevEnvironment() && (
               <div style={{
                 background: '#DC2626', color: '#fff', fontWeight: 900, fontSize: 15,
-                padding: '4px 14px', borderRadius: 8, letterSpacing: '1px',
-                display: 'flex', alignItems: 'center', flexShrink: 0,
+                padding: '4px 40px', minWidth: 140, borderRadius: 8, letterSpacing: '2px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}>
                 DEV
               </div>

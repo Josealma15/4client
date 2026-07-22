@@ -257,7 +257,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
         onClick={() => setDetailId(ord.id)}
       >
         {ord.client_modified && (
-          <div title="El cliente modificó este pedido - sin revisar"
+          <div title="El cliente modificó este pedido desde el formulario"
             style={{
               position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: '50%',
               background: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center',
