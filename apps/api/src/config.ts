@@ -5,6 +5,13 @@ const envSchema = z.object({
   JWT_SECRET:                z.string().min(32),
   JWT_REFRESH_SECRET:        z.string().min(32),
   NODE_ENV:                  z.enum(['development', 'production', 'test']).default('development'),
+  // Railway sets this per-environment (e.g. "production", "dev") - unlike NODE_ENV,
+  // which is "production" on EVERY Railway environment (it controls build/runtime
+  // optimizations, not which environment this is) and so can't tell a real prod
+  // deploy apart from a dev/staging one on the same platform. Checks that must only
+  // be strict on the ACTUAL live environment (e.g. "is a Meta webhook secret
+  // mandatory") need this, not NODE_ENV - see webhook.ts and dev.ts's /seed route.
+  RAILWAY_ENVIRONMENT_NAME:  z.string().optional(),
   PORT:                      z.coerce.number().default(3000),
   FRONTEND_URL:              z.string().default('http://localhost:5173'),
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
