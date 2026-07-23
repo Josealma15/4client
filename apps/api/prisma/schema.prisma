@@ -37,6 +37,7 @@ model Organization {
   daily_closes        DailyClose[]
   revoked_form_tokens RevokedFormToken[]
   audit_logs          AuditLog[]
+  invoice_links       InvoiceLink[]
 
   @@map("organizations")
 }
@@ -327,6 +328,25 @@ model FormLinkSession {
   ticket Ticket @relation(fields: [ticket_id], references: [id])
 
   @@map("form_link_sessions")
+}
+
+// A factura PDF is shared with the client the exact same way a form link is - a
+// bare URL sent over WhatsApp, so it gets the same two protections (routes/files.ts):
+// a phone_last4 check (proves whoever opens it knows the customer's number) and a
+// 10-minute-unopened-dies window. Unlike a form link there's no Ticket/Order row this
+// naturally lives on (the file itself is just a blob in R2/local disk with no DB
+// identity), so this is its own small table instead.
+model InvoiceLink {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id      String    @db.Uuid
+  filename    String    @unique @db.VarChar(300)
+  phone_last4 String    @db.VarChar(4)
+  opened_at   DateTime? @db.Timestamptz
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  org Organization @relation(fields: [org_id], references: [id])
+
+  @@map("invoice_links")
 }
 
 // Trail for security-sensitive account/config actions (user create, password reset,

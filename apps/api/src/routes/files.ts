@@ -1,12 +1,18 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { storage } from '../services/storage.js';
+import { config } from '../config.js';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+
+// 10 minutes - same reasoning and same value as the form link's UNOPENED_LINK_TTL_SECONDS
+// (public.ts): a factura URL nobody opens promptly dies on its own, shrinking how long a
+// misdirected one (wrong number, forwarded by mistake) stays usable.
+const UNOPENED_INVOICE_TTL_SECONDS = 10 * 60;
 
 export default async function fileRoutes(fastify: FastifyInstance) {
   const MAX_BASE64_BYTES = 28_000_000; // ~20 MB decoded
@@ -16,8 +22,22 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     const body = z.object({
       data: z.string().min(1).max(MAX_BASE64_BYTES),
       num: z.string().regex(/^[a-zA-Z0-9_-]{1,20}$/, 'num inválido'),
+      order_id: z.string().uuid(),
     }).safeParse(req.body);
     if (!body.success) return reply.status(400).send({ error: 'Datos inválidos' });
+
+    // The factura is shared over WhatsApp exactly like a form link, so it gets the
+    // same phone_last4 gate (below) - needs the customer's real number, which only
+    // the order itself (never the client) can supply.
+    const order = await fastify.prisma.order.findFirst({
+      where: { id: body.data.order_id, org_id: req.user.orgId },
+      select: { customer_phone: true },
+    });
+    if (!order) return reply.status(404).send({ error: 'Pedido no encontrado', code: 'NOT_FOUND' });
+    const phoneLast4 = (order.customer_phone ?? '').replace(/\D/g, '').slice(-4);
+    if (phoneLast4.length !== 4) {
+      return reply.status(400).send({ error: 'El pedido no tiene un teléfono válido para proteger la factura', code: 'NO_PHONE' });
+    }
 
     const decoded = Buffer.from(body.data.data, 'base64');
     if (decoded.length > 20 * 1024 * 1024) {
@@ -37,17 +57,16 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     const stamp = new Date(bogotaMs).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '').replace('T', '-');
     const filename = `Factura-${stamp}-${orgPrefix}-${safeNum}-${id}.pdf`;
 
-    const r = req as FastifyRequest;
-    const host = (r.headers['x-forwarded-host'] as string | undefined) ?? r.hostname;
-    const proto = (r.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0] ?? r.protocol;
-    // Always hand back OUR OWN url (proxied through GET /files/:filename below), never
-    // the raw R2 object URL - R2 buckets aren't public by default, and even a "public
-    // dev URL" would mean the file is genuinely public to anyone on the internet who
-    // guesses/finds it, forever. Proxying through our server means: a) it works
-    // immediately without needing R2's bucket-level public access config touched at
-    // all, and b) any future access control (client-only tokens, expiry) lives in one
-    // place - this route - instead of in Cloudflare's dashboard.
-    const publicUrl = `${proto}://${host}/api/v1/files/${filename}`;
+    await fastify.prisma.invoiceLink.create({
+      data: { org_id: req.user.orgId, filename, phone_last4: phoneLast4 },
+    });
+
+    // Points at the FRONTEND app now, not directly at this API - GET /:filename below
+    // requires phone_last4 on every request, which only a page that can prompt for it
+    // (ClientFormPage-style verify screen) can supply. A bare API link opened straight
+    // from WhatsApp would have nowhere to collect those digits.
+    const frontendUrl = config.FRONTEND_URL.split(',')[0].trim();
+    const publicUrl = `${frontendUrl}/factura?f=${encodeURIComponent(filename)}`;
 
     if (storage.isConfigured()) {
       try {
@@ -78,13 +97,17 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     return reply.status(201).send({ url: publicUrl });
   });
 
-  // GET /api/v1/files/:filename - public (no auth: filename is unguessable org+UUID combo),
-  // but only for 24h - same lifetime as the client form-link, for the same reason: if
-  // someone needs the invoice again after that, staff just hits "Enviar factura" again
-  // from that order (it regenerates fresh from the order's current items every time,
-  // nothing is cached), rather than this URL staying valid forever once shared.
+  // GET /api/v1/files/:filename?phone_last4=XXXX - public (no staff auth - this is the
+  // client's own download), but gated the same way a form link is: the caller must
+  // prove they know the customer's phone, and a factura nobody opens within 10 minutes
+  // of being generated dies on its own. Still capped at 24h total even once opened -
+  // if someone needs it again after that, staff just hits "Enviar factura" again (it
+  // regenerates fresh from the order's current items every time, nothing is cached).
   fastify.get('/:filename', async (req, reply) => {
     const { filename } = req.params as { filename: string };
+    const q = z.object({ phone_last4: z.string().min(1) }).safeParse(req.query);
+    if (!q.success) return reply.status(400).send({ error: 'Verificación requerida', code: 'VALIDATION_ERROR' });
+
     // Deliberately not tied to the exact current segment layout (timestamp/org/num/id)
     // - only what actually matters for safety: starts with "Factura", ends in ".pdf",
     // and the middle can't contain a path separator or traversal. This way every past
@@ -94,23 +117,24 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Archivo inválido' });
     }
 
-    // The filename embeds its own creation stamp (Factura-YYYYMMDD-HHMMSS-...), written
-    // in Bogota wall-clock time labeled as if it were UTC (see the upload route above) -
-    // reversing that same -5h shift recovers the real UTC instant it was created, no
-    // separate expiry table needed. Filenames that don't match this exact shape (should
-    // never happen - every invoice this app has ever generated uses it) fail open rather
-    // than breaking on an unexpected format.
-    const stampMatch = filename.match(/^Factura[_-](\d{8})-(\d{6})-/);
-    if (stampMatch) {
-      const [, datePart, timePart] = stampMatch;
-      const bogotaAsUtcMs = Date.UTC(
-        Number(datePart.slice(0, 4)), Number(datePart.slice(4, 6)) - 1, Number(datePart.slice(6, 8)),
-        Number(timePart.slice(0, 2)), Number(timePart.slice(2, 4)), Number(timePart.slice(4, 6)),
-      );
-      const createdAtMs = bogotaAsUtcMs + 5 * 3600000;
-      if (Date.now() - createdAtMs > 24 * 3600 * 1000) {
-        return reply.status(410).send({ error: 'Este link de factura ya expiró (válido 24 horas). Pide que te reenvíen la factura.', code: 'INVOICE_EXPIRED' });
-      }
+    const link = await fastify.prisma.invoiceLink.findUnique({ where: { filename } });
+    // No row = either a pre-hardening invoice link (nothing to check against) or a
+    // bogus filename - both dead ends the same way: ask staff to resend, which always
+    // regenerates a fresh, fully-protected link.
+    if (!link) {
+      return reply.status(404).send({ error: 'Archivo no encontrado. Pide que te reenvíen la factura.', code: 'NOT_FOUND' });
+    }
+    if (Date.now() - link.created_at.getTime() > 24 * 3600 * 1000) {
+      return reply.status(410).send({ error: 'Este link de factura ya expiró (válido 24 horas). Pide que te reenvíen la factura.', code: 'INVOICE_EXPIRED' });
+    }
+    if (!link.opened_at && Date.now() - link.created_at.getTime() > UNOPENED_INVOICE_TTL_SECONDS * 1000) {
+      return reply.status(410).send({ error: 'Este link de factura expiró por no abrirse a tiempo. Pide que te reenvíen la factura.', code: 'INVOICE_EXPIRED' });
+    }
+    if (q.data.phone_last4 !== link.phone_last4) {
+      return reply.status(401).send({ error: 'Número incorrecto. Verifica los últimos 4 dígitos.', code: 'PHONE_MISMATCH' });
+    }
+    if (!link.opened_at) {
+      await fastify.prisma.invoiceLink.update({ where: { filename }, data: { opened_at: new Date() } });
     }
 
     if (storage.isConfigured()) {

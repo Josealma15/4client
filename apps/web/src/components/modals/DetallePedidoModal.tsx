@@ -374,7 +374,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
     if (!doc || !order) return;
     try {
       const base64 = doc.output('datauristring').split(',')[1];
-      const res = await api.post<{ url: string }>('/files/invoice', { data: base64, num: order.num });
+      const res = await api.post<{ url: string }>('/files/invoice', { data: base64, num: order.num, order_id: order.id });
       const url = res.url;
       const total = items.reduce((s: number, i: any) => s + (parseFloat(i.price) || 0), 0);
       const orgName = user?.orgName ?? '4Client';
