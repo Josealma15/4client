@@ -138,6 +138,22 @@ model Ticket {
   // (typo'd number, accidental forward) stays usable, without touching the normal
   // end-of-day expiry for a link that WAS opened in time.
   form_link_opened_at DateTime? @db.Timestamptz
+  // Wrong-phone-digits guesses against ANY link for this ticket - form link AND
+  // every invoice/factura link together (see linkSecurity.ts) - since the last
+  // reset. Reset to 0 whenever staff sends a fresh link of EITHER kind (inbox.ts's
+  // /form-link route, files.ts's POST /invoice). Once it hits linkSecurity.ts's
+  // MAX_ATTEMPTS_SOFT, EVERY outstanding link for this ticket is dead - not just
+  // whichever one the wrong guesses happened to land on.
+  link_failed_attempts Int       @default(0)
+  // Cumulative wrong-digit guesses across EVERY link this ticket has ever issued,
+  // since the last time this ticket was hard-blocked. Never reset by a fresh link
+  // (unlike link_failed_attempts above) - that's what stops someone from dodging
+  // the soft block by just asking staff for a new link every 10 guesses.
+  link_failed_total    Int       @default(0)
+  // Set once link_failed_total crosses MAX_ATTEMPTS_HARD - blocks every link (form
+  // + all invoices) for this ticket until this timestamp, self-expiring with no
+  // staff action needed (unlike the manual org-wide "bloquear todos los links").
+  link_blocked_until   DateTime? @db.Timestamptz
 
   org                Organization      @relation(fields: [org_id], references: [id])
   messages           TicketMessage[]

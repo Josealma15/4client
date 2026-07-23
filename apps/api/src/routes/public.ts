@@ -5,6 +5,7 @@ import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 import { sanitizeForWhatsApp } from '../lib/sanitize.js';
 import { config } from '../config.js';
 import { sortByCategoryOrder } from '../lib/categoryOrder.js';
+import { registerFailedLinkAttempt, MAX_ATTEMPTS_SOFT } from '../lib/linkSecurity.js';
 
 interface FormTokenPayload {
   type: string;
@@ -129,6 +130,21 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (err instanceof Error && err.message === 'phone mismatch') {
       return reply.status(401).send({ error: 'Número incorrecto. Verifica los últimos 4 dígitos.', code: 'PHONE_MISMATCH' });
     }
+    // These two get their own message too (same reasoning as phone mismatch above,
+    // not a security-sensitive reason to hide) - a customer stuck after too many
+    // wrong guesses deserves to know why and what to do next, not just "link inválido".
+    if (err instanceof Error && err.message === 'ticket blocked') {
+      return reply.status(403).send({
+        error: 'Demasiados intentos incorrectos. Este chat quedó bloqueado temporalmente por seguridad. Intenta de nuevo en 24 horas o contáctanos directamente.',
+        code: 'TICKET_BLOCKED',
+      });
+    }
+    if (err instanceof Error && err.message === 'link attempts exceeded') {
+      return reply.status(403).send({
+        error: 'Demasiados intentos incorrectos con este link. Pide que te reenvíen uno nuevo.',
+        code: 'LINK_ATTEMPTS_EXCEEDED',
+      });
+    }
     return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
   }
 
@@ -184,12 +200,24 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         phone: true,
         form_token_min_iat: true,
         form_link_opened_at: true,
+        link_failed_attempts: true,
+        link_blocked_until: true,
         revoked_form_token: { select: { id: true } },
         org: { select: { form_links_blocked_at: true } },
       },
     });
     if (!ticket) throw new Error('ticket not found');
     if (ticket.revoked_form_token) throw new Error('revoked');
+    // Checked before anything token-specific below - a chat that hit
+    // MAX_ATTEMPTS_HARD wrong guesses is locked out entirely for TICKET_BLOCK_HOURS,
+    // even against a link issued after the block started.
+    if (ticket.link_blocked_until && ticket.link_blocked_until > new Date()) throw new Error('ticket blocked');
+    // Ticket-wide, not specific to this token - a wrong guess against the
+    // INVOICE link for this same ticket counts here too (files.ts), so hitting
+    // MAX_ATTEMPTS_SOFT kills the form link even if every failed guess actually
+    // happened on the factura. Staff sending ANY fresh link (form or factura)
+    // resets this counter (linkSecurity.ts's clearSoftLinkBlock).
+    if (ticket.link_failed_attempts >= MAX_ATTEMPTS_SOFT) throw new Error('link attempts exceeded');
     // Whole-second resolution on both sides - `iat` is JWT-standard seconds-since-
     // epoch, but the stamped column is millisecond precision, so comparing raw ms
     // would make a token superseded by the very same issuance that minted it (its
@@ -218,7 +246,14 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // it was issued for - the token itself only proves it's a real link for THIS
     // ticket, not that the person using it is the intended customer (a link can end
     // up with the wrong person: staff typo, an accidental forward, etc).
-    if (!phoneLast4 || phoneLast4 !== last4(ticket.phone)) throw new Error('phone mismatch');
+    if (!phoneLast4 || phoneLast4 !== last4(ticket.phone)) {
+      // Recorded even though the request is about to fail anyway - this counter is
+      // the whole point, not an afterthought. Bumps both the ticket-wide soft count
+      // (dies at MAX_ATTEMPTS_SOFT, checked above on the NEXT call - for THIS link
+      // and the ticket's factura links alike) and the cumulative hard-block one.
+      await registerFailedLinkAttempt(fastify.prisma, ticketId);
+      throw new Error('phone mismatch');
+    }
   }
 
   // Claims this ticket's form-link for whichever browser SUBMITS first. There's no
@@ -273,8 +308,13 @@ export default async function publicRoutes(fastify: FastifyInstance) {
       const payload = verifyFormToken(q.data.t);
       await assertLinkNotDead(payload.ticketId, payload.iat);
       return reply.send({ data: { valid: true } });
-    } catch {
-      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    } catch (err) {
+      // sendInvalidToken - not a bare generic catch - so a ticket-wide block or an
+      // exhausted link shows ITS OWN message here too, same as files.ts's factura
+      // /status already does. Was swallowing those into "Link inválido o expirado"
+      // before, so a client who hit the lockout only ever saw the specific reason
+      // on the factura side, never on the form link.
+      return sendInvalidToken(err, reply);
     }
   });
 

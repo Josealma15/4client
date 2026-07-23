@@ -162,7 +162,15 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     // form_link_opened_at resets too - this new link has its own fresh 10-minute
     // unopened-dies window (public.ts's assertLinkStillValid), independent of
     // whether the previous link was ever opened.
-    await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt, form_link_opened_at: null } });
+    // link_failed_attempts resets too - sending a fresh link is exactly the "give
+    // them another chance" action that clears the ticket-wide soft wrong-guess
+    // block (linkSecurity.ts's clearSoftLinkBlock does the same thing; inlined here
+    // since this update was already happening anyway). Un-blocks the factura link(s)
+    // for this ticket too, not just this form link - the soft block is shared.
+    // link_failed_total (the cumulative count behind the 24h hard block) is NOT
+    // reset here on purpose - that's what makes it actually cumulative instead of
+    // something a new link resets for free.
+    await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt, form_link_opened_at: null, link_failed_attempts: 0 } });
     await fastify.prisma.revokedFormToken.deleteMany({ where: { ticket_id: ticket.id, org_id: req.user.orgId } });
     await fastify.prisma.formLinkSession.deleteMany({ where: { ticket_id: ticket.id } });
 

@@ -760,3 +760,133 @@ describe('public form routes', () => {
     });
   });
 });
+
+describe('link abuse lockout - repeated wrong PIN guesses', () => {
+  let app: FastifyInstance;
+  let orgId: string;
+  let adminId: string;
+  let adminToken: string;
+
+  beforeAll(async () => {
+    app = await buildTestServer();
+    const org = await createTestOrg(app.prisma);
+    orgId = org.id;
+    const admin = await createTestUser(app.prisma, orgId, 'admin', 'LockoutAdmin1!');
+    adminId = admin.id;
+    adminToken = await login(app, admin.email, 'LockoutAdmin1!');
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  function sign(ticketId: string) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (app.jwt.sign as any)({ type: 'form_link', ticketId, orgId }, { expiresIn: '7d' });
+  }
+
+  it('10 wrong phone_last4 guesses against the same link kill it - even the correct digits stop working afterward', async () => {
+    const phone = '573001119900';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Lockout Link' } });
+    const token = sign(ticket.id);
+
+    for (let i = 0; i < 10; i++) {
+      const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=lockout-link&phone_last4=0000` });
+      expect(res.statusCode).toBe(401);
+      expect(res.json().code).toBe('PHONE_MISMATCH');
+    }
+
+    // 11th try, this time with the RIGHT digits - the link itself is already dead.
+    const afterLimit = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=lockout-link&phone_last4=9900` });
+    expect(afterLimit.statusCode).toBe(403);
+    expect(afterLimit.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
+
+    // GET /link-status - checked BEFORE the digit-entry screen even shows - must
+    // surface this SAME specific reason, not the generic "Link inválido o expirado"
+    // (that was the bug: the PDF's equivalent /status route already showed the
+    // specific reason, this one didn't).
+    const status = await app.inject({ method: 'GET', url: `/api/v1/public/link-status?t=${token}` });
+    expect(status.statusCode).toBe(403);
+    expect(status.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
+  });
+
+  it('a freshly-issued link resets the per-link count, so it works again even after the old one got exhausted', async () => {
+    const phone = '573001119901';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Lockout Reset' } });
+    const staleToken = sign(ticket.id);
+
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${staleToken}&device_token=lockout-reset&phone_last4=0000` });
+    }
+    const dead = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${staleToken}&device_token=lockout-reset&phone_last4=9901` });
+    expect(dead.statusCode).toBe(403);
+    expect(dead.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
+
+    const linkRes = await app.inject({ method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` } });
+    const freshToken = new URL(linkRes.json().data.url).searchParams.get('t')!;
+    const works = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=lockout-reset&phone_last4=9901` });
+    expect(works.statusCode).toBe(200);
+  });
+
+  it('30 cumulative wrong guesses across re-issued links blocks the WHOLE ticket for 24h, even a link issued after the block started', async () => {
+    const phone = '573001119902';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Lockout Ticket' } });
+
+    // Burn through 3 links' worth of wrong guesses (10 each = 30 total) - each
+    // fresh link resets ITS OWN per-link count, but the ticket-wide cumulative
+    // count (what actually matters here) is never reset by issuing a new link.
+    for (let link = 0; link < 3; link++) {
+      const linkRes = await app.inject({ method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` } });
+      const t = new URL(linkRes.json().data.url).searchParams.get('t')!;
+      for (let i = 0; i < 10; i++) {
+        await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${t}&device_token=lockout-ticket-${link}&phone_last4=0000` });
+      }
+    }
+
+    // A brand-new link, issued AFTER the block was triggered, is still blocked -
+    // it's the ticket that's locked out, not any one token.
+    const linkRes = await app.inject({ method: 'GET', url: `/api/v1/inbox/${ticket.id}/form-link`, headers: { authorization: `Bearer ${adminToken}` } });
+    const freshToken = new URL(linkRes.json().data.url).searchParams.get('t')!;
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=lockout-ticket-final&phone_last4=9902` });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('TICKET_BLOCKED');
+
+    // Same check via /link-status, the pre-digit-entry precheck a fresh page load
+    // actually hits first - must show TICKET_BLOCKED there too, not a generic error.
+    const status = await app.inject({ method: 'GET', url: `/api/v1/public/link-status?t=${freshToken}` });
+    expect(status.statusCode).toBe(403);
+    expect(status.json().code).toBe('TICKET_BLOCKED');
+  });
+
+  it('10 wrong guesses on the FORM link also block that ticket\'s already-outstanding factura link, not just the form link - the soft block is shared, not per-token', async () => {
+    const phone = '573001119903';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Cross Lockout Form' } });
+
+    // Factura sent BEFORE the wrong guesses below - sending a NEW one afterward
+    // would itself clear the soft block (it's the "give another chance" action),
+    // which would hide the exact bug this test guards against.
+    const order = await app.prisma.order.create({
+      data: {
+        org_id: orgId, ticket_id: ticket.id, num: '920', customer_name: 'Cliente Cross Lockout Form',
+        customer_phone: phone, address: 'Calle Cross Form 1',
+        payment_method: 'cash', registered_by: adminId, fecha: new Date(),
+      },
+    });
+    const tinyPdfBase64 = Buffer.from('%PDF-1.4 fake content for test').toString('base64');
+    const upload = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '920', order_id: order.id },
+    });
+    const filename = new URL(upload.json().url).searchParams.get('f')!;
+
+    const token = sign(ticket.id);
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=cross-lockout-form&phone_last4=0000` });
+    }
+
+    // The factura, never touched by any of the wrong guesses above, is dead too.
+    const res = await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=9903` });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
+  });
+});
