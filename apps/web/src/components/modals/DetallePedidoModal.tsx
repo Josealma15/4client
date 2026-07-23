@@ -11,6 +11,7 @@ import { useEmployees } from '../../hooks/useEmployees';
 import { useDiaCerrado } from '../../hooks/useCierre';
 import { useWithinFormHours, FORM_HOURS_CLOSED_MSG } from '../../hooks/useFormHours';
 import { STATUS_LABEL, STATUS_ORDER, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { toast } from '../ui/Toast';
 import ProductSearch from '../orders/ProductSearch';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -202,7 +203,6 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
   const saveMut = useMutation({
     mutationFn: () => api.patch(`/orders/${orderId}`, {
       customer_name: nombre,
-      customer_phone: telefono,
       address: direccion,
       payment_method: pago,
       employee_id: empleadoId || null,
@@ -322,7 +322,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
 
     if (order.customer_phone) {
       doc.setFont('helvetica', 'bold'); doc.text('Tel:', 3, y);
-      doc.setFont('helvetica', 'normal'); doc.text(order.customer_phone, 15, y); y += 5;
+      doc.setFont('helvetica', 'normal'); doc.text(formatPhoneDisplay(order.customer_phone), 15, y); y += 5;
     }
 
     doc.line(3, y, 77, y); y += 5;
@@ -392,7 +392,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       `Pedido #${order.num} - ${user?.orgName ?? '4Client'}`,
       `Fecha: ${formatFechaLong(order.fecha)}`,
       `Cliente: ${order.customer_name}`,
-      ...(order.customer_phone ? [`Teléfono: ${order.customer_phone}`] : []),
+      ...(order.customer_phone ? [`Teléfono: ${formatPhoneDisplay(order.customer_phone)}`] : []),
       `Dirección: ${order.address}`,
       `Método de pago: ${PAYMENT_LABEL[pago] ?? pago}`,
       '',
@@ -503,7 +503,7 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
                 <div style={{ fontWeight: 800, fontSize: 14 }}>
                   {order.customer_name}
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>{order.customer_phone}</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{formatPhoneDisplay(order.customer_phone)}</div>
               </div>
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                 <button
@@ -684,8 +684,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
               </div>
               <div className="fg2">
                 <label className="fl2">Teléfono</label>
-                <input className="fi2" disabled={readOnly} value={telefono}
-                  onChange={(e) => { setTelefono(e.target.value); markDirty(); }} />
+                {/* Always disabled, even when the rest of the order is editable - this
+                    is the real WhatsApp number the conversation is on, never a value
+                    staff types in, and the backend no longer accepts changes to it
+                    (see orders.ts's updateOrderSchema). */}
+                <input className="fi2" disabled value={formatPhoneDisplay(telefono)} title="El teléfono no se puede modificar - es el número de WhatsApp del ticket" />
               </div>
             </div>
             <div className="fg2">

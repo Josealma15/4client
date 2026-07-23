@@ -159,7 +159,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     // a new one. Also clears any device lock (public.ts's FormLinkSession) -
     // sending a new link is a deliberate "start over" action, e.g. to fix a
     // false-positive lockout from the wrong device claiming an earlier link.
-    await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt } });
+    // form_link_opened_at resets too - this new link has its own fresh 10-minute
+    // unopened-dies window (public.ts's assertLinkStillValid), independent of
+    // whether the previous link was ever opened.
+    await fastify.prisma.ticket.update({ where: { id: ticket.id }, data: { form_token_min_iat: issuedAt, form_link_opened_at: null } });
     await fastify.prisma.revokedFormToken.deleteMany({ where: { ticket_id: ticket.id, org_id: req.user.orgId } });
     await fastify.prisma.formLinkSession.deleteMany({ where: { ticket_id: ticket.id } });
 

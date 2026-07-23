@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Siren, MessageSquare, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Eye, Plus, AlertTriangle, Lock, Bell } from 'lucide-react';
 import { STATUS_LABEL, STATUS_ORDER, fmtCOP, todayStr } from '../../lib/format';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { useMoveOrder } from '../../hooks/useOrders';
 import { toast } from '../ui/Toast';
 import DetallePedidoModal from '../modals/DetallePedidoModal';
@@ -465,7 +466,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
                       Pospuesto
                     </div>
                   )}
-                  <div className="tk-phone">{ticket.phone}</div>
+                  <div className="tk-phone">{formatPhoneDisplay(ticket.phone)}</div>
                   <div className="tk-name">{ticket.customer_name}</div>
                   <div className="tk-foot">
                     <span className="tk-time">

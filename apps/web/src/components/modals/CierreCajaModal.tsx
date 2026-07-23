@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Banknote, ArrowLeftRight, AlertTriangle, CheckCircle, Download, MessageSquare } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fmtCOP, STATUS_LABEL } from '../../lib/format';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { downloadCierreCSV } from '../../lib/csv';
 import { toast } from '../ui/Toast';
 
@@ -245,7 +246,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <MessageSquare size={13} color="var(--az)" />
                     <div style={{ fontWeight: 700, fontSize: 13 }}>
-                      {ticketInfo?.customer_name ?? tOrders[0].customer_name} - {ticketInfo?.phone ?? tOrders[0].customer_phone ?? ''}
+                      {ticketInfo?.customer_name ?? tOrders[0].customer_name} - {formatPhoneDisplay(ticketInfo?.phone ?? tOrders[0].customer_phone ?? '')}
                     </div>
                     {ticketInfo?.unread_count > 0 && (
                       <span style={{ color: 'var(--az)', fontWeight: 700, fontSize: 12 }}>{ticketInfo.unread_count} sin leer</span>
@@ -288,7 +289,7 @@ export default function CierreCajaModal({ fecha, orders, tickets, onClose }: Pro
                 return (
                   <div key={t.id} className="warn-ord" style={{ borderLeft: hasDecision ? '3px solid var(--v)' : '3px solid var(--az)' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700 }}>{t.customer_name} - {t.phone}</div>
+                      <div style={{ fontWeight: 700 }}>{t.customer_name} - {formatPhoneDisplay(t.phone)}</div>
                       <div style={{ fontSize: 12, color: 'var(--gt)' }}>
                         {hasNoOrders ? 'Sin pedido' : 'Pedidos completados'}
                         {t.unread_count > 0 && <span style={{ marginLeft: 8, color: 'var(--az)', fontWeight: 700 }}>{t.unread_count} sin leer</span>}

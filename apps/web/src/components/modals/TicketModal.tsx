@@ -3,6 +3,7 @@ import { useRef, useEffect, useState, KeyboardEvent } from 'react';
 import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList, Ban } from 'lucide-react';
 import { api } from '../../lib/api';
 import { buildFormLinkMessage } from '../../lib/formLinkMessage';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { useAuthStore } from '../../store/auth';
 import { getSocket } from '../../lib/socket';
 import { fmtCOP, STATUS_LABEL, todayStr } from '../../lib/format';
@@ -153,7 +154,7 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
                 {isLoading ? 'Cargando...' : ticket?.customer_name}
               </div>
               <div style={{ fontSize: 12, opacity: 0.8 }}>
-                {ticket?.phone}
+                {formatPhoneDisplay(ticket?.phone)}
                 {ticket?.messages?.length != null && ` · ${ticket.messages.length} mensajes`}
               </div>
             </div>

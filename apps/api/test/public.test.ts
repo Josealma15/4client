@@ -48,6 +48,7 @@ describe('public form routes', () => {
   let ticketId: string;
   let token: string;
   const phone = '573001112200';
+  const PHONE4 = '2200';
 
   beforeAll(async () => {
     app = await buildTestServer();
@@ -82,7 +83,7 @@ describe('public form routes', () => {
   });
 
   it('GET /form-info reports no orders before any pedido exists', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=${PHONE4}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.orders).toEqual([]);
   });
@@ -93,7 +94,7 @@ describe('public form routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: DEVICE, items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
+      payload: { token, device_token: DEVICE, phone_last4: PHONE4, items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('VALIDATION_ERROR');
@@ -103,7 +104,7 @@ describe('public form routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: DEVICE, address: 'Calle 1 #2-34', items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
+      payload: { token, device_token: DEVICE, phone_last4: PHONE4, address: 'Calle 1 #2-34', items: [{ product_name: 'Mango', quantity_label: '2 kg' }] },
     });
     expect(res.statusCode).toBe(201);
     firstOrderId = res.json().data.orderId;
@@ -118,7 +119,7 @@ describe('public form routes', () => {
   });
 
   it('GET /form-info now lists that order, editable (status nuevo), with its item', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=${PHONE4}` });
     const orders = res.json().data.orders;
     expect(orders).toHaveLength(1);
     expect(orders[0].id).toBe(firstOrderId);
@@ -132,10 +133,10 @@ describe('public form routes', () => {
     // (see public.ts's assertDeviceOk comment: this used to run on every request,
     // which broke iPhone links whose first "open" was WhatsApp's own in-app browser
     // previewing it before the customer ever reached Safari).
-    const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=some-other-device` });
+    const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=some-other-device&phone_last4=${PHONE4}` });
     expect(formInfo.statusCode).toBe(200);
 
-    const products = await app.inject({ method: 'GET', url: `/api/v1/public/products?t=${token}&device_token=some-other-device` });
+    const products = await app.inject({ method: 'GET', url: `/api/v1/public/products?t=${token}&device_token=some-other-device&phone_last4=${PHONE4}` });
     expect(products.statusCode).toBe(200);
 
     // firstOrderId's earlier submit (above) already claimed the ticket for DEVICE -
@@ -143,13 +144,48 @@ describe('public form routes', () => {
     const submit = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: 'some-other-device', address: 'Calle Test 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token, device_token: 'some-other-device', phone_last4: PHONE4, address: 'Calle Test 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(submit.statusCode).toBe(401);
 
     // The original device is unaffected - still works fine.
-    const stillOk = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
+    const stillOk = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=${PHONE4}` });
     expect(stillOk.statusCode).toBe(200);
+  });
+
+  it('wrong phone_last4 is rejected with its own distinct error, not the generic "link inválido" - the right digits still work', async () => {
+    const wrong = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=9999` });
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json().code).toBe('PHONE_MISMATCH');
+
+    const right = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=${PHONE4}` });
+    expect(right.statusCode).toBe(200);
+  });
+
+  it('a link nobody opens within 10 minutes of being issued dies on its own - one opened in time keeps working past that mark', async () => {
+    const staleTicket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: '573001112233', customer_name: 'Cliente Nunca Abrio' } });
+    const openedTicket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: '573001112234', customer_name: 'Cliente Si Abrio' } });
+    const oldIat = Math.floor(Date.now() / 1000) - 700; // 11m40s ago
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sign = (tId: string) => (app.jwt.sign as any)(
+      { type: 'form_link', ticketId: tId, orgId, iat: oldIat },
+      { expiresIn: '7d' },
+    );
+    const staleToken = sign(staleTicket.id);
+    const openedToken = sign(openedTicket.id);
+
+    // Simulates openedTicket's link having been opened (a real form-info call) well
+    // within its first 10 minutes, before this old `iat` would otherwise matter -
+    // once form_link_opened_at is set, assertLinkStillValid never re-checks the
+    // 10-minute window for this link again, no matter how stale `iat` gets from here.
+    await app.prisma.ticket.update({ where: { id: openedTicket.id }, data: { form_link_opened_at: new Date(oldIat * 1000 + 60_000) } });
+
+    const staleRes = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${staleToken}&device_token=stale-device&phone_last4=2233` });
+    expect(staleRes.statusCode).toBe(401);
+    expect(staleRes.json().code).toBe('INVALID_TOKEN');
+
+    const openedRes = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${openedToken}&device_token=opened-device&phone_last4=2234` });
+    expect(openedRes.statusCode).toBe(200);
   });
 
   it('POST /submit with merge_order_id replaces the order\'s items with the full submitted list (not append-only), flags only the new/changed line, and sets client_modified', async () => {
@@ -157,7 +193,7 @@ describe('public form routes', () => {
       method: 'POST',
       url: '/api/v1/public/submit',
       payload: {
-        token, device_token: DEVICE,
+        token, device_token: DEVICE, phone_last4: PHONE4,
         merge_order_id: firstOrderId,
         address: 'Calle 123 #45-67',
         // payment_method intentionally omitted - should NOT clear the existing value
@@ -215,7 +251,7 @@ describe('public form routes', () => {
       method: 'POST',
       url: '/api/v1/public/submit',
       payload: {
-        token, device_token: DEVICE,
+        token, device_token: DEVICE, phone_last4: PHONE4,
         merge_order_id: firstOrderId,
         address: before.address,
         items: before.items.map(i => ({ product_name: i.product_name, quantity_label: i.quantity_label })),
@@ -240,7 +276,7 @@ describe('public form routes', () => {
     );
     const create = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: caminoToken, device_token: 'device-camino', address: 'Calle Camino 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: caminoToken, device_token: 'device-camino', phone_last4: '2288', address: 'Calle Camino 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     const caminoOrderId = create.json().data.orderId;
     await app.prisma.order.update({ where: { id: caminoOrderId }, data: { status: 'camino' } });
@@ -249,7 +285,7 @@ describe('public form routes', () => {
       method: 'POST',
       url: '/api/v1/public/submit',
       payload: {
-        token: caminoToken, device_token: 'device-camino', merge_order_id: caminoOrderId,
+        token: caminoToken, device_token: 'device-camino', phone_last4: '2288', merge_order_id: caminoOrderId,
         address: 'Calle Camino 1',
         items: [{ product_name: 'Mango', quantity_label: '1 kg' }, { product_name: 'Piña', quantity_label: '1 unidad' }],
       },
@@ -273,14 +309,14 @@ describe('public form routes', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token, device_token: DEVICE, merge_order_id: firstOrderId, address: 'Calle Cerrado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token, device_token: DEVICE, phone_last4: PHONE4, merge_order_id: firstOrderId, address: 'Calle Cerrado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('ORDER_NOT_EDITABLE');
   });
 
   it('GET /form-info no longer lists the closed order at all - nothing left for the client to see or do with it', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}` });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=${DEVICE}&phone_last4=${PHONE4}` });
     const orders = res.json().data.orders as any[];
     expect(orders.find(o => o.id === firstOrderId)).toBeUndefined();
   });
@@ -295,12 +331,12 @@ describe('public form routes', () => {
     );
     const create = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: caminoToken2, device_token: 'device-camino-2', address: 'Calle Camino 2', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: caminoToken2, device_token: 'device-camino-2', phone_last4: '2266', address: 'Calle Camino 2', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     const orderId = create.json().data.orderId;
     await app.prisma.order.update({ where: { id: orderId }, data: { status: 'camino' } });
 
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${caminoToken2}&device_token=device-camino-2` });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${caminoToken2}&device_token=device-camino-2&phone_last4=2266` });
     const orders = res.json().data.orders as any[];
     const found = orders.find(o => o.id === orderId);
     expect(found).toBeDefined();
@@ -342,7 +378,7 @@ describe('public form routes', () => {
     const submitRes = await app.inject({
       method: 'POST',
       url: '/api/v1/public/submit',
-      payload: { token: sentToken, device_token: 'device-002', address: 'Calle Atribucion 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: sentToken, device_token: 'device-002', phone_last4: PHONE4, address: 'Calle Atribucion 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(submitRes.statusCode).toBe(201);
     const newOrderId = submitRes.json().data.orderId;
@@ -388,17 +424,17 @@ describe('public form routes', () => {
       });
       expect(revoke.statusCode).toBe(200);
 
-      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${revokedToken}&device_token=${DEVICE}` });
+      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${revokedToken}&device_token=${DEVICE}&phone_last4=2299` });
       expect(formInfo.statusCode).toBe(401);
       expect(formInfo.json().code).toBe('INVALID_TOKEN');
 
-      const products = await app.inject({ method: 'GET', url: `/api/v1/public/products?t=${revokedToken}&device_token=${DEVICE}` });
+      const products = await app.inject({ method: 'GET', url: `/api/v1/public/products?t=${revokedToken}&device_token=${DEVICE}&phone_last4=2299` });
       expect(products.statusCode).toBe(401);
 
       const submit = await app.inject({
         method: 'POST',
         url: '/api/v1/public/submit',
-        payload: { token: revokedToken, device_token: DEVICE, address: 'Calle Revocado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+        payload: { token: revokedToken, device_token: DEVICE, phone_last4: '2299', address: 'Calle Revocado 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
       });
       expect(submit.statusCode).toBe(401);
       expect(submit.json().code).toBe('INVALID_TOKEN');
@@ -413,7 +449,7 @@ describe('public form routes', () => {
       expect(linkRes.statusCode).toBe(200);
       const freshToken = new URL(linkRes.json().data.url).searchParams.get('t')!;
 
-      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=${DEVICE}` });
+      const formInfo = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=${DEVICE}&phone_last4=2299` });
       expect(formInfo.statusCode).toBe(200);
     });
 
@@ -426,7 +462,7 @@ describe('public form routes', () => {
       });
       const firstToken = new URL(first.json().data.url).searchParams.get('t')!;
 
-      const firstWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device` });
+      const firstWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device&phone_last4=2255` });
       expect(firstWorks.statusCode).toBe(200);
 
       // The supersede check compares `iat` at whole-second resolution - wait past the
@@ -443,11 +479,11 @@ describe('public form routes', () => {
       const secondToken = new URL(second.json().data.url).searchParams.get('t')!;
       expect(secondToken).not.toBe(firstToken);
 
-      const firstNowBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device` });
+      const firstNowBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${firstToken}&device_token=resend-device&phone_last4=2255` });
       expect(firstNowBlocked.statusCode).toBe(401);
       expect(firstNowBlocked.json().code).toBe('INVALID_TOKEN');
 
-      const secondWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${secondToken}&device_token=resend-device-2` });
+      const secondWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${secondToken}&device_token=resend-device-2&phone_last4=2255` });
       expect(secondWorks.statusCode).toBe(200);
     });
   });
@@ -483,9 +519,9 @@ describe('public form routes', () => {
       // FormLinkSession), not to any one specific link/JWT, so this is the same customer's
       // same phone using two different links sent for the same conversation over time.
       const device = 'multi-device';
-      const oldWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${oldToken}&device_token=${device}` });
+      const oldWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${oldToken}&device_token=${device}&phone_last4=2277` });
       expect(oldWorks.statusCode).toBe(200);
-      const newWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${newToken}&device_token=${device}` });
+      const newWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${newToken}&device_token=${device}&phone_last4=2277` });
       expect(newWorks.statusCode).toBe(200);
 
       const block = await app.inject({
@@ -496,9 +532,9 @@ describe('public form routes', () => {
       });
       expect(block.statusCode).toBe(200);
 
-      const oldBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${oldToken}&device_token=${device}` });
+      const oldBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${oldToken}&device_token=${device}&phone_last4=2277` });
       expect(oldBlocked.statusCode).toBe(401);
-      const newBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${newToken}&device_token=${device}` });
+      const newBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${newToken}&device_token=${device}&phone_last4=2277` });
       expect(newBlocked.statusCode).toBe(401);
     });
   });
@@ -534,14 +570,14 @@ describe('public form routes', () => {
     for (let i = 0; i < 3; i++) {
       const res = await app.inject({
         method: 'POST', url: '/api/v1/public/submit',
-        payload: { token: capToken, device_token: device, address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+        payload: { token: capToken, device_token: device, phone_last4: '2244', address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
       });
       expect(res.statusCode).toBe(201);
     }
     // The 4th today hits the cap.
     const blocked = await app.inject({
       method: 'POST', url: '/api/v1/public/submit',
-      payload: { token: capToken, device_token: device, address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
+      payload: { token: capToken, device_token: device, phone_last4: '2244', address: 'Calle Limite 1', items: [{ product_name: 'Mango', quantity_label: '1 kg' }] },
     });
     expect(blocked.statusCode).toBe(429);
     expect(blocked.json().code).toBe('FORM_LIMIT_REACHED');
@@ -580,9 +616,9 @@ describe('public form routes', () => {
       const tokenA = sign(ticketA.id, 'org', 'Cliente Block A', phoneA);
       const tokenB = sign(ticketB.id, 'org', 'Cliente Block B', phoneB);
 
-      const aWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenA}&device_token=block-a` });
+      const aWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenA}&device_token=block-a&phone_last4=2211` });
       expect(aWorks.statusCode).toBe(200);
-      const bWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenB}&device_token=block-b` });
+      const bWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenB}&device_token=block-b&phone_last4=2222` });
       expect(bWorks.statusCode).toBe(200);
 
       // Past the second boundary so the block timestamp is genuinely later than
@@ -597,9 +633,9 @@ describe('public form routes', () => {
       });
       expect(block.statusCode).toBe(200);
 
-      const aBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenA}&device_token=block-a` });
+      const aBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenA}&device_token=block-a&phone_last4=2211` });
       expect(aBlocked.statusCode).toBe(401);
-      const bBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenB}&device_token=block-b` });
+      const bBlocked = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${tokenB}&device_token=block-b&phone_last4=2222` });
       expect(bBlocked.statusCode).toBe(401);
 
       await new Promise(r => setTimeout(r, 1100));
@@ -609,7 +645,7 @@ describe('public form routes', () => {
       // which this test bypasses by signing the JWT directly); a different
       // device_token here would 401 on the device-lock check, not proving anything
       // about the org-block feature this test is actually about.
-      const freshWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=block-a` });
+      const freshWorks = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=block-a&phone_last4=2211` });
       expect(freshWorks.statusCode).toBe(200);
     });
   });

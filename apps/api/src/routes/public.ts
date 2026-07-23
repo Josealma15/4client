@@ -114,6 +114,19 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   // superseded/expired/device-mismatch - this isn't a security-sensitive reason to
   // hide, and a legitimate customer deserves to know why instead of thinking their
   // link is broken.
+  // Every other invalid-link reason (revoked/superseded/org-blocked/never-opened-in-
+  // time/malformed token) stays behind the same generic message on purpose - doesn't
+  // help an attacker learn which one it was. Wrong phone digits get their own message
+  // instead: that's the one case where the visitor might genuinely be the right
+  // customer who just mistyped, and a useless "link inválido" only pushes them to
+  // give up and ask staff to resend instead of just retrying the 4 digits.
+  function sendInvalidToken(err: unknown, reply: FastifyReply) {
+    if (err instanceof Error && err.message === 'phone mismatch') {
+      return reply.status(401).send({ error: 'Número incorrecto. Verifica los últimos 4 dígitos.', code: 'PHONE_MISMATCH' });
+    }
+    return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+  }
+
   function sendFormClosed(reply: FastifyReply) {
     return reply.status(403).send({
       error: 'El formulario está disponible de 4:00am a 8:00pm. Para hacer tu pedido ahora, escríbenos directamente por WhatsApp.',
@@ -142,11 +155,23 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   // form_links_blocked_at the exact same way, just scoped to every ticket in the
   // org at once instead of one. All three fail the same generic way on every public
   // endpoint below - never reveals which of them it was.
-  async function assertLinkStillValid(ticketId: string, tokenIat: number | undefined): Promise<void> {
+  // 10 minutes - a link nobody opens within this window dies on its own (see
+  // assertLinkStillValid below). Short enough that a link sent to the wrong number
+  // (staff typo, accidental forward) is only usable for a few minutes; long enough
+  // that a real customer glancing at WhatsApp a bit late still catches it.
+  const UNOPENED_LINK_TTL_SECONDS = 10 * 60;
+
+  function last4(phone: string): string {
+    return phone.replace(/\D/g, '').slice(-4);
+  }
+
+  async function assertLinkStillValid(ticketId: string, tokenIat: number | undefined, phoneLast4: string): Promise<void> {
     const ticket = await fastify.prisma.ticket.findUnique({
       where: { id: ticketId },
       select: {
+        phone: true,
         form_token_min_iat: true,
+        form_link_opened_at: true,
         revoked_form_token: { select: { id: true } },
         org: { select: { form_links_blocked_at: true } },
       },
@@ -164,6 +189,18 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (ticket.org.form_links_blocked_at) {
       const blockedAtSec = Math.floor(ticket.org.form_links_blocked_at.getTime() / 1000);
       if (!tokenIat || tokenIat < blockedAtSec) throw new Error('org blocked');
+    }
+    // Proves whoever's holding the link right now actually knows the phone number
+    // it was issued for - the token itself only proves it's a real link for THIS
+    // ticket, not that the person using it is the intended customer (a link can end
+    // up with the wrong person: staff typo, an accidental forward, etc).
+    if (!phoneLast4 || phoneLast4 !== last4(ticket.phone)) throw new Error('phone mismatch');
+    // Only matters while it's still unopened - once form-info's handler stamps
+    // form_link_opened_at (below), this never fires again for this link, no matter
+    // how much later a later call comes in.
+    if (!ticket.form_link_opened_at && tokenIat) {
+      const ageSeconds = Math.floor(Date.now() / 1000) - tokenIat;
+      if (ageSeconds > UNOPENED_LINK_TTL_SECONDS) throw new Error('never opened in time');
     }
   }
 
@@ -205,21 +242,27 @@ export default async function publicRoutes(fastify: FastifyInstance) {
   // here on, the client's copy becomes view-only.
   const EDITABLE_STATUSES = ['nuevo', 'preparando', 'listo'] as const;
 
-  // GET /api/v1/public/form-info?t=TOKEN&device_token=X - verifica token y devuelve
-  // info del cliente + sus pedidos activos de hoy
+  // GET /api/v1/public/form-info?t=TOKEN&device_token=X&phone_last4=XXXX - verifica
+  // token y devuelve info del cliente + sus pedidos activos de hoy
   fastify.get('/form-info', async (req, reply) => {
     if (shouldBlockForHours()) return sendFormClosed(reply);
-    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
+    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1), phone_last4: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
-      await assertLinkStillValid(payload.ticketId, payload.iat);
+      await assertLinkStillValid(payload.ticketId, payload.iat, q.data.phone_last4);
 
       const ticketInfo = await fastify.prisma.ticket.findFirst({
         where: { id: payload.ticketId, org_id: payload.orgId },
-        select: { customer_name: true, org: { select: { name: true } } },
+        select: { customer_name: true, org: { select: { name: true } }, form_link_opened_at: true },
       });
       if (!ticketInfo) throw new Error('ticket not found');
+
+      // First successful open of THIS link - stamps it so assertLinkStillValid's
+      // 10-minute-unopened check never fires again for it (see that function).
+      if (!ticketInfo.form_link_opened_at) {
+        await fastify.prisma.ticket.update({ where: { id: payload.ticketId }, data: { form_link_opened_at: new Date() } });
+      }
 
       // Colombia UTC-5 local date - same "today" the client's own submissions land on.
       const todayLocal = new Date(new Date(Date.now() - 5 * 3600000).toISOString().split('T')[0]);
@@ -256,27 +299,28 @@ export default async function publicRoutes(fastify: FastifyInstance) {
           })),
         },
       });
-    } catch {
-      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    } catch (err) {
+      return sendInvalidToken(err, reply);
     }
   });
 
-  // GET /api/v1/public/products?t=TOKEN&device_token=X - catálogo público (sin precios)
+  // GET /api/v1/public/products?t=TOKEN&device_token=X&phone_last4=XXXX - catálogo
+  // público (sin precios)
   fastify.get('/products', async (req, reply) => {
     if (shouldBlockForHours()) return sendFormClosed(reply);
-    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1) }).safeParse(req.query);
+    const q = z.object({ t: z.string().min(1), device_token: z.string().min(1), phone_last4: z.string().min(1) }).safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: 'Token requerido', code: 'VALIDATION_ERROR' });
     try {
       const payload = verifyFormToken(q.data.t);
-      await assertLinkStillValid(payload.ticketId, payload.iat);
+      await assertLinkStillValid(payload.ticketId, payload.iat, q.data.phone_last4);
       const products = await fastify.prisma.product.findMany({
         where: { org_id: payload.orgId, active: true },
         select: { id: true, name: true, category: true, unit_type: true, sort_order: true },
         orderBy: [{ category: 'asc' }, { sort_order: 'asc' }, { name: 'asc' }],
       });
       return reply.send({ data: sortByCategoryOrder(products) });
-    } catch {
-      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    } catch (err) {
+      return sendInvalidToken(err, reply);
     }
   });
 
@@ -305,6 +349,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     const body = z.object({
       token: z.string().min(1),
       device_token: z.string().min(1),
+      phone_last4: z.string().min(1),
       // Required - a pedido without a delivery address can't actually be dispatched,
       // and staff kept having to chase clients down for it after the fact.
       address: z.string().trim().min(1, 'La dirección es obligatoria').max(500),
@@ -324,10 +369,10 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     let payload: FormTokenPayload;
     try {
       payload = verifyFormToken(body.data.token);
-      await assertLinkStillValid(payload.ticketId, payload.iat);
+      await assertLinkStillValid(payload.ticketId, payload.iat, body.data.phone_last4);
       await assertDeviceOk(payload.ticketId, body.data.device_token);
-    } catch {
-      return reply.status(401).send({ error: 'Link inválido o expirado', code: 'INVALID_TOKEN' });
+    } catch (err) {
+      return sendInvalidToken(err, reply);
     }
 
     // Fetch ticket to get org and validate it still exists

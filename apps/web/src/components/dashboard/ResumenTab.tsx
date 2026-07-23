@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { STATUS_LABEL, fmtCOP, PAYMENT_LABEL, todayStr } from '../../lib/format';
 import { downloadCierreCSV } from '../../lib/csv';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { api } from '../../lib/api';
 import { toast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -323,7 +324,7 @@ export default function ResumenTab({ fecha, setFecha, dashboard, papeleraOrders,
                       {isExp && (
                         <div className="ord-hist-sub" style={{ paddingLeft: 32 }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px 12px', fontSize: 13, marginBottom: orderHist.length > 0 ? 10 : 0 }}>
-                            <div><span style={{ color: 'var(--gt)' }}>Teléfono: </span>{o.customer_phone ?? '-'}</div>
+                            <div><span style={{ color: 'var(--gt)' }}>Teléfono: </span>{o.customer_phone ? formatPhoneDisplay(o.customer_phone) : '-'}</div>
                             <div><span style={{ color: 'var(--gt)' }}>Pago: </span>{PAYMENT_LABEL[o.payment_method] ?? o.payment_method ?? '-'}</div>
                             <div><span style={{ color: 'var(--gt)' }}>Dom: </span>{o.employee?.name ?? 'Sin asignar'}</div>
                           </div>

@@ -67,7 +67,9 @@ const createOrderSchema = z.object({
 
 const updateOrderSchema = z.object({
   customer_name:  z.string().min(1).max(200).optional(),
-  customer_phone: z.string().max(20).optional(),
+  // customer_phone deliberately absent - it's always the ticket's real WhatsApp
+  // number (set once at creation, see POST / above) and must never drift from it,
+  // so there's no field here for staff to send a different value through.
   address:        z.string().max(500).optional(),
   payment_method: z.enum(['sin_asignar', 'cash', 'transfer', 'cod']).optional(),
   employee_id:    z.string().uuid().nullable().optional(),
@@ -168,8 +170,12 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     // belonging to a different organization would still satisfy the foreign key and
     // silently attach this order to another tenant's ticket/employee.
     if (rest.ticket_id) {
-      const ticket = await fastify.prisma.ticket.findFirst({ where: { id: rest.ticket_id, org_id: req.user.orgId }, select: { id: true } });
+      const ticket = await fastify.prisma.ticket.findFirst({ where: { id: rest.ticket_id, org_id: req.user.orgId }, select: { phone: true } });
       if (!ticket) return reply.status(400).send({ error: 'Ticket no encontrado', code: 'VALIDATION_ERROR' });
+      // The customer's phone is always the WhatsApp number the conversation is
+      // actually on, never a value typed into a form - whatever customer_phone the
+      // request sent gets overridden here rather than trusted.
+      rest.customer_phone = ticket.phone;
     }
     if (rest.employee_id) {
       const employee = await fastify.prisma.employee.findFirst({ where: { id: rest.employee_id, org_id: req.user.orgId }, select: { id: true } });
@@ -279,7 +285,7 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
     // Registrar cambios en historial
     const trackFields: Record<string, string> = {
-      customer_name: 'Nombre', customer_phone: 'Teléfono',
+      customer_name: 'Nombre',
       address: 'Dirección', payment_method: 'Método de pago',
       employee_id: 'Domiciliario', notes: 'Notas',
     };

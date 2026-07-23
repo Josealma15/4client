@@ -130,6 +130,13 @@ model Ticket {
   // issued before this field existed) - nothing to compare against, so old
   // already-issued tokens keep working until their own expiry.
   form_token_min_iat DateTime? @db.Timestamptz
+  // Set the first time GET /form-info actually succeeds for the CURRENT link (reset
+  // to null every time a fresh link is issued, same as form_token_min_iat above). A
+  // link nobody opens within 10 minutes of being sent dies on its own (public.ts's
+  // assertLinkStillValid) - shrinks how long a link that went to the wrong person
+  // (typo'd number, accidental forward) stays usable, without touching the normal
+  // end-of-day expiry for a link that WAS opened in time.
+  form_link_opened_at DateTime? @db.Timestamptz
 
   org                Organization      @relation(fields: [org_id], references: [id])
   messages           TicketMessage[]

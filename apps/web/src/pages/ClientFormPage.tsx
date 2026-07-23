@@ -45,16 +45,39 @@ function getOrCreateDeviceToken(token: string): string {
   }
 }
 
+// Once the visitor proves they know the last 4 digits of the number this link was
+// issued for (see the 'verify' screen below), remember it for this specific link so
+// they're not asked again every time they come back to it - same trust model as
+// getOrCreateDeviceToken above (a value scoped to THIS token, not a real session).
+function getSavedPhoneLast4(token: string): string {
+  try {
+    return localStorage.getItem(`4client_phone4_${token}`) ?? '';
+  } catch {
+    return '';
+  }
+}
+function savePhoneLast4(token: string, last4: string): void {
+  try {
+    localStorage.setItem(`4client_phone4_${token}`, last4);
+  } catch { /* localStorage unavailable - just re-asks next visit, not fatal */ }
+}
+
 export default function ClientFormPage() {
   const token = new URLSearchParams(window.location.search).get('t') ?? '';
   const deviceToken = useMemo(() => getOrCreateDeviceToken(token), [token]);
   const draftKey = `4client_form_draft_${token}`;
   const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-  const [state, setState] = useState<'loading' | 'invalid' | 'choose' | 'catalog' | 'done'>('loading');
+  const [state, setState] = useState<'loading' | 'verify' | 'invalid' | 'choose' | 'catalog' | 'done'>('loading');
   const [clientName, setClientName] = useState('');
   const [orgName, setOrgName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  // Confirmed (server-accepted) last 4 digits - blank until the 'verify' screen
+  // passes. phoneInput is just the live value of that screen's text field.
+  const [phoneLast4, setPhoneLast4] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [dayOrders, setDayOrders] = useState<DayOrder[]>([]);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   // null = not decided yet (only matters while dayOrders.length > 0); 'new' = a
@@ -89,19 +112,29 @@ export default function ClientFormPage() {
   // stale `false` value in the same tick. A ref updates immediately, no render lag.
   const submittingRef = useRef(false);
 
-  // Shared by the initial load AND by "volver al menú" from the done screen -
-  // fetches the client's current info/orders and returns the order list (or null on
-  // failure, having already switched to 'invalid' itself). Callers decide the actual
-  // state transition since the initial load and the post-done return route slightly
-  // differently (first-ever visit skips the menu, everything else goes to it).
-  async function loadFormInfo(): Promise<DayOrder[] | null> {
-    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
+  // Shared by the verify screen, the initial load, AND "volver al menú" from the
+  // done screen - fetches the client's current info/orders and returns the order
+  // list (or null on failure, having already switched to 'invalid' or surfaced a
+  // phone-mismatch itself). Takes `last4` explicitly rather than reading the
+  // `phoneLast4` state so the very first call (right after the visitor types it,
+  // before that setState commits) sends the value that was actually just typed.
+  async function loadFormInfo(last4: string): Promise<DayOrder[] | null> {
+    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}&phone_last4=${encodeURIComponent(last4)}`;
     try {
       const [info, prods] = await Promise.all([
         fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()),
         fetch(`${API}/api/v1/public/products?${qs}`).then(r => r.json()),
       ]);
-      if (!info.data?.clientName) { setState('invalid'); setErrorMsg(info.error ?? 'Link inválido o expirado.'); return null; }
+      if (!info.data?.clientName) {
+        if (info.code === 'PHONE_MISMATCH') {
+          setState('verify');
+          setVerifyError(info.error ?? 'Número incorrecto. Verifica los últimos 4 dígitos.');
+        } else {
+          setState('invalid');
+          setErrorMsg(info.error ?? 'Link inválido o expirado.');
+        }
+        return null;
+      }
       setClientName(info.data.clientName);
       setOrgName(info.data.orgName ?? '');
       setProducts(prods.data ?? []);
@@ -112,6 +145,31 @@ export default function ClientFormPage() {
       setState('invalid');
       setErrorMsg('No se pudo conectar. Verifica tu internet e intenta de nuevo.');
       return null;
+    }
+  }
+
+  // Verify screen's "Continuar" - on success, remembers the digits for this link
+  // (so returning to it later doesn't ask again) and moves on exactly like the
+  // initial-load effect below would have.
+  async function handleVerifyPhone() {
+    const last4 = phoneInput.trim();
+    if (last4.length !== 4 || !/^\d{4}$/.test(last4)) {
+      setVerifyError('Escribe los 4 dígitos.');
+      return;
+    }
+    setVerifying(true);
+    setVerifyError('');
+    const orders = await loadFormInfo(last4);
+    setVerifying(false);
+    if (orders === null) return; // loadFormInfo already set 'verify' (wrong) or 'invalid' (dead link)
+    setPhoneLast4(last4);
+    savePhoneLast4(token, last4);
+    if (orders.length > 0) {
+      setState('choose');
+    } else {
+      setMergeTarget('new');
+      setState('catalog');
+      setTimeout(() => searchRef.current?.focus(), 100);
     }
   }
 
@@ -133,7 +191,13 @@ export default function ClientFormPage() {
     } catch { /* localStorage unavailable (private mode, etc.) - ignore */ }
     setHydrated(true);
 
-    loadFormInfo().then(orders => {
+    // A previously-verified visit to THIS link skips straight back in - only a
+    // brand new visitor (or one whose saved digits somehow stop matching, handled
+    // inside loadFormInfo) sees the verify screen.
+    const saved = getSavedPhoneLast4(token);
+    if (!saved) { setState('verify'); return; }
+    setPhoneLast4(saved);
+    loadFormInfo(saved).then(orders => {
       if (orders === null) return;
       // First-ever visit today (no orders yet) - straight to the catalog, nothing to
       // choose between. Any later visit (an order already exists) - the menu, with
@@ -152,8 +216,8 @@ export default function ClientFormPage() {
   // just finished an order had no way back in except manually refreshing the page.
   async function goToMenu() {
     setState('loading');
-    const orders = await loadFormInfo();
-    if (orders === null) return; // loadFormInfo already switched to 'invalid'
+    const orders = await loadFormInfo(phoneLast4);
+    if (orders === null) return; // loadFormInfo already switched to 'invalid'/'verify'
     setState('choose');
   }
 
@@ -181,7 +245,7 @@ export default function ClientFormPage() {
   // `address`/`paymentMethod` - never stomps whatever the client is mid-typing.
   useEffect(() => {
     if ((state !== 'catalog' && state !== 'choose') || !token) return;
-    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}`;
+    const qs = `t=${encodeURIComponent(token)}&device_token=${encodeURIComponent(deviceToken)}&phone_last4=${encodeURIComponent(phoneLast4)}`;
     const poll = () => {
       fetch(`${API}/api/v1/public/form-info?${qs}`).then(r => r.json()).then(info => {
         const orders: DayOrder[] = info?.data?.orders ?? [];
@@ -206,7 +270,7 @@ export default function ClientFormPage() {
     };
     const iv = setInterval(poll, 5000);
     return () => clearInterval(iv);
-  }, [state, token, deviceToken, mergeTarget]);
+  }, [state, token, deviceToken, phoneLast4, mergeTarget]);
 
   const grouped = useMemo(() => groupByCategory(products), [products]);
   const searchLower = search.toLowerCase().trim();
@@ -323,6 +387,7 @@ export default function ClientFormPage() {
         body: JSON.stringify({
           token,
           device_token: deviceToken,
+          phone_last4: phoneLast4,
           address: address.trim(),
           payment_method: paymentMethod || undefined,
           merge_order_id: mergeTarget && mergeTarget !== 'new' ? mergeTarget : undefined,
@@ -391,6 +456,34 @@ export default function ClientFormPage() {
   if (state === 'loading') return (
     <div style={page}>
       <div style={{ textAlign: 'center', padding: 60, color: '#888', fontSize: 18 }}>Cargando...</div>
+    </div>
+  );
+
+  if (state === 'verify') return (
+    <div style={page}>
+      <div style={{ background: '#fff', borderRadius: 18, margin: '24px 16px', padding: '32px 20px', boxShadow: '0 2px 12px rgba(0,0,0,.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><Lock size={48} color={GREEN} strokeWidth={1.5} /></div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#111', marginBottom: 8, textAlign: 'center' }}>Confirma que eres tú</div>
+        <div style={{ fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center', lineHeight: 1.5 }}>
+          Escribe los últimos 4 dígitos del número de WhatsApp donde recibiste este link.
+        </div>
+        <input
+          type="tel" inputMode="numeric" maxLength={4} autoFocus
+          placeholder="0000"
+          value={phoneInput}
+          onChange={(e) => { setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 4)); if (verifyError) setVerifyError(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyPhone(); }}
+          style={{
+            width: '100%', fontSize: 28, fontWeight: 800, letterSpacing: 10, textAlign: 'center',
+            padding: '14px 0', border: `2px solid ${verifyError ? '#DC2626' : '#ddd'}`, borderRadius: 12,
+            outline: 'none', marginBottom: 10, color: '#111',
+          }}
+        />
+        {verifyError && <div style={{ color: '#DC2626', fontSize: 13, fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>{verifyError}</div>}
+        <button onClick={handleVerifyPhone} disabled={verifying} style={{ ...btnPrimary, opacity: verifying ? 0.6 : 1 }}>
+          {verifying ? 'Verificando...' : 'Continuar'}
+        </button>
+      </div>
     </div>
   );
 

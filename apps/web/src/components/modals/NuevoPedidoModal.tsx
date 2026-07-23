@@ -3,6 +3,7 @@ import { Smartphone, Check, Send, ClipboardList, Ban } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useProducts } from '../../hooks/useProducts';
 import { buildFormLinkMessage } from '../../lib/formLinkMessage';
+import { formatPhoneDisplay } from '../../lib/formatPhone';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { api } from '../../lib/api';
@@ -47,7 +48,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
   const [canal, setCanal] = useState('whatsapp');
   const [pago, setPago] = useState('sin_asignar');
   const [nombre, setNombre] = useState(preNombre ?? '');
-  const [telefono, setTelefono] = useState(prePhone ?? '');
+  // Display-only, from the ticket's real WhatsApp number - never user-editable
+  // (see the disabled input below), so no setter needed.
+  const [telefono] = useState(prePhone ?? '');
   const [direccion, setDireccion] = useState('');
   const [empleadoId, setEmpleadoId] = useState('');
   const [items, setItems] = useState<any[]>([]);
@@ -140,7 +143,9 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
         channel: canal,
         payment_method: pago,
         customer_name: nombre.trim(),
-        customer_phone: telefono.trim() || undefined,
+        // No customer_phone - this modal always requires a ticketId (checked above),
+        // and the backend always sets the phone from that ticket's real WhatsApp
+        // number, never from a typed value (orders.ts's POST /).
         address: direccion.trim() || undefined,
         employee_id: empleadoId || undefined,
         items: items.map((i: any, idx: number) => ({
@@ -178,7 +183,7 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
           <div style={{ width: 300, background: '#ECE5DD', display: 'flex', flexDirection: 'column', flexShrink: 0, minHeight: 0 }}>
             <div style={{ background: 'var(--vd)', color: '#fff', padding: '10px 12px', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Smartphone size={15} />
-              <span style={{ flex: 1 }}>{preNombre || telefono}</span>
+              <span style={{ flex: 1 }}>{preNombre || formatPhoneDisplay(telefono)}</span>
               {ticketId && (
                 <button
                   className="hdr-ic-btn"
@@ -281,8 +286,10 @@ export default function NuevoPedidoModal({ fecha, onClose, ticketId, preNombre, 
               </div>
               <div className="fg2">
                 <label className="fl2">Teléfono</label>
-                <input className="fi2" placeholder="Ej: 3001234567" value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)} />
+                {/* Always disabled - this modal only ever creates orders linked to a
+                    ticket (handleSubmit blocks otherwise), and the backend always
+                    takes the phone from that ticket's real WhatsApp number. */}
+                <input className="fi2" disabled value={formatPhoneDisplay(telefono)} title="El teléfono es el número de WhatsApp del ticket - no se puede modificar" />
               </div>
             </div>
             <div className="fg2">
