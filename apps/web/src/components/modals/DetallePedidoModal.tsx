@@ -214,6 +214,11 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
         added_by_client: !!i.added_by_client,
       })),
     }),
+    // No onClose() here on purpose - staff kept having to save, reopen the same
+    // order, and keep going for a string of small edits. Saving now just refreshes
+    // this modal in place with the saved data; only actually leaving (X, Escape,
+    // backdrop) closes it. The one exception is the "unsaved changes" dialog's own
+    // "save and exit" option below, which explicitly closes after its own save.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['order', orderId] });
@@ -221,7 +226,6 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       setCatalogDirty(false);
       setCatalogClearKey(k => k + 1);
       toast('Cambios guardados');
-      onClose();
     },
     onError: (e: any) => toast(e.message, true),
   });
@@ -431,7 +435,10 @@ export default function DetallePedidoModal({ orderId, onClose, openCobro }: Prop
       setConfirmDlg({
         msg: 'Hay cambios sin guardar.',
         onOk: onClose,
-        onSave: () => saveMut.mutate(undefined, { onSuccess: () => setConfirmDlg(null) }),
+        // Unlike a plain "Guardar cambios" click, this save came from trying to
+        // CLOSE the modal - so unlike saveMut's own onSuccess (which deliberately
+        // no longer closes), finishing this one should actually close it.
+        onSave: () => saveMut.mutate(undefined, { onSuccess: () => { setConfirmDlg(null); onClose(); } }),
       });
       return;
     }
