@@ -205,7 +205,7 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
 
 
   const urgTickets = isToday ? filteredTickets.filter((t) => {
-    const tOrds = filteredOrders.filter((o) => t.orders.some((to) => to.id === o.id));
+    const tOrds = filteredOrders.filter((o) => o.ticket_id === t.id);
     return isTicketUrg(t, tOrds);
   }) : [];
 
@@ -392,7 +392,15 @@ export default function Swimlane({ fecha, tickets, orders, search, diaCerrado, o
           ))}
 
           {filteredTickets.map((ticket) => {
-            const ticketOrders = filteredOrders.filter((o) => ticket.orders.some((to) => to.id === o.id));
+            // Match by ticket_id on the flat orders list, NOT by intersecting with
+            // ticket.orders (GET /tickets' nested include, strictly `fecha`-scoped with
+            // no notes-marker fallback). A pedido deferred to tomorrow at cierre moves
+            // its own `fecha` there but keeps showing on TODAY's flat /orders list via
+            // that marker (by design - see orders.ts) - intersecting against ticket.orders
+            // silently dropped it from today's ticket card the moment it deferred, so the
+            // "frozen snapshot" of a closed day showed the ticket grayed out but empty,
+            // even though the same order rendered fine once "today" became tomorrow.
+            const ticketOrders = filteredOrders.filter((o) => o.ticket_id === ticket.id);
             const urg = isToday && isTicketUrg(ticket, ticketOrders);
             const isCollapsed = collapsedTickets.has(ticket.id);
             const tNum = `T-${String(filteredTickets.indexOf(ticket) + 1).padStart(2, '0')}`;
