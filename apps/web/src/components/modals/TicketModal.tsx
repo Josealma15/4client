@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useEffect, useState, KeyboardEvent } from 'react';
 import { Check, SendHorizontal, ArrowRight, Lock, ClipboardList, Ban } from 'lucide-react';
+import DeliveryStatus from '../ui/DeliveryStatus';
 import { api } from '../../lib/api';
 import { buildFormLinkMessage } from '../../lib/formLinkMessage';
 import { formatPhoneDisplay } from '../../lib/formatPhone';
@@ -55,15 +56,22 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
     const onMsg = (data: { ticketId: string }) => {
       if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
     };
+    // Delivery/read/failure updates on a message already shown here - same
+    // invalidate-and-refetch as a new message, just a different trigger.
+    const onMsgStatus = (data: { ticketId: string }) => {
+      if (data?.ticketId === ticketId) qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
+    };
     // Orders embedded in this ticket's card list must reflect status/paid changes
     // immediately, not just when a new chat message happens to trigger a refetch.
     const onOrderChange = () => qc.invalidateQueries({ queryKey: ['ticket', ticketId, fecha] });
     sock.on('ticket:message', onMsg);
+    sock.on('ticket:message-status', onMsgStatus);
     sock.on('order:moved', onOrderChange);
     sock.on('order:updated', onOrderChange);
     sock.on('order:paid', onOrderChange);
     return () => {
       sock.off('ticket:message', onMsg);
+      sock.off('ticket:message-status', onMsgStatus);
       sock.off('order:moved', onOrderChange);
       sock.off('order:updated', onOrderChange);
       sock.off('order:paid', onOrderChange);
@@ -199,8 +207,11 @@ export default function TicketModal({ ticketId, fecha, onClose, onCreateFromTick
                       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--vd)', marginBottom: 2 }}>{msg.sender.name}</div>
                     )}
                     <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{renderText(msg.text)}</div>
-                    <div style={{ fontSize: 10, color: '#999', textAlign: 'right', marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: '#999', textAlign: 'right', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                       {new Date(msg.sent_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })}
+                      {isOut && msg.wpp_message_id && (
+                        <DeliveryStatus delivered={msg.delivered} read_by_client={msg.read_by_client} failed_reason={msg.failed_reason} />
+                      )}
                     </div>
                   </div>
                 </div>

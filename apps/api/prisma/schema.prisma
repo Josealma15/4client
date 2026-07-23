@@ -169,8 +169,17 @@ model TicketMessage {
   sent_by        String?  @db.Uuid
   wpp_message_id String?  @unique @db.VarChar(200)
   sent_at        DateTime @default(now()) @db.Timestamptz
+  // All three driven by Meta's webhook `statuses` array (webhook.ts), matched back
+  // to this row by wpp_message_id - previously declared but never actually written,
+  // so every outbound message looked permanently "unconfirmed" regardless of what
+  // really happened on WhatsApp's side.
   delivered      Boolean  @default(false)
   read_by_client Boolean  @default(false)
+  // Set when Meta reports this specific message failed to deliver (invalid number,
+  // blocked the business, phone off WhatsApp, etc.) - null means "no failure
+  // reported", not "confirmed fine". Distinct from delivered/read_by_client staying
+  // false, which just means no status has come back yet (could still be in transit).
+  failed_reason  String?  @db.VarChar(255)
 
   ticket Ticket @relation(fields: [ticket_id], references: [id])
   sender User?  @relation(fields: [sent_by], references: [id])

@@ -112,6 +112,42 @@ describe('files routes (invoice PDF)', () => {
     expect(dead.json().code).toBe('INVOICE_EXPIRED');
   });
 
+  it('sending a fresh factura for the same ticket auto-supersedes every earlier one, no manual block needed', async () => {
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone: '573001119900', customer_name: 'Cliente Supersede' } });
+    const orderWithTicket = await app.prisma.order.create({
+      data: {
+        org_id: orgId, ticket_id: ticket.id, num: '009', customer_name: 'Cliente Supersede',
+        customer_phone: '573001119900', address: 'Calle Supersede 1',
+        payment_method: 'cash', registered_by: adminId, fecha: new Date(),
+      },
+    });
+
+    const first = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '009', order_id: orderWithTicket.id },
+    });
+    const firstFilename = new URL(first.json().url).searchParams.get('f')!;
+
+    const second = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '009', order_id: orderWithTicket.id },
+    });
+    const secondFilename = new URL(second.json().url).searchParams.get('f')!;
+
+    const third = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '009', order_id: orderWithTicket.id },
+    });
+    const thirdFilename = new URL(third.json().url).searchParams.get('f')!;
+
+    const firstDead = await app.inject({ method: 'GET', url: `/api/v1/files/${firstFilename}/status` });
+    expect(firstDead.statusCode).toBe(410);
+    const secondDead = await app.inject({ method: 'GET', url: `/api/v1/files/${secondFilename}/status` });
+    expect(secondDead.statusCode).toBe(410);
+    const thirdAlive = await app.inject({ method: 'GET', url: `/api/v1/files/${thirdFilename}/status` });
+    expect(thirdAlive.statusCode).toBe(200);
+  });
+
   it('a link nobody opens within 10 minutes of being issued dies on its own, even though it\'s well under the 24h absolute cap', async () => {
     const upload = await app.inject({
       method: 'POST',

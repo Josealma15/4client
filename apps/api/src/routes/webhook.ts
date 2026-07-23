@@ -19,7 +19,16 @@ interface MetaWebhookPayload {
           type: string;
           text?: { body: string };
         }>;
-        statuses?: unknown[];
+        // Delivery/read receipts for OUTBOUND messages we sent, keyed by the same
+        // `id` Meta gave that message when we sent it (stored as wpp_message_id).
+        // `errors` is only present when status === 'failed' (invalid number, phone
+        // blocked the business, not on WhatsApp, etc).
+        statuses?: Array<{
+          id: string;
+          status: 'sent' | 'delivered' | 'read' | 'failed';
+          timestamp: string;
+          errors?: Array<{ code?: number; title?: string; message?: string }>;
+        }>;
       };
       field: string;
     }>;
@@ -170,6 +179,56 @@ async function ingestMessage(
   fastify.log.info({ phone, ticketId: ticket.id }, 'WPP: mensaje entrante ingresado');
 }
 
+// Updates delivered/read_by_client/failed_reason on an OUTBOUND message we already
+// sent, matched by wpp_message_id - a status can arrive well after the message was
+// created (Meta doesn't know delivery/read timing in advance), so this is always a
+// separate event from ingestMessage above, never inline with sending.
+async function ingestStatus(
+  fastify: FastifyInstance,
+  waMsgId: string,
+  status: 'sent' | 'delivered' | 'read' | 'failed',
+  errors: Array<{ code?: number; title?: string; message?: string }> | undefined,
+) {
+  const message = await fastify.prisma.ticketMessage.findUnique({
+    where: { wpp_message_id: waMsgId },
+    select: { id: true, ticket_id: true, ticket: { select: { org_id: true } } },
+  });
+  // Not every status update corresponds to a message we actually stored (e.g. one
+  // for the auto-reply welcome message sent before this feature existed) - nothing
+  // to update, safe to just skip.
+  if (!message) return;
+
+  // Never regresses - 'read' implies 'delivered' already happened even if that
+  // specific status update got lost/arrived out of order, and once true these only
+  // ever stay true (Meta doesn't un-deliver or un-read a message).
+  const data: { delivered?: boolean; read_by_client?: boolean; failed_reason?: string } = {};
+  if (status === 'delivered' || status === 'read') data.delivered = true;
+  if (status === 'read') data.read_by_client = true;
+  if (status === 'failed') {
+    const first = errors?.[0];
+    data.failed_reason = (first?.title ?? first?.message ?? 'Error desconocido').slice(0, 255);
+  }
+  if (Object.keys(data).length === 0) return; // 'sent' alone - nothing new to record
+
+  // Read back the actual row instead of trusting just this call's own partial
+  // `data` - a later 'failed' event (network issue after an earlier successful
+  // delivery, rare but real) must not make the emitted payload look like it
+  // regressed delivered/read_by_client back to false for clients already showing them true.
+  const updated = await fastify.prisma.ticketMessage.update({
+    where: { id: message.id },
+    data,
+    select: { delivered: true, read_by_client: true, failed_reason: true },
+  });
+
+  fastify.io.to(`org:${message.ticket.org_id}`).emit('ticket:message-status', {
+    ticketId: message.ticket_id,
+    messageId: message.id,
+    delivered: updated.delivered,
+    read_by_client: updated.read_by_client,
+    failed_reason: updated.failed_reason,
+  });
+}
+
 export default async function webhookRoutes(fastify: FastifyInstance) {
   if (!config.META_APP_SECRET) {
     // RAILWAY_ENVIRONMENT_NAME, not NODE_ENV - NODE_ENV is "production" on every
@@ -235,10 +294,9 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
       for (const change of entry.changes ?? []) {
         if (change.field !== 'messages') continue;
 
-        const { metadata, contacts, messages } = change.value;
-        if (!messages?.length) continue;
+        const { metadata, contacts, messages, statuses } = change.value;
 
-        for (const msg of messages) {
+        for (const msg of messages ?? []) {
           if (msg.type !== 'text' || !msg.text?.body) continue;
 
           const sentAt = new Date(parseInt(msg.timestamp) * 1000);
@@ -251,6 +309,14 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
 
           ingestMessage(fastify, metadata.phone_number_id, phone, name, text, msg.id, sentAt)
             .catch(err => fastify.log.error({ err }, 'WPP: error ingiriendo mensaje'));
+        }
+
+        // Delivery/read/failure receipts arrive as their own webhook events
+        // (Meta doesn't send `messages` and `statuses` together in practice), so
+        // this must never be gated on `messages` being present.
+        for (const s of statuses ?? []) {
+          ingestStatus(fastify, s.id, s.status, s.errors)
+            .catch(err => fastify.log.error({ err }, 'WPP: error ingiriendo status'));
         }
       }
     }

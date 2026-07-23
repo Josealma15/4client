@@ -15,6 +15,7 @@ export interface TicketMessage {
   sent_at: string;
   delivered: boolean;
   read_by_client: boolean;
+  failed_reason: string | null;
 }
 
 export interface Ticket {

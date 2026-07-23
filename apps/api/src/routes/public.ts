@@ -611,7 +611,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
             id: message.id, ticket_id: ticket.id, direction: 'out' as const, text: message.text,
             media_url: null, media_type: null, media_caption: null,
             sent_by: actorUser.id, sent_by_name: actorUser.name, wpp_message_id: null,
-            sent_at: message.sent_at.toISOString(), delivered: false, read_by_client: false,
+            sent_at: message.sent_at.toISOString(), delivered: false, read_by_client: false, failed_reason: null,
           },
         });
 
@@ -739,7 +739,7 @@ export default async function publicRoutes(fastify: FastifyInstance) {
         media_url: null, media_type: null, media_caption: null,
         sent_by: actorUser.id, sent_by_name: actorUser.name, wpp_message_id: null,
         sent_at: message.sent_at.toISOString(),
-        delivered: false, read_by_client: false,
+        delivered: false, read_by_client: false, failed_reason: null,
       },
     });
 
