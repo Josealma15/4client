@@ -5,7 +5,7 @@ import { MetaCloudProvider } from '../services/whatsapp/meta-cloud.js';
 import { sanitizeForWhatsApp } from '../lib/sanitize.js';
 import { config } from '../config.js';
 import { sortByCategoryOrder } from '../lib/categoryOrder.js';
-import { registerFailedLinkAttempt, MAX_ATTEMPTS_PER_LINK } from '../lib/linkSecurity.js';
+import { registerFailedLinkAttempt, MAX_ATTEMPTS_SOFT } from '../lib/linkSecurity.js';
 
 interface FormTokenPayload {
   type: string;
@@ -209,13 +209,15 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     if (!ticket) throw new Error('ticket not found');
     if (ticket.revoked_form_token) throw new Error('revoked');
     // Checked before anything token-specific below - a chat that hit
-    // MAX_ATTEMPTS_PER_TICKET wrong guesses is locked out entirely for
-    // TICKET_BLOCK_HOURS, even against a link issued after the block started.
+    // MAX_ATTEMPTS_HARD wrong guesses is locked out entirely for TICKET_BLOCK_HOURS,
+    // even against a link issued after the block started.
     if (ticket.link_blocked_until && ticket.link_blocked_until > new Date()) throw new Error('ticket blocked');
-    // This specific link ran out its own MAX_ATTEMPTS_PER_LINK wrong guesses -
-    // dead regardless of the ticket-wide cumulative count above. Staff sending a
-    // fresh link resets this counter (inbox.ts's /form-link route).
-    if (ticket.link_failed_attempts >= MAX_ATTEMPTS_PER_LINK) throw new Error('link attempts exceeded');
+    // Ticket-wide, not specific to this token - a wrong guess against the
+    // INVOICE link for this same ticket counts here too (files.ts), so hitting
+    // MAX_ATTEMPTS_SOFT kills the form link even if every failed guess actually
+    // happened on the factura. Staff sending ANY fresh link (form or factura)
+    // resets this counter (linkSecurity.ts's clearSoftLinkBlock).
+    if (ticket.link_failed_attempts >= MAX_ATTEMPTS_SOFT) throw new Error('link attempts exceeded');
     // Whole-second resolution on both sides - `iat` is JWT-standard seconds-since-
     // epoch, but the stamped column is millisecond precision, so comparing raw ms
     // would make a token superseded by the very same issuance that minted it (its
@@ -246,10 +248,9 @@ export default async function publicRoutes(fastify: FastifyInstance) {
     // up with the wrong person: staff typo, an accidental forward, etc).
     if (!phoneLast4 || phoneLast4 !== last4(ticket.phone)) {
       // Recorded even though the request is about to fail anyway - this counter is
-      // the whole point, not an afterthought. Bumps both the per-link count (dies at
-      // MAX_ATTEMPTS_PER_LINK, checked above on the NEXT call) and the ticket-wide
-      // cumulative one (see registerFailedLinkAttempt).
-      await fastify.prisma.ticket.update({ where: { id: ticketId }, data: { link_failed_attempts: { increment: 1 } } });
+      // the whole point, not an afterthought. Bumps both the ticket-wide soft count
+      // (dies at MAX_ATTEMPTS_SOFT, checked above on the NEXT call - for THIS link
+      // and the ticket's factura links alike) and the cumulative hard-block one.
       await registerFailedLinkAttempt(fastify.prisma, ticketId);
       throw new Error('phone mismatch');
     }

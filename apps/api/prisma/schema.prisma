@@ -138,20 +138,21 @@ model Ticket {
   // (typo'd number, accidental forward) stays usable, without touching the normal
   // end-of-day expiry for a link that WAS opened in time.
   form_link_opened_at DateTime? @db.Timestamptz
-  // Wrong-phone-digits guesses against the CURRENT form link only - reset to 0
-  // every time a fresh link is issued (inbox.ts's /form-link route), alongside
-  // form_link_opened_at above. Once it hits linkSecurity.ts's MAX_ATTEMPTS_PER_LINK
-  // this specific link is dead; staff resending gives the client a clean slate.
+  // Wrong-phone-digits guesses against ANY link for this ticket - form link AND
+  // every invoice/factura link together (see linkSecurity.ts) - since the last
+  // reset. Reset to 0 whenever staff sends a fresh link of EITHER kind (inbox.ts's
+  // /form-link route, files.ts's POST /invoice). Once it hits linkSecurity.ts's
+  // MAX_ATTEMPTS_SOFT, EVERY outstanding link for this ticket is dead - not just
+  // whichever one the wrong guesses happened to land on.
   link_failed_attempts Int       @default(0)
-  // Cumulative wrong-digit guesses across EVERY link this ticket has ever issued
-  // (form links AND invoice/factura links together - see linkSecurity.ts) since the
-  // last time this ticket was blocked. Never reset by a fresh link (unlike
-  // link_failed_attempts above) - that's what stops someone from dodging the block
-  // by just asking staff for a new link after each 10-guess exhaustion.
+  // Cumulative wrong-digit guesses across EVERY link this ticket has ever issued,
+  // since the last time this ticket was hard-blocked. Never reset by a fresh link
+  // (unlike link_failed_attempts above) - that's what stops someone from dodging
+  // the soft block by just asking staff for a new link every 10 guesses.
   link_failed_total    Int       @default(0)
-  // Set once link_failed_total crosses MAX_ATTEMPTS_PER_TICKET - blocks every link
-  // (form + all invoices) for this ticket until this timestamp, self-expiring with
-  // no staff action needed (unlike the manual org-wide "bloquear todos los links").
+  // Set once link_failed_total crosses MAX_ATTEMPTS_HARD - blocks every link (form
+  // + all invoices) for this ticket until this timestamp, self-expiring with no
+  // staff action needed (unlike the manual org-wide "bloquear todos los links").
   link_blocked_until   DateTime? @db.Timestamptz
 
   org                Organization      @relation(fields: [org_id], references: [id])
@@ -384,11 +385,6 @@ model InvoiceLink {
   opened_at   DateTime? @db.Timestamptz
   revoked_at  DateTime? @db.Timestamptz
   created_at  DateTime  @default(now()) @db.Timestamptz
-  // Wrong-phone-digits guesses against THIS specific invoice link - same idea and
-  // same limit as Ticket.link_failed_attempts, just scoped to one factura instead
-  // of the form link (see linkSecurity.ts). No reset path needed here: unlike a
-  // form link, a new factura is always a brand-new row with its own filename.
-  failed_attempts Int @default(0)
 
   org Organization @relation(fields: [org_id], references: [id])
 

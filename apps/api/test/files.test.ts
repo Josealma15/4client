@@ -378,10 +378,22 @@ describe('files routes (invoice PDF)', () => {
     expect(freshWorks.statusCode).toBe(200);
   });
 
-  it('10 wrong phone_last4 guesses against the same factura link kill it - even the correct digits stop working afterward', async () => {
+  it('10 wrong phone_last4 guesses against a factura link kill it - even the correct digits stop working afterward', async () => {
+    // Needs a ticket - the wrong-guess count is shared per-ticket (linkSecurity.ts),
+    // and an order with no ticket_id has nothing to share it with (see
+    // loadLiveInvoiceLink), so it would never trip this limit at all.
+    const phone = '573001119911';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Lockout Factura' } });
+    const order = await app.prisma.order.create({
+      data: {
+        org_id: orgId, ticket_id: ticket.id, num: '900', customer_name: 'Cliente Lockout Factura',
+        customer_phone: phone, address: 'Calle Lockout 1',
+        payment_method: 'cash', registered_by: adminId, fecha: new Date(),
+      },
+    });
     const upload = await app.inject({
       method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
-      payload: { data: tinyPdfBase64, num: '900', order_id: orderId },
+      payload: { data: tinyPdfBase64, num: '900', order_id: order.id },
     });
     const filename = new URL(upload.json().url).searchParams.get('f')!;
 
@@ -389,9 +401,37 @@ describe('files routes (invoice PDF)', () => {
       const res = await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=0000` });
       expect(res.statusCode).toBe(401);
     }
-    const afterLimit = await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=4400` });
+    const afterLimit = await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=9911` });
     expect(afterLimit.statusCode).toBe(403);
     expect(afterLimit.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
+  });
+
+  it('10 wrong guesses on a factura link also block that ticket\'s FORM link, not just the factura - the soft block is shared, not per-token', async () => {
+    const phone = '573001119912';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Cross Lockout' } });
+    const order = await app.prisma.order.create({
+      data: {
+        org_id: orgId, ticket_id: ticket.id, num: '910', customer_name: 'Cliente Cross Lockout',
+        customer_phone: phone, address: 'Calle Cross 1',
+        payment_method: 'cash', registered_by: adminId, fecha: new Date(),
+      },
+    });
+    const upload = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '910', order_id: order.id },
+    });
+    const filename = new URL(upload.json().url).searchParams.get('f')!;
+
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=0000` });
+    }
+
+    // A form link for the SAME ticket, never touched by any of the above, is dead too.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const formToken = (app.jwt.sign as any)({ type: 'form_link', ticketId: ticket.id, orgId }, { expiresIn: '7d' });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${formToken}&device_token=cross-lockout&phone_last4=9912` });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
   });
 
   it('wrong guesses on a factura link count toward the ticket-wide cumulative lockout shared with its form link', async () => {

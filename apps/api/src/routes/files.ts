@@ -6,7 +6,7 @@ import { config } from '../config.js';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { registerFailedLinkAttempt, MAX_ATTEMPTS_PER_LINK } from '../lib/linkSecurity.js';
+import { registerFailedLinkAttempt, clearSoftLinkBlock, MAX_ATTEMPTS_SOFT } from '../lib/linkSecurity.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
@@ -75,6 +75,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       where: { order_id: body.data.order_id, org_id: req.user.orgId, filename: { not: filename }, revoked_at: null },
       data: { revoked_at: new Date() },
     });
+
+    // Same reasoning as inbox.ts's /form-link route resetting its own copy of
+    // this field: sending a fresh factura is a deliberate "give them another
+    // chance" staff action, so it clears the ticket-wide soft wrong-guess block
+    // (linkSecurity.ts) - un-blocking the form link too, not just this factura.
+    if (order.ticket_id) await clearSoftLinkBlock(fastify.prisma, order.ticket_id);
 
     // Points at the FRONTEND app now, not directly at this API - GET /:filename below
     // requires phone_last4 on every request, which only a page that can prompt for it
@@ -146,22 +152,27 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     if (link.org.form_links_blocked_at && link.created_at < link.org.form_links_blocked_at) {
       throw { status: 410, error: 'Este link de factura fue bloqueado. Pide que te reenvíen la factura.', code: 'INVOICE_EXPIRED' };
     }
-    // Same wrong-PIN ladder as form links (public.ts / linkSecurity.ts): this
-    // specific factura dies after too many wrong digits, and if the CHAT it belongs
-    // to hit the ticket-wide cumulative limit, every link for it (form + every
-    // other factura) is locked out for TICKET_BLOCK_HOURS regardless of this one's
-    // own count.
-    if (link.failed_attempts >= MAX_ATTEMPTS_PER_LINK) {
-      throw { status: 403, error: 'Demasiados intentos incorrectos con este link. Pide que te reenvíen la factura.', code: 'LINK_ATTEMPTS_EXCEEDED' };
-    }
+    // Same wrong-PIN ladder as form links, and ticket-wide, not specific to this
+    // filename (public.ts / linkSecurity.ts): a wrong guess against the FORM link
+    // for this same ticket counts here too, so either limit can kill this factura
+    // even if every failed guess actually happened on the form link instead.
+    // Invoices with no ticket_id (order with no WhatsApp thread) skip this - there's
+    // no ticket to share the count with, so they keep only the org-wide/TTL checks
+    // above and the generic per-IP rate limit.
     if (link.ticket_id) {
-      const ticket = await fastify.prisma.ticket.findUnique({ where: { id: link.ticket_id }, select: { link_blocked_until: true } });
+      const ticket = await fastify.prisma.ticket.findUnique({
+        where: { id: link.ticket_id },
+        select: { link_blocked_until: true, link_failed_attempts: true },
+      });
       if (ticket?.link_blocked_until && ticket.link_blocked_until > new Date()) {
         throw {
           status: 403,
           error: 'Demasiados intentos incorrectos. Este chat quedó bloqueado temporalmente por seguridad. Intenta de nuevo en 24 horas o contáctanos directamente.',
           code: 'TICKET_BLOCKED',
         };
+      }
+      if (ticket && ticket.link_failed_attempts >= MAX_ATTEMPTS_SOFT) {
+        throw { status: 403, error: 'Demasiados intentos incorrectos. Pide que te reenvíen la factura o el link del formulario.', code: 'LINK_ATTEMPTS_EXCEEDED' };
       }
     }
     if (Date.now() - link.created_at.getTime() > 24 * 3600 * 1000) {
@@ -205,11 +216,11 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       return reply.status(err.status ?? 500).send({ error: err.error ?? 'Error', code: err.code });
     }
     if (q.data.phone_last4 !== link.phone_last4) {
-      // Recorded before failing - bumps this invoice's own count (dies at
-      // MAX_ATTEMPTS_PER_LINK, checked in loadLiveInvoiceLink above on the next
-      // call) and, if this factura belongs to a ticket, the ticket-wide cumulative
-      // count shared with its form link and every other factura in the same chat.
-      await fastify.prisma.invoiceLink.update({ where: { filename }, data: { failed_attempts: { increment: 1 } } });
+      // Recorded before failing - if this factura belongs to a ticket, this bumps
+      // the SAME ticket-wide counters a wrong form-link guess would (linkSecurity.ts),
+      // so this one wrong guess also counts against the form link and every other
+      // factura in the same chat. Invoices with no ticket_id have nothing to share
+      // the count with (see loadLiveInvoiceLink) - not tracked beyond the global rate limit.
       if (link.ticket_id) await registerFailedLinkAttempt(fastify.prisma, link.ticket_id);
       return reply.status(401).send({ error: 'Número incorrecto. Verifica los últimos 4 dígitos.', code: 'PHONE_MISMATCH' });
     }

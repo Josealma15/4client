@@ -764,6 +764,7 @@ describe('public form routes', () => {
 describe('link abuse lockout - repeated wrong PIN guesses', () => {
   let app: FastifyInstance;
   let orgId: string;
+  let adminId: string;
   let adminToken: string;
 
   beforeAll(async () => {
@@ -771,6 +772,7 @@ describe('link abuse lockout - repeated wrong PIN guesses', () => {
     const org = await createTestOrg(app.prisma);
     orgId = org.id;
     const admin = await createTestUser(app.prisma, orgId, 'admin', 'LockoutAdmin1!');
+    adminId = admin.id;
     adminToken = await login(app, admin.email, 'LockoutAdmin1!');
   });
 
@@ -840,5 +842,37 @@ describe('link abuse lockout - repeated wrong PIN guesses', () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${freshToken}&device_token=lockout-ticket-final&phone_last4=9902` });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('TICKET_BLOCKED');
+  });
+
+  it('10 wrong guesses on the FORM link also block that ticket\'s already-outstanding factura link, not just the form link - the soft block is shared, not per-token', async () => {
+    const phone = '573001119903';
+    const ticket = await app.prisma.ticket.create({ data: { org_id: orgId, phone, customer_name: 'Cliente Cross Lockout Form' } });
+
+    // Factura sent BEFORE the wrong guesses below - sending a NEW one afterward
+    // would itself clear the soft block (it's the "give another chance" action),
+    // which would hide the exact bug this test guards against.
+    const order = await app.prisma.order.create({
+      data: {
+        org_id: orgId, ticket_id: ticket.id, num: '920', customer_name: 'Cliente Cross Lockout Form',
+        customer_phone: phone, address: 'Calle Cross Form 1',
+        payment_method: 'cash', registered_by: adminId, fecha: new Date(),
+      },
+    });
+    const tinyPdfBase64 = Buffer.from('%PDF-1.4 fake content for test').toString('base64');
+    const upload = await app.inject({
+      method: 'POST', url: '/api/v1/files/invoice', headers: { authorization: `Bearer ${adminToken}` },
+      payload: { data: tinyPdfBase64, num: '920', order_id: order.id },
+    });
+    const filename = new URL(upload.json().url).searchParams.get('f')!;
+
+    const token = sign(ticket.id);
+    for (let i = 0; i < 10; i++) {
+      await app.inject({ method: 'GET', url: `/api/v1/public/form-info?t=${token}&device_token=cross-lockout-form&phone_last4=0000` });
+    }
+
+    // The factura, never touched by any of the wrong guesses above, is dead too.
+    const res = await app.inject({ method: 'GET', url: `/api/v1/files/${filename}?phone_last4=9903` });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('LINK_ATTEMPTS_EXCEEDED');
   });
 });
