@@ -162,6 +162,20 @@ export default async function orderRoutes(fastify: FastifyInstance) {
 
     const { items, fecha, ...rest } = body.data;
 
+    // ticket_id/employee_id are just UUIDs from the request body - Prisma's FK check
+    // only confirms the row exists SOMEWHERE, not that it belongs to this org (both
+    // are globally-unique ids, not scoped per org). Without this, a crafted id
+    // belonging to a different organization would still satisfy the foreign key and
+    // silently attach this order to another tenant's ticket/employee.
+    if (rest.ticket_id) {
+      const ticket = await fastify.prisma.ticket.findFirst({ where: { id: rest.ticket_id, org_id: req.user.orgId }, select: { id: true } });
+      if (!ticket) return reply.status(400).send({ error: 'Ticket no encontrado', code: 'VALIDATION_ERROR' });
+    }
+    if (rest.employee_id) {
+      const employee = await fastify.prisma.employee.findFirst({ where: { id: rest.employee_id, org_id: req.user.orgId }, select: { id: true } });
+      if (!employee) return reply.status(400).send({ error: 'Domiciliario no encontrado', code: 'VALIDATION_ERROR' });
+    }
+
     // Generar número de pedido: siguiente num del día
     // Parse YYYY-MM-DD as UTC midnight to avoid timezone drift
     const todayUTC = new Date().toISOString().split('T')[0];
@@ -248,6 +262,15 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     }
 
     const { items, ...fields } = body.data;
+
+    // Same cross-org guard as POST / - employee_id is a bare UUID from the request
+    // body, and Employee.id is globally unique (not scoped per org), so an id
+    // belonging to a different organization would otherwise still pass the FK check.
+    if (fields.employee_id) {
+      const employee = await fastify.prisma.employee.findFirst({ where: { id: fields.employee_id, org_id: req.user.orgId }, select: { id: true } });
+      if (!employee) return reply.status(400).send({ error: 'Domiciliario no encontrado', code: 'VALIDATION_ERROR' });
+    }
+
     const historyEntries: any[] = [];
 
     const PAYMENT_LABELS: Record<string, string> = {
