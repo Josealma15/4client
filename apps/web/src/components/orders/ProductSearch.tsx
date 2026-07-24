@@ -1,5 +1,16 @@
 import { useState, useMemo, useEffect, useRef, useImperativeHandle, forwardRef, KeyboardEvent } from 'react';
 import { Check, Pencil, X } from 'lucide-react';
+import { toast } from '../ui/Toast';
+
+// A negative price must never make it into `items` at all - not just get blocked
+// downstream at Guardar/Copiar/PDF/Enviar factura (defense-in-depth, still in place
+// in DetallePedidoModal/NuevoPedidoModal) but rejected right here, at the only
+// places a value actually commits: Enter and the ✓ button. An empty/non-numeric
+// string isn't "negative" - that's the separate "no price set yet" case.
+function isNegativePrice(priceStr: string | undefined): boolean {
+  const n = parseFloat(priceStr ?? '');
+  return !isNaN(n) && n < 0;
+}
 
 interface Product { id: string; name: string; category: string; }
 interface Item { product_name: string; quantity_label: string; price: string; added_by_client?: boolean; }
@@ -99,8 +110,16 @@ const ProductSearch = forwardRef<ProductSearchHandle, Props>(function ProductSea
   // needs the ACTUAL merged list synchronously, not the state update this also
   // triggers via onChange, which only lands on the next render and would still be
   // stale to whatever reads `items` right after calling it in the same tick.
-  function commitProduct(productName: string): Item[] {
+  // Returns null specifically when blocked (negative price) - distinct from the
+  // legitimate "nothing typed" no-op (which returns `items` unchanged) - callers
+  // that close the edit row on commit (saveEdit) need to tell those apart, so a
+  // blocked attempt doesn't get silently discarded by closing the row anyway.
+  function commitProduct(productName: string): Item[] | null {
     const local = localInputs[productName];
+    if (isNegativePrice(local?.price)) {
+      toast('El precio no puede ser negativo', true);
+      return null;
+    }
     if (!local?.qty.trim() && !local?.price.trim()) return items;
 
     // Preserve provenance - staff editing qty/price on a line the client added
@@ -157,9 +176,16 @@ const ProductSearch = forwardRef<ProductSearchHandle, Props>(function ProductSea
   // Commits the currently-typed qty/price for a row WITHOUT closing its edit mode -
   // used when Enter just advances focus to the next field, not when the person is
   // done with the whole row (that's saveEdit, which also calls this then closes).
-  function commitEditField(productName: string) {
+  // Returns false when blocked (negative price) - callers (advanceToPrice/
+  // advanceToNextRow) must NOT move focus away in that case, so the person stays
+  // right on the bad value instead of it silently vanishing to the next field.
+  function commitEditField(productName: string): boolean {
     const local = localInputs[productName];
-    if (local === undefined) return;
+    if (local === undefined) return true;
+    if (isNegativePrice(local.price)) {
+      toast('El precio no puede ser negativo', true);
+      return false;
+    }
     const priorItem = items.find(i => i.product_name === productName);
     const newItem: Item = {
       product_name: productName,
@@ -168,11 +194,12 @@ const ProductSearch = forwardRef<ProductSearchHandle, Props>(function ProductSea
       added_by_client: priorItem?.added_by_client ?? false,
     };
     onChange(items.map(i => i.product_name === productName ? newItem : i));
+    return true;
   }
 
   // Enter in the qty field of a row being edited: save qty, jump to price - same row.
   function advanceToPrice(productName: string) {
-    commitEditField(productName);
+    if (!commitEditField(productName)) return;
     requestAnimationFrame(() => { editPriceRef.current?.focus(); editPriceRef.current?.select(); });
   }
 
@@ -180,7 +207,7 @@ const ProductSearch = forwardRef<ProductSearchHandle, Props>(function ProductSea
   // edit mode - the editingRow effect below already focuses editQtyRef whenever
   // editingRow changes, so opening the next row is all this needs to do.
   function advanceToNextRow(productName: string) {
-    commitEditField(productName);
+    if (!commitEditField(productName)) return;
     const idx = items.findIndex(i => i.product_name === productName);
     const next = idx >= 0 ? items[idx + 1] : undefined;
     if (next) editItem(next);
@@ -196,19 +223,31 @@ const ProductSearch = forwardRef<ProductSearchHandle, Props>(function ProductSea
     setEditingRow(null);
   }
 
-  function saveEdit(productName: string): Item[] {
+  // Returns null when blocked (negative price) too, same as commitProduct - the ✓
+  // button must leave the row open on a rejected value instead of closing over it
+  // and silently reverting to whatever the item was before.
+  function saveEdit(productName: string): Item[] | null {
     const next = commitProduct(productName);
+    if (next === null) return null;
     setEditingRow(null);
     return next;
   }
 
   useImperativeHandle(ref, () => ({
-    commitPendingEdit: () => editingRow ? saveEdit(editingRow) : items,
+    // Falls back to the current `items` (not null) when blocked - the modal's own
+    // Guardar just proceeds without that particular edit rather than erroring out;
+    // the person already saw the "no puede ser negativo" toast and the row stayed
+    // open with their bad value still in it for them to fix.
+    commitPendingEdit: () => (editingRow ? saveEdit(editingRow) : items) ?? items,
   }));
 
   function addManualProduct() {
     const name = manualName.trim();
     if (!name) return;
+    if (isNegativePrice(manualPrice)) {
+      setManualError('El precio no puede ser negativo.');
+      return;
+    }
     // Items are keyed by product_name throughout this file (React key, edit/remove
     // lookups) - a manual entry colliding with an existing line would silently merge
     // into/overwrite it instead of adding a new one.
