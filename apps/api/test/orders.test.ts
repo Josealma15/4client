@@ -412,6 +412,18 @@ describe('orders routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('cobro-en-casa: "completo" with a total of $0 (every item agotado/priced at 0) is allowed - 0 is a real value, only negative is rejected', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/orders', headers: authHeader(encargadoToken),
+      payload: sampleOrderPayload({
+        fecha: '2026-01-18', payment_method: 'cod', amount_received: 0, cod_choice: 'completo',
+        items: [{ product_name: 'Papa Criolla', quantity_label: '2 kg', price: 0, sort_order: 0 }],
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(Number(res.json().data.amount_received)).toBe(0);
+  });
+
   it('cobro-en-casa: amount_received is rejected on a non-cod order (PATCH and POST)', async () => {
     const create = await app.inject({
       method: 'POST', url: '/api/v1/orders', headers: authHeader(encargadoToken),

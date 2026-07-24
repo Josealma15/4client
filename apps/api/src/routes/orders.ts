@@ -157,7 +157,9 @@ function validateCodAmount(
   // schema.prisma's cod_choice comment for why that distinction can't be inferred
   // from the number alone).
   if (amount === null || choice === null) return 'Indica si el cliente paga completo o cuánto paga (con vuelta)';
-  if (amount <= 0) return 'El monto debe ser mayor que cero';
+  // 0 is a real, valid total (every item on the order is agotado/priced at 0) - only
+  // an actually negative amount is ever wrong, same rule as an item's own price.
+  if (amount < 0) return 'El monto no puede ser negativo';
   if (amount < total) return `El monto debe ser mayor o igual al total del pedido ($${total.toLocaleString('es-CO')})`;
   if (choice === 'completo' && amount !== total) return 'El monto de "completo" debe ser igual al total del pedido';
   return null;
@@ -610,8 +612,11 @@ export default async function orderRoutes(fastify: FastifyInstance) {
     // a NEGATIVE change_amount, recorded as-is. Same rule as validateCodAmount above,
     // applied here too since this is the one place that ALWAYS runs regardless of
     // payment method (cash/transfer confirmations go through this exact same field).
-    if (body.data.amount_received <= 0) {
-      return reply.status(400).send({ error: 'El monto recibido debe ser mayor que cero', code: 'VALIDATION_ERROR' });
+    // total <= 0 is already blocked above (NO_TOTAL) before this line is ever
+    // reached, so amount_received is always being checked against a real total here -
+    // < 0 (not <= 0) purely for consistency with validateCodAmount's own rule.
+    if (body.data.amount_received < 0) {
+      return reply.status(400).send({ error: 'El monto recibido no puede ser negativo', code: 'VALIDATION_ERROR' });
     }
     if (body.data.amount_received < total) {
       return reply.status(400).send({ error: `El monto recibido debe ser mayor o igual al total del pedido ($${total.toLocaleString('es-CO')})`, code: 'VALIDATION_ERROR' });
